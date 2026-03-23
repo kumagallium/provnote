@@ -1,17 +1,47 @@
 // ──────────────────────────────────────────────
 // PROVグラフ可視化（Cytoscape.js + ELK レイアウト）
 //
-// prov-jsonld-viz のデザインパターンに準拠:
-//   Activity = 楕円・緑
-//   Entity   = 丸四角・青
-//   Parameter = ダイヤ・オレンジ
+// design.md ラベル色パレット準拠:
+//   Activity  = 楕円・落ち着いた青 (#5b8fb9)
+//   Entity    = 丸四角・ブランドグリーン (#4B7A52)
+//   Result    = 丸四角・テラコッタ (#c26356)
+//   Parameter = ダイヤ・落ち着いたアンバー (#c08b3e)
 // ──────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import ELK from "elkjs/lib/elk.bundled.js";
+import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import type { ProvDocument, ProvNode, ProvRelation } from "./generator";
 import type { ProvWarning } from "./errors";
+
+// fcose レイアウト登録（重複防止）
+ensureCytoscapePlugins();
+
+// ── design.md ラベル色パレット ──
+
+const THEME = {
+  // ノード色
+  activity:  { bg: "#5b8fb9", border: "#4a7da6", text: "#ffffff" },
+  entity:    { bg: "#4B7A52", border: "#3d6844", text: "#ffffff" },
+  result:    { bg: "#c26356", border: "#a8513f", text: "#ffffff" },
+  parameter: { bg: "#c08b3e", border: "#a67630", text: "#ffffff" },
+  sample:    { bg: "#8b7ab5", border: "#7466a0", text: "#ffffff" },
+  // エッジ色
+  edge: {
+    wasInformedBy:  "#5b8fb9",
+    used:           "#4B7A52",
+    wasGeneratedBy: "#c26356",
+    parameter:      "#c08b3e",
+    default:        "#6b7f6e",
+  },
+  // UI 色
+  background: "#fafdf7",
+  border: "#d5e0d7",
+  muted: "#f0f5ef",
+  mutedFg: "#6b7f6e",
+  primary: "#4B7A52",
+} as const;
 
 // ── 試料ごとのグラフ分離 ──
 
@@ -46,6 +76,16 @@ function splitDocBySample(doc: ProvDocument): SampleSplit[] {
 }
 
 /**
+ * ノードのサブタイプを判定（Entity を [使用したもの] と [結果] に分離）
+ */
+function getNodeSubtype(node: ProvNode): string {
+  if (node["@type"] === "prov:Entity") {
+    return node["@id"].startsWith("result_") ? "result" : "entity";
+  }
+  return node["@type"];
+}
+
+/**
  * PROVドキュメント → Cytoscape elements 変換
  */
 function provToCytoscapeElements(doc: ProvDocument): cytoscape.ElementDefinition[] {
@@ -65,6 +105,7 @@ function provToCytoscapeElements(doc: ProvDocument): cytoscape.ElementDefinition
         id: node["@id"],
         label,
         type: node["@type"],
+        subtype: getNodeSubtype(node),
       },
     });
   }
@@ -101,12 +142,8 @@ function provToCytoscapeElements(doc: ProvDocument): cytoscape.ElementDefinition
   return elements;
 }
 
-/**
- * Cytoscape グラフコンポーネント
- */
-/**
- * ELK layered レイアウトを計算し、Cytoscape ノードに位置を適用する
- */
+// ── ELK layered レイアウト ──
+
 // ノードタイプ別の固定サイズ（ELK レイアウト計算用）
 const NODE_SIZES: Record<string, { width: number; height: number }> = {
   "prov:Activity": { width: 150, height: 60 },
@@ -142,124 +179,214 @@ async function applyElkLayout(cy: cytoscape.Core) {
     edges: elkEdges,
   });
 
-  // ELK 計算結果を Cytoscape に反映
-  for (const elkNode of elkGraph.children ?? []) {
-    const node = cy.getElementById(elkNode.id);
-    if (node.length > 0 && elkNode.x != null && elkNode.y != null) {
-      node.position({
-        x: elkNode.x + (elkNode.width ?? 0) / 2,
-        y: elkNode.y + (elkNode.height ?? 0) / 2,
-      });
+  // ELK 計算結果を Cytoscape にアニメーション付きで反映
+  cy.batch(() => {
+    for (const elkNode of elkGraph.children ?? []) {
+      const node = cy.getElementById(elkNode.id);
+      if (node.length > 0 && elkNode.x != null && elkNode.y != null) {
+        node.position({
+          x: elkNode.x + (elkNode.width ?? 0) / 2,
+          y: elkNode.y + (elkNode.height ?? 0) / 2,
+        });
+      }
     }
-  }
+  });
 
   cy.fit(undefined, 20);
 }
 
-// Cytoscape スタイル定義
+// ── Cytoscape スタイル定義（design.md 準拠） ──
+
+const commonNodeStyle = {
+  label: "data(label)",
+  "text-wrap": "wrap" as any,
+  "text-max-width": "120px",
+  "font-size": "11px",
+  "font-family": "Inter, system-ui, sans-serif",
+  "text-valign": "center" as const,
+  "text-halign": "center" as const,
+  "border-width": 2,
+  width: "label",
+  height: "label",
+  padding: "14px",
+  // スムーズなトランジション
+  "transition-property": "background-color, border-color, opacity, width, height" as any,
+  "transition-duration": 200,
+  "transition-timing-function": "ease-in-out-sine" as any,
+};
+
 const cyStyles: cytoscape.StylesheetStyle[] = [
-  // Activity ノード（楕円・緑）
+  // Activity ノード（楕円・落ち着いた青）
   {
-    selector: 'node[type = "prov:Activity"]',
+    selector: 'node[subtype = "prov:Activity"]',
     style: {
-      label: "data(label)",
-      "text-wrap": "wrap" as any,
-      "text-max-width": "120px",
-      "font-size": "11px",
-      "text-valign": "center",
-      "text-halign": "center",
-      "background-color": "#91BF6D",
-      "border-color": "#388E3C",
-      "border-width": 2,
+      ...commonNodeStyle,
+      "background-color": THEME.activity.bg,
+      "border-color": THEME.activity.border,
+      color: THEME.activity.text,
       shape: "ellipse",
-      width: "label",
-      height: "label",
-      padding: "14px",
-      color: "#1a1a1a",
     },
   },
-  // Entity ノード（丸四角・青）
+  // Entity ノード — [使用したもの]（丸四角・ブランドグリーン）
   {
-    selector: 'node[type = "prov:Entity"]',
+    selector: 'node[subtype = "entity"]',
     style: {
-      label: "data(label)",
-      "text-wrap": "wrap" as any,
-      "text-max-width": "120px",
-      "font-size": "11px",
-      "text-valign": "center",
-      "text-halign": "center",
-      "background-color": "#8ECAE6",
-      "border-color": "#1976D2",
-      "border-width": 2,
+      ...commonNodeStyle,
+      "background-color": THEME.entity.bg,
+      "border-color": THEME.entity.border,
+      color: THEME.entity.text,
       shape: "round-rectangle",
-      width: "label",
-      height: "label",
-      padding: "14px",
-      color: "#1a1a1a",
     },
   },
-  // Parameter ノード（ダイヤ・オレンジ）
+  // Entity ノード — [結果]（丸四角・テラコッタ）
   {
-    selector: 'node[type = "matprov:Parameter"]',
+    selector: 'node[subtype = "result"]',
     style: {
-      label: "data(label)",
-      "text-wrap": "wrap" as any,
-      "text-max-width": "120px",
-      "font-size": "11px",
-      "text-valign": "center",
-      "text-halign": "center",
-      "background-color": "#F4A361",
-      "border-color": "#FFA000",
-      "border-width": 2,
-      shape: "diamond",
-      width: "label",
-      height: "label",
-      padding: "14px",
-      color: "#1a1a1a",
+      ...commonNodeStyle,
+      "background-color": THEME.result.bg,
+      "border-color": THEME.result.border,
+      color: THEME.result.text,
+      shape: "round-rectangle",
     },
   },
-  // エッジ（共通）
+  // Parameter ノード（ダイヤ・落ち着いたアンバー）
+  {
+    selector: 'node[subtype = "matprov:Parameter"]',
+    style: {
+      ...commonNodeStyle,
+      "background-color": THEME.parameter.bg,
+      "border-color": THEME.parameter.border,
+      color: THEME.parameter.text,
+      shape: "diamond",
+    },
+  },
+
+  // ── ホバーエフェクト ──
+
+  // ホバー中のノード: 少し明るく + 影（overlay で表現）
+  {
+    selector: "node.hover",
+    style: {
+      "border-width": 3,
+      "overlay-opacity": 0.08,
+      "overlay-color": "#000",
+    },
+  },
+  // ホバーノードに接続するエッジ: 太く
+  {
+    selector: "edge.hover-connected",
+    style: {
+      width: 3.5,
+      "z-index": 10,
+    },
+  },
+  // ホバーノードの隣接ノード: そのまま
+  {
+    selector: "node.hover-neighbor",
+    style: {
+      opacity: 1,
+    },
+  },
+  // フェード対象（ホバー時に接続のないノード・エッジ）
+  {
+    selector: "node.faded",
+    style: {
+      opacity: 0.15,
+    },
+  },
+  {
+    selector: "edge.faded",
+    style: {
+      opacity: 0.08,
+    },
+  },
+
+  // ── エッジ（共通） ──
   {
     selector: "edge",
     style: {
       label: "data(label)",
       "font-size": "9px",
+      "font-family": "Inter, system-ui, sans-serif",
       "text-rotation": "autorotate" as any,
       "text-margin-y": -10,
-      "text-background-color": "#fff",
-      "text-background-opacity": 0.8,
+      "text-background-color": THEME.background,
+      "text-background-opacity": 0.85,
       "text-background-padding": "2px" as any,
-      color: "#333",
-      "line-color": "#666",
-      "target-arrow-color": "#666",
+      color: "#4a5568",
+      "line-color": THEME.edge.default,
+      "target-arrow-color": THEME.edge.default,
       "target-arrow-shape": "triangle",
-      "curve-style": "bezier",
+      "arrow-scale": 0.9,
+      // 同一ノード間の複数エッジを分離して描画
+      "curve-style": "unbundled-bezier" as any,
+      "control-point-distances": 40,
+      "control-point-weights": 0.5,
       width: 2,
+      opacity: 1,
+      // スムーズなトランジション
+      "transition-property": "opacity, width, line-color, target-arrow-color" as any,
+      "transition-duration": 200,
+      "transition-timing-function": "ease-in-out-sine" as any,
     },
   },
-  // wasInformedBy エッジ（緑）
+  // wasInformedBy エッジ（落ち着いた青 — Activity 間フロー）
   {
     selector: 'edge[label = "wasInformedBy"]',
-    style: { "line-color": "#388E3C", "target-arrow-color": "#388E3C" },
+    style: { "line-color": THEME.edge.wasInformedBy, "target-arrow-color": THEME.edge.wasInformedBy },
   },
-  // used エッジ（青）
+  // used エッジ（ブランドグリーン — Entity→Activity）
   {
     selector: 'edge[label = "used"]',
-    style: { "line-color": "#1976D2", "target-arrow-color": "#1976D2" },
+    style: { "line-color": THEME.edge.used, "target-arrow-color": THEME.edge.used },
   },
-  // wasGeneratedBy エッジ（赤）
+  // wasGeneratedBy エッジ（テラコッタ — Activity→Result）
   {
     selector: 'edge[label = "wasGeneratedBy"]',
-    style: { "line-color": "#D32F2F", "target-arrow-color": "#D32F2F" },
+    style: { "line-color": THEME.edge.wasGeneratedBy, "target-arrow-color": THEME.edge.wasGeneratedBy },
   },
-  // parameter エッジ（オレンジ・点線）
+  // parameter エッジ（アンバー・点線）
   {
     selector: 'edge[label = "parameter"]',
-    style: { "line-color": "#FFA000", "target-arrow-color": "#FFA000", "line-style": "dashed" },
+    style: { "line-color": THEME.edge.parameter, "target-arrow-color": THEME.edge.parameter, "line-style": "dashed" },
   },
 ];
 
-function CytoscapeGraph({ doc, height = 450 }: { doc: ProvDocument; height?: number }) {
+// ── ホバーイベント設定 ──
+
+function setupHoverEffects(cy: cytoscape.Core) {
+  cy.on("mouseover", "node", (evt) => {
+    const node = evt.target;
+    const neighborhood = node.neighborhood();
+
+    // 全要素をフェード
+    cy.elements().addClass("faded");
+
+    // ホバーノード + 隣接ノード・エッジをハイライト
+    node.removeClass("faded").addClass("hover");
+    neighborhood.removeClass("faded");
+    neighborhood.nodes().addClass("hover-neighbor");
+    neighborhood.edges().addClass("hover-connected");
+  });
+
+  cy.on("mouseout", "node", () => {
+    cy.elements().removeClass("faded hover hover-neighbor hover-connected");
+  });
+}
+
+// ── グラフコンポーネント ──
+
+type LayoutMode = "layered" | "force";
+
+function CytoscapeGraph({
+  doc,
+  height = 450,
+  layoutMode = "layered",
+}: {
+  doc: ProvDocument;
+  height?: number;
+  layoutMode?: LayoutMode;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -269,34 +396,65 @@ function CytoscapeGraph({ doc, height = 450 }: { doc: ProvDocument; height?: num
     const elements = provToCytoscapeElements(doc);
     if (elements.length === 0) return;
 
-    // breadthfirst で初期表示（即座に見える）
+    // 初期レイアウトは preset（位置なし = 原点）で即座に描画
     const cy = cytoscape({
       container: containerRef.current,
       elements,
       style: cyStyles,
-      layout: { name: "breadthfirst", directed: true, spacingFactor: 1.5 } as any,
+      layout: { name: "preset" },
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
+      wheelSensitivity: 0.3,
+      minZoom: 0.2,
+      maxZoom: 4,
     });
 
     cyRef.current = cy;
-    cy.fit(undefined, 20);
 
-    // ELK layered で再レイアウト（非同期、完了後に上書き）
+    // ホバーエフェクト設定
+    setupHoverEffects(cy);
+
     let cancelled = false;
-    applyElkLayout(cy).then(() => {
-      if (!cancelled) cy.fit(undefined, 20);
-    }).catch((err) => {
-      console.warn("[PROV] ELK レイアウト失敗（breadthfirst を維持）:", err);
-    });
+
+    if (layoutMode === "force") {
+      // fcose: アニメーション付き力学レイアウト
+      const layout = cy.layout({
+        name: "fcose",
+        animate: true,
+        animationDuration: 800,
+        animationEasing: "ease-out-cubic" as any,
+        quality: "default",
+        randomize: true,
+        nodeRepulsion: 6000,
+        idealEdgeLength: 120,
+        edgeElasticity: 0.45,
+        gravity: 0.25,
+        gravityRange: 3.8,
+        nodeSeparation: 80,
+        padding: 20,
+      } as any);
+      layout.on("layoutstop", () => {
+        if (!cancelled) cy.fit(undefined, 20);
+      });
+      layout.run();
+    } else {
+      // layered: breadthfirst → ELK
+      cy.layout({ name: "breadthfirst", directed: true, spacingFactor: 1.5 } as any).run();
+      cy.fit(undefined, 20);
+      applyElkLayout(cy).then(() => {
+        if (!cancelled) cy.fit(undefined, 20);
+      }).catch((err) => {
+        console.warn("[PROV] ELK レイアウト失敗（breadthfirst を維持）:", err);
+      });
+    }
 
     return () => {
       cancelled = true;
       cy.destroy();
       cyRef.current = null;
     };
-  }, [doc]);
+  }, [doc, layoutMode]);
 
   return (
     <div
@@ -304,7 +462,7 @@ function CytoscapeGraph({ doc, height = 450 }: { doc: ProvDocument; height?: num
       style={{
         width: "100%",
         height,
-        background: "#fafdf7",
+        background: THEME.background,
       }}
     />
   );
@@ -316,6 +474,7 @@ function CytoscapeGraph({ doc, height = 450 }: { doc: ProvDocument; height?: num
 export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
   const [tab, setTab] = useState<"graph" | "json" | "warnings">("graph");
   const [viewMode, setViewMode] = useState<"all" | "split">("all");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("layered");
 
   // 試料分離（メモ化）
   const sampleSplits = useMemo(() => (doc ? splitDocBySample(doc) : []), [doc]);
@@ -341,8 +500,8 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
             onClick={() => setTab(t)}
             style={{
               ...tabStyle,
-              borderBottom: tab === t ? "2px solid #4B7A52" : "2px solid transparent",
-              color: tab === t ? "#4B7A52" : "#6b7f6e",
+              borderBottom: tab === t ? `2px solid ${THEME.primary}` : "2px solid transparent",
+              color: tab === t ? THEME.primary : THEME.mutedFg,
               fontWeight: tab === t ? 600 : 400,
             }}
           >
@@ -353,22 +512,53 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
 
       {/* 凡例 + 表示切替 */}
       {tab === "graph" && (
-        <div style={{ display: "flex", gap: 12, padding: "6px 12px", borderBottom: "1px solid #f0f5ef", fontSize: 10, color: "#6b7f6e", alignItems: "center" }}>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#91BF6D", marginRight: 3, verticalAlign: "middle" }} />Activity</span>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#8ECAE6", marginRight: 3, verticalAlign: "middle" }} />Entity</span>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, transform: "rotate(45deg)", background: "#F4A361", marginRight: 3, verticalAlign: "middle" }} />Parameter</span>
+        <div style={legendBarStyle}>
+          {/* ノード凡例 */}
+          <LegendDot color={THEME.activity.bg} shape="circle" label="手順" />
+          <LegendDot color={THEME.entity.bg} shape="square" label="使用" />
+          <LegendDot color={THEME.result.bg} shape="square" label="結果" />
+          <LegendDot color={THEME.parameter.bg} shape="diamond" label="属性" />
+
+          {/* 右側: レイアウト切替 + 統計 + 表示切替 */}
           <span style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
             <span style={{ color: "#9ca3af", marginRight: 4 }}>
               {doc["@graph"].length} ノード · {doc.relations.length} リレーション
             </span>
+
+            {/* レイアウトモード切替 */}
+            <button
+              onClick={() => setLayoutMode("layered")}
+              style={{
+                ...toggleBtnStyle,
+                background: layoutMode === "layered" ? THEME.primary : THEME.muted,
+                color: layoutMode === "layered" ? "#fff" : THEME.mutedFg,
+              }}
+              title="階層レイアウト（実験フロー順）"
+            >
+              階層
+            </button>
+            <button
+              onClick={() => setLayoutMode("force")}
+              style={{
+                ...toggleBtnStyle,
+                background: layoutMode === "force" ? THEME.primary : THEME.muted,
+                color: layoutMode === "force" ? "#fff" : THEME.mutedFg,
+              }}
+              title="力学レイアウト（自由探索）"
+            >
+              力学
+            </button>
+
+            {/* 試料分割切替 */}
             {hasSamples && (
               <>
+                <span style={{ width: 1, height: 14, background: THEME.border, margin: "0 2px" }} />
                 <button
                   onClick={() => setViewMode("all")}
                   style={{
                     ...toggleBtnStyle,
-                    background: viewMode === "all" ? "#4B7A52" : "#f0f5ef",
-                    color: viewMode === "all" ? "#fff" : "#6b7f6e",
+                    background: viewMode === "all" ? THEME.primary : THEME.muted,
+                    color: viewMode === "all" ? "#fff" : THEME.mutedFg,
                   }}
                 >
                   全体
@@ -377,8 +567,8 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
                   onClick={() => setViewMode("split")}
                   style={{
                     ...toggleBtnStyle,
-                    background: viewMode === "split" ? "#4B7A52" : "#f0f5ef",
-                    color: viewMode === "split" ? "#fff" : "#6b7f6e",
+                    background: viewMode === "split" ? THEME.primary : THEME.muted,
+                    color: viewMode === "split" ? "#fff" : THEME.mutedFg,
                   }}
                 >
                   試料別
@@ -390,7 +580,7 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
       )}
 
       {/* コンテンツ */}
-      {tab === "graph" && viewMode === "all" && <CytoscapeGraph doc={doc} />}
+      {tab === "graph" && viewMode === "all" && <CytoscapeGraph doc={doc} layoutMode={layoutMode} />}
       {tab === "graph" && viewMode === "split" && (
         <div style={{ overflow: "auto", maxHeight: 900 }}>
           {sampleSplits.map(({ sampleId, doc: splitDoc }) => (
@@ -402,7 +592,7 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
                   {splitDoc["@graph"].length} ノード
                 </span>
               </div>
-              <CytoscapeGraph doc={splitDoc} height={320} />
+              <CytoscapeGraph doc={splitDoc} height={320} layoutMode={layoutMode} />
             </div>
           ))}
         </div>
@@ -413,11 +603,36 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
   );
 }
 
+// ── 凡例ドット ──
+
+function LegendDot({ color, shape, label }: { color: string; shape: "circle" | "square" | "diamond"; label: string }) {
+  const dotStyle: React.CSSProperties = {
+    display: "inline-block",
+    width: 10,
+    height: 10,
+    marginRight: 3,
+    verticalAlign: "middle",
+    background: color,
+    ...(shape === "circle" ? { borderRadius: "50%" } : {}),
+    ...(shape === "square" ? { borderRadius: 2 } : {}),
+    ...(shape === "diamond" ? { borderRadius: 1, transform: "rotate(45deg) scale(0.8)" } : {}),
+  };
+
+  return (
+    <span>
+      <span style={dotStyle} />
+      {label}
+    </span>
+  );
+}
+
+// ── サブビュー ──
+
 function JsonView({ doc }: { doc: ProvDocument }) {
   return (
     <pre style={{
       padding: 12, fontSize: 10, overflow: "auto",
-      maxHeight: 400, background: "#f0f5ef", margin: 0,
+      maxHeight: 400, background: THEME.muted, margin: 0,
       fontFamily: "monospace", lineHeight: 1.5,
     }}>
       {JSON.stringify(doc, null, 2)}
@@ -432,7 +647,7 @@ function WarningsView({ warnings }: { warnings: ProvWarning[] }) {
   return (
     <div style={{ padding: 12 }}>
       {warnings.map((w, i) => (
-        <div key={i} style={{ fontSize: 11, padding: "4px 0", borderBottom: "1px solid #f0f5ef" }}>
+        <div key={i} style={{ fontSize: 11, padding: "4px 0", borderBottom: `1px solid ${THEME.muted}` }}>
           <span style={{
             fontSize: 9, padding: "1px 4px", borderRadius: 3,
             background: "#fef3c7", color: "#b45309", marginRight: 6, fontWeight: 600,
@@ -446,18 +661,19 @@ function WarningsView({ warnings }: { warnings: ProvWarning[] }) {
   );
 }
 
-// スタイル定数
+// ── スタイル定数 ──
+
 const panelStyle: React.CSSProperties = {
-  border: "1px solid #d5e0d7",
+  border: `1px solid ${THEME.border}`,
   borderRadius: 8,
-  background: "#fafdf7",
+  background: THEME.background,
   overflow: "hidden",
 };
 
 const tabBarStyle: React.CSSProperties = {
   display: "flex",
-  borderBottom: "1px solid #d5e0d7",
-  background: "#f0f5ef",
+  borderBottom: `1px solid ${THEME.border}`,
+  background: THEME.muted,
 };
 
 const tabStyle: React.CSSProperties = {
@@ -466,6 +682,16 @@ const tabStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
+};
+
+const legendBarStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  padding: "6px 12px",
+  borderBottom: `1px solid ${THEME.muted}`,
+  fontSize: 10,
+  color: THEME.mutedFg,
+  alignItems: "center",
 };
 
 const emptyStyle: React.CSSProperties = {
@@ -492,14 +718,14 @@ const sampleHeaderStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
   color: "#374151",
-  background: "#f0f5ef",
-  borderTop: "1px solid #d5e0d7",
-  borderBottom: "1px solid #f0f5ef",
+  background: THEME.muted,
+  borderTop: `1px solid ${THEME.border}`,
+  borderBottom: `1px solid ${THEME.muted}`,
 };
 
 const sampleDotStyle: React.CSSProperties = {
   width: 8,
   height: 8,
   borderRadius: "50%",
-  background: "#8b7ab5",
+  background: THEME.sample.bg,
 };
