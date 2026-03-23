@@ -44,145 +44,112 @@ function getLabelColor(label: string): string {
 }
 
 // ──────────────────────────────────
-// LabelBadgeLayer（マージン埋め込み方式）
+// LabelBadgeLayer（インライン挿入方式）
 //
-// エディタのラッパーに padding-left を確保し、
-// その左マージン領域に position:absolute でバッジを配置する。
-// DOMフローに乗るためスクロール追従が自動で、はみ出しが構造的に不可能。
+// ラベルが付いたブロックの content 要素にバッジを直接挿入する。
+// DOM フローに乗るためスクロール追従・位置ずれが構造的に起きない。
 // ──────────────────────────────────
 
-/** エディタラッパー用の定数 */
-export const LABEL_GUTTER_WIDTH = 100; // px: ラベル表示領域の幅
+/** ガター幅（互換性のためエクスポートを維持、値は0） */
+export const LABEL_GUTTER_WIDTH = 0;
 
-type BadgeInfo = {
-  blockId: string;
-  label: string;
-  top: number;   // ラッパー内の offsetTop
-};
+// バッジのスタイルを生成
+function badgeStyle(color: string): string {
+  return [
+    "display:inline-flex",
+    "align-items:center",
+    "gap:3px",
+    "padding:1px 6px",
+    "border-radius:4px",
+    "font-size:11px",
+    "font-weight:600",
+    `background-color:${color}18`,
+    `color:${color}`,
+    `border:1px solid ${color}38`,
+    "cursor:pointer",
+    "user-select:none",
+    "line-height:1.6",
+    "margin-right:6px",
+    "vertical-align:middle",
+    "white-space:nowrap",
+  ].join(";");
+}
 
 export function LabelBadgeLayer() {
   const { labels, openDropdown } = useLabelStore();
-  const [badges, setBadges] = useState<BadgeInfo[]>([]);
-  const wrapperRef = useRef<HTMLElement | null>(null);
 
-  const compute = useCallback(() => {
-    // ラッパー要素を取得（data-label-wrapper 属性で識別）
-    const wrapper = document.querySelector("[data-label-wrapper]") as HTMLElement | null;
-    if (!wrapper) return;
-    wrapperRef.current = wrapper;
-
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const next: BadgeInfo[] = [];
-
-    for (const [blockId, label] of labels) {
-      const el = wrapper.querySelector(
-        `[data-id="${blockId}"][data-node-type="blockOuter"]`
-      ) as HTMLElement | null;
-      if (!el) continue;
-
-      const elRect = el.getBoundingClientRect();
-      if (elRect.height === 0) continue;
-
-      // ブロックの先頭行に合わせる（ネストしたブロックでもずれない）
-      // blockOuter 内の最初のテキスト要素を探して、その位置を使う
-      const firstContent = el.querySelector("h1, h2, h3, p, li, td") as HTMLElement | null;
-      const targetRect = firstContent ? firstContent.getBoundingClientRect() : elRect;
-      const top = targetRect.top - wrapperRect.top + wrapper.scrollTop + targetRect.height / 2;
-      next.push({ blockId, label, top });
-    }
-    setBadges(next);
-  }, [labels]);
-
-  // labels 変化時に再計算
+  // ラベルバッジをブロック DOM に直接挿入・更新
   useEffect(() => {
-    const raf = requestAnimationFrame(compute);
-    return () => cancelAnimationFrame(raf);
-  }, [compute]);
+    const inject = () => {
+      const wrapper = document.querySelector("[data-label-wrapper]");
+      if (!wrapper) return;
 
-  // エディタ内のDOM変更で再計算（スクロールでは再計算しない）
-  useEffect(() => {
-    const wrapper = document.querySelector("[data-label-wrapper]");
-    if (!wrapper) return;
+      // 既存のバッジをすべて削除
+      wrapper.querySelectorAll("[data-inline-label]").forEach((el) => el.remove());
 
-    let rafId: number | null = null;
-    const observer = new MutationObserver(() => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(compute);
-    });
-    observer.observe(wrapper, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
+      // 各ラベル付きブロックにバッジを挿入
+      for (const [blockId, label] of labels) {
+        const blockOuter = wrapper.querySelector(
+          `[data-id="${blockId}"][data-node-type="blockOuter"]`
+        );
+        if (!blockOuter) continue;
 
-    // ウィンドウリサイズ時のみ再計算
-    const onResize = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(compute);
+        // content 要素を探す（見出し・段落・リスト等）
+        const contentEl = blockOuter.querySelector(
+          "[data-content-type] h1, [data-content-type] h2, [data-content-type] h3, " +
+          "[data-content-type] p, [data-content-type] > div"
+        );
+        if (!contentEl) continue;
+
+        // バッジ要素を作成
+        const badge = document.createElement("span");
+        badge.setAttribute("data-inline-label", blockId);
+        badge.setAttribute("data-prov-label-anchor", blockId);
+        badge.setAttribute("contenteditable", "false");
+        badge.setAttribute("title", `${label} — クリックで変更`);
+        badge.style.cssText = badgeStyle(getLabelColor(label));
+        badge.textContent = label;
+
+        // クリックでドロップダウンを開く
+        badge.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openDropdown(blockId);
+        });
+
+        // テキストの先頭に挿入
+        contentEl.insertBefore(badge, contentEl.firstChild);
+      }
     };
-    window.addEventListener("resize", onResize);
+
+    // 初回挿入（DOM が準備できるのを待つ）
+    const rafId = requestAnimationFrame(inject);
+
+    // DOM 変化時に再挿入（ProseMirror がバッジを消す場合の対策）
+    const wrapper = document.querySelector("[data-label-wrapper]");
+    let observer: MutationObserver | null = null;
+    if (wrapper) {
+      let debounceId: number | null = null;
+      observer = new MutationObserver(() => {
+        if (debounceId) cancelAnimationFrame(debounceId);
+        debounceId = requestAnimationFrame(inject);
+      });
+      observer.observe(wrapper, {
+        childList: true,
+        subtree: true,
+      });
+    }
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", onResize);
-      if (rafId) cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafId);
+      observer?.disconnect();
+      // クリーンアップ: バッジを削除
+      document.querySelectorAll("[data-inline-label]").forEach((el) => el.remove());
     };
-  }, [compute]);
+  }, [labels, openDropdown]);
 
-  if (badges.length === 0) return null;
-
-  // ラッパー内にポータルで描画（ラッパーが position:relative なので absolute が効く）
-  const wrapper = wrapperRef.current ?? document.querySelector("[data-label-wrapper]");
-  if (!wrapper) return null;
-
-  return createPortal(
-    <>
-      {badges.map(({ blockId, label, top }) => {
-        return (
-          <div
-            key={blockId}
-            style={{
-              position: "absolute",
-              top,
-              left: 4,
-              transform: "translateY(-50%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: 3,
-              pointerEvents: "auto",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {/* ラベルバッジ本体 */}
-            <span
-              data-prov-label-anchor={blockId}
-              onClick={() => openDropdown(blockId)}
-              title={`${label} — クリックで変更`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 3,
-                padding: "1px 6px",
-                borderRadius: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                backgroundColor: getLabelColor(label) + "18",
-                color: getLabelColor(label),
-                border: `1px solid ${getLabelColor(label)}38`,
-                cursor: "pointer",
-                userSelect: "none",
-                lineHeight: 1.6,
-              }}
-            >
-              {label}
-            </span>
-          </div>
-        );
-      })}
-    </>,
-    wrapper
-  );
+  // DOM 挿入方式のため、React レンダリングは不要
+  return null;
 }
 
 // ──────────────────────────────────
