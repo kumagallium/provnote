@@ -1,6 +1,16 @@
 [
   {
-    "sha": "888c2bb",
+    "sha": "d7c45d0",
+    "message": "[fix] Align SideMenu height with custom heading sizes",
+    "date": "2026-03-23"
+  },
+  {
+    "sha": "69ceb92",
+    "message": "Merge pull request #13 from kumagallium/fix/replace-emoji-with-lucide-icons",
+    "date": "2026-03-23"
+  },
+  {
+    "sha": "01b877a",
     "message": "Merge origin/main into fix/replace-emoji-with-lucide-icons",
     "date": "2026-03-23"
   },
@@ -237,16 +247,6 @@
   {
     "sha": "7350493",
     "message": "Apply Crucible design guidelines to stories and add Design Guide",
-    "date": "2026-03-23"
-  },
-  {
-    "sha": "a18d585",
-    "message": "Fix stories: anchor + drag at content edge, labels extend left",
-    "date": "2026-03-23"
-  },
-  {
-    "sha": "8845259",
-    "message": "Fix stories: SideMenu x-position fixed at editor left edge",
     "date": "2026-03-23"
   }
 ]
