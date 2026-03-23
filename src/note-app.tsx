@@ -577,7 +577,12 @@ export function NoteApp() {
   const { authenticated, loading: authLoading, signIn, signOut } = useGoogleAuth();
   const [files, setFiles] = useState<ProvNoteFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
-  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [activeFileId, _setActiveFileId] = useState<string | null>(null);
+  const activeFileIdRef = useRef<string | null>(null);
+  const setActiveFileId = useCallback((id: string | null) => {
+    activeFileIdRef.current = id;
+    _setActiveFileId(id);
+  }, []);
   const [activeDoc, setActiveDoc] = useState<ProvNoteDocument | null>(null);
   const [saving, setSaving] = useState(false);
   // エディタを強制的にリマウントするためのキー
@@ -622,18 +627,19 @@ export function NoteApp() {
     setEditorKey((k) => k + 1);
   }, []);
 
-  // 保存
+  // 保存（ref 経由で常に最新の activeFileId を使用）
   const handleSave = useCallback(
     async (doc: ProvNoteDocument) => {
       setSaving(true);
       try {
-        if (activeFileId) {
+        const currentFileId = activeFileIdRef.current;
+        if (currentFileId) {
           // 既存ファイルを上書き
-          await saveFile(activeFileId, doc);
-          // ローカルのファイル一覧を即座に更新（API ラグを回避）
+          await saveFile(currentFileId, doc);
+          // ローカルのファイル一覧を即座に更新
           setFiles((prev) =>
             prev.map((f) =>
-              f.id === activeFileId
+              f.id === currentFileId
                 ? { ...f, name: `${doc.title}.provnote.json`, modifiedTime: new Date().toISOString() }
                 : f
             )
@@ -660,7 +666,7 @@ export function NoteApp() {
         setSaving(false);
       }
     },
-    [activeFileId]
+    [setActiveFileId]
   );
 
   // 削除
