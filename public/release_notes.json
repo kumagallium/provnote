@@ -1,6 +1,11 @@
 [
   {
-    "sha": "94a4438",
+    "sha": "fba3961",
+    "message": "[fix] Filter out orphan links from existing notes",
+    "date": "2026-03-23"
+  },
+  {
+    "sha": "6d96b23",
     "message": "[fix] Clean up orphan links when deleting derived notes",
     "date": "2026-03-23"
   },
@@ -242,11 +247,6 @@
   {
     "sha": "8f89b20",
     "message": "Switch labels to gutter badges beside block handle",
-    "date": "2026-03-23"
-  },
-  {
-    "sha": "1113964",
-    "message": "Switch label badges from gutter to inline injection",
     "date": "2026-03-23"
   }
 ]

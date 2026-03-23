@@ -44,15 +44,20 @@ export function buildNoteGraph(
     adjacency.get(to)!.add(from);
   };
 
+  // 存在するファイル ID のセット（孤児リンクを除外）
+  const fileIds = new Set(files.map((f) => f.id));
+
   for (const [fileId, doc] of docs) {
-    // derivedFromNoteId: このノートの親
-    if (doc.derivedFromNoteId) {
+    // derivedFromNoteId: このノートの親（存在チェック）
+    if (doc.derivedFromNoteId && fileIds.has(doc.derivedFromNoteId)) {
       addEdge(doc.derivedFromNoteId, fileId);
     }
-    // noteLinks: このノートの子
+    // noteLinks: このノートの子（存在チェック）
     if (doc.noteLinks) {
       for (const link of doc.noteLinks) {
-        addEdge(fileId, link.targetNoteId);
+        if (fileIds.has(link.targetNoteId)) {
+          addEdge(fileId, link.targetNoteId);
+        }
       }
     }
   }
