@@ -365,8 +365,7 @@ export function LabelSideMenuButton() {
         data-prov-label-anchor={block.id}
         title={`${label} — クリックで変更`}
         style={{
-          display: "inline-flex",
-          alignItems: "center",
+          display: "inline-block",
           padding: "0px 6px",
           borderRadius: 9999,
           fontSize: 11,
@@ -378,6 +377,9 @@ export function LabelSideMenuButton() {
           userSelect: "none",
           lineHeight: 1.6,
           whiteSpace: "nowrap",
+          maxWidth: 48,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
         {label}
