@@ -1,17 +1,25 @@
 // ノート間ネットワークグラフ（Obsidian 風）
-// Cytoscape.js で2ホップの派生関係を可視化
+// Cytoscape.js + fcose で派生関係をヌルヌル可視化
+// design.md テーマカラー準拠
 
 import { useEffect, useRef, useCallback } from "react";
 import cytoscape from "cytoscape";
+import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import type { NoteGraphData } from "./graph-builder";
 
-// ── スタイル定義 ──
+// fcose レイアウト登録（重複防止）
+ensureCytoscapePlugins();
+
+// ── design.md テーマカラー準拠 ──
 
 const NODE_COLORS = {
-  current: "#3B82F6", // 青（現在のノート）
-  hop1: "#8B5CF6", // 紫（1ホップ）
-  hop2: "#94A3B8", // グレー（2ホップ）
+  current: "#4B7A52", // ブランドグリーン（現在のノート）
+  hop1: "#5b8fb9",    // 落ち着いた青（1ホップ）
+  hop2: "#b8c9be",    // 淡いグリーングレー（2ホップ）
 } as const;
+
+const EDGE_COLOR = "#b8d4bb"; // 淡いグリーン
+const BG_COLOR = "#fafdf7";   // テーマ背景
 
 function getNodeColor(hop: number, isCurrent: boolean): string {
   if (isCurrent) return NODE_COLORS.current;
@@ -19,9 +27,17 @@ function getNodeColor(hop: number, isCurrent: boolean): string {
   return NODE_COLORS.hop2;
 }
 
+function getBorderColor(hop: number, isCurrent: boolean): string {
+  if (isCurrent) return "#3d6844";
+  if (hop === 1) return "#4a7da6";
+  return "#9cb5a4";
+}
+
 function getNodeSize(isCurrent: boolean): number {
   return isCurrent ? 40 : 28;
 }
+
+// ── Cytoscape スタイル ──
 
 const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
   {
@@ -31,6 +47,7 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       "text-wrap": "wrap",
       "text-max-width": "100px",
       "font-size": "10px",
+      "font-family": "Inter, system-ui, sans-serif",
       "text-valign": "bottom",
       "text-margin-y": 6,
       "background-color": "data(color)",
@@ -38,24 +55,74 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       height: "data(size)",
       "border-width": 2,
       "border-color": "data(borderColor)",
-      color: "#64748B",
+      color: "#6b7f6e",
+      // スムーズなトランジション
+      "transition-property": "background-color, border-color, opacity, width, height" as any,
+      "transition-duration": 200,
+      "transition-timing-function": "ease-in-out-sine" as any,
     },
   },
   {
     selector: "node:active",
     style: {
-      "overlay-opacity": 0.1,
+      "overlay-opacity": 0.08,
+    },
+  },
+  // ホバー中のノード
+  {
+    selector: "node.hover",
+    style: {
+      "border-width": 3,
+      "overlay-opacity": 0.06,
+      "overlay-color": "#000",
+    },
+  },
+  // ホバーノードの隣接ノード
+  {
+    selector: "node.hover-neighbor",
+    style: {
+      opacity: 1,
+    },
+  },
+  // フェード対象
+  {
+    selector: "node.faded",
+    style: {
+      opacity: 0.15,
     },
   },
   {
     selector: "edge",
     style: {
       width: 1.5,
-      "line-color": "#CBD5E1",
-      "target-arrow-color": "#CBD5E1",
+      "line-color": EDGE_COLOR,
+      "target-arrow-color": EDGE_COLOR,
       "target-arrow-shape": "triangle",
       "arrow-scale": 0.8,
-      "curve-style": "bezier",
+      "curve-style": "unbundled-bezier" as any,
+      "control-point-distances": 30,
+      "control-point-weights": 0.5,
+      opacity: 1,
+      // スムーズなトランジション
+      "transition-property": "opacity, width, line-color" as any,
+      "transition-duration": 200,
+      "transition-timing-function": "ease-in-out-sine" as any,
+    },
+  },
+  // ホバーノードに接続するエッジ
+  {
+    selector: "edge.hover-connected",
+    style: {
+      width: 2.5,
+      "line-color": "#4B7A52",
+      "target-arrow-color": "#4B7A52",
+      "z-index": 10,
+    },
+  },
+  {
+    selector: "edge.faded",
+    style: {
+      opacity: 0.08,
     },
   },
 ];
@@ -99,7 +166,7 @@ export function NetworkGraphPanel({
           id: node.id,
           label: node.title,
           color,
-          borderColor: node.isCurrent ? "#1D4ED8" : color,
+          borderColor: getBorderColor(node.hop, node.isCurrent),
           size: getNodeSize(node.isCurrent),
           hop: node.hop,
           isCurrent: node.isCurrent,
@@ -126,19 +193,61 @@ export function NetworkGraphPanel({
       container: containerRef.current,
       elements,
       style: cytoscapeStyle,
-      layout: {
-        name: "cose",
-        animate: false,
-        nodeRepulsion: 8000,
-        idealEdgeLength: 120,
-        gravity: 0.3,
-        padding: 40,
-      } as cytoscape.LayoutOptions,
+      layout: { name: "preset" },
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
-      minZoom: 0.3,
-      maxZoom: 3,
+      wheelSensitivity: 0.3,
+      minZoom: 0.2,
+      maxZoom: 4,
+    });
+
+    // fcose レイアウト実行（要素描画後にアニメーション開始）
+    const layout = cy.layout({
+      name: "fcose",
+      animate: true,
+      animationDuration: 800,
+      animationEasing: "ease-out-cubic" as any,
+      quality: "default",
+      randomize: true,
+      nodeRepulsion: 6000,
+      idealEdgeLength: 120,
+      edgeElasticity: 0.45,
+      gravity: 0.25,
+      gravityRange: 3.8,
+      nodeSeparation: 80,
+      padding: 40,
+    } as any);
+    layout.on("layoutstop", () => {
+      cy.fit(undefined, 20);
+    });
+    layout.run();
+
+    // ── ホバーエフェクト ──
+
+    cy.on("mouseover", "node", (evt) => {
+      const node = evt.target;
+      const neighborhood = node.neighborhood();
+
+      // 全要素をフェード
+      cy.elements().addClass("faded");
+
+      // ホバーノード + 隣接をハイライト
+      node.removeClass("faded").addClass("hover");
+      neighborhood.removeClass("faded");
+      neighborhood.nodes().addClass("hover-neighbor");
+      neighborhood.edges().addClass("hover-connected");
+
+      // カーソル変更（他ノートならポインター）
+      const isCurrent = node.data("isCurrent");
+      if (!isCurrent) {
+        containerRef.current!.style.cursor = "pointer";
+      }
+    });
+
+    cy.on("mouseout", "node", () => {
+      cy.elements().removeClass("faded hover hover-neighbor hover-connected");
+      containerRef.current!.style.cursor = "default";
     });
 
     // ノードクリックでナビゲーション
@@ -148,17 +257,6 @@ export function NetworkGraphPanel({
       if (!isCurrent) {
         handleNavigate(nodeId);
       }
-    });
-
-    // ホバー時のカーソル変更
-    cy.on("mouseover", "node", (evt) => {
-      const isCurrent = evt.target.data("isCurrent");
-      if (!isCurrent) {
-        containerRef.current!.style.cursor = "pointer";
-      }
-    });
-    cy.on("mouseout", "node", () => {
-      containerRef.current!.style.cursor = "default";
     });
 
     cyRef.current = cy;
@@ -178,7 +276,7 @@ export function NetworkGraphPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: BG_COLOR }}>
       {/* 凡例 */}
       <div className="px-3 py-2 border-b border-border flex items-center gap-3 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
