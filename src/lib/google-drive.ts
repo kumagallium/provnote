@@ -17,11 +17,27 @@ export type ProvNoteFile = {
   createdTime: string;
 };
 
+// ノート間リンク（派生関係）
+export type NoteLink = {
+  /** リンク先ノートの Google Drive ファイル ID */
+  targetNoteId: string;
+  /** リンク元のブロック ID */
+  sourceBlockId: string;
+  /** リンクの種類 */
+  type: "derived_from";
+};
+
 // ProvNote ファイルの内容（エディタの完全な状態）
 export type ProvNoteDocument = {
   version: 1;
   title: string;
   pages: ProvNotePage[];
+  /** ノート間リンク（派生先ノートへの参照） */
+  noteLinks?: NoteLink[];
+  /** このノートの派生元ノート ID */
+  derivedFromNoteId?: string;
+  /** このノートの派生元ブロック ID */
+  derivedFromBlockId?: string;
   createdAt: string;
   modifiedAt: string;
 };

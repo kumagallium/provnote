@@ -227,28 +227,7 @@ function NoteLinkSideMenuButton() {
     <button
       onClick={handleClick}
       title="このブロックから新ページを派生"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 22,
-        height: 22,
-        borderRadius: 4,
-        border: "1px dashed #bfdbfe",
-        background: "none",
-        cursor: "pointer",
-        color: "#93c5fd",
-        fontSize: 11,
-        lineHeight: 1,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "#3b82f6";
-        e.currentTarget.style.color = "#3b82f6";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "#bfdbfe";
-        e.currentTarget.style.color = "#93c5fd";
-      }}
+      className="inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-dashed border-primary/30 bg-transparent cursor-pointer text-primary/50 text-[11px] leading-none hover:border-primary hover:text-primary transition-colors"
     >
       &#128279;
     </button>
@@ -260,11 +239,13 @@ function NoteEditor({
   fileId,
   initialDoc,
   onSave,
+  onDeriveNote,
   saving,
 }: {
   fileId: string | null;
   initialDoc: ProvNoteDocument | null;
   onSave: (doc: ProvNoteDocument) => void;
+  onDeriveNote: (title: string, sourceBlockId: string) => void;
   saving: boolean;
 }) {
   return (
@@ -274,6 +255,7 @@ function NoteEditor({
           fileId={fileId}
           initialDoc={initialDoc}
           onSave={onSave}
+          onDeriveNote={onDeriveNote}
           saving={saving}
         />
       </LinkStoreProvider>
@@ -285,11 +267,13 @@ function NoteEditorInner({
   fileId,
   initialDoc,
   onSave,
+  onDeriveNote,
   saving,
 }: {
   fileId: string | null;
   initialDoc: ProvNoteDocument | null;
   onSave: (doc: ProvNoteDocument) => void;
+  onDeriveNote: (title: string, sourceBlockId: string) => void;
   saving: boolean;
 }) {
   const { pages, activePageId, setActivePageId, addPage, removePage } =
@@ -429,7 +413,7 @@ function NoteEditorInner({
     return () => { setOnPrevStepLinkSelected(null); };
   }, [linkStore]);
 
-  // スコープ派生ボタン
+  // スコープ派生ボタン → 別ノートとして作成
   useEffect(() => {
     openLinkDropdownFn = (params) => {
       const sourceBlockId = params.sourceBlockId;
@@ -437,23 +421,11 @@ function NoteEditorInner({
         `[data-id="${sourceBlockId}"][data-node-type="blockOuter"]`
       );
       const heading = el?.querySelector("h1, h2, h3");
-      const derivedTitle = heading?.textContent || "派生ページ";
-
-      const newPageId = addPage(`↳ ${derivedTitle}`, {
-        pageId: activePageId,
-        blockId: sourceBlockId,
-      });
-
-      linkStore.addLink({
-        sourceBlockId,
-        targetBlockId: newPageId ?? "",
-        type: "derived_from",
-        createdBy: "system",
-        targetPageId: newPageId,
-      });
+      const derivedTitle = heading?.textContent || "派生ノート";
+      onDeriveNote(derivedTitle, sourceBlockId);
     };
     return () => { openLinkDropdownFn = null; };
-  }, [activePageId, addPage, linkStore]);
+  }, [onDeriveNote]);
 
   // PROV リアルタイム生成（デバウンス 500ms）
   const provTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -524,17 +496,9 @@ function NoteEditorInner({
         </button>
       </div>
 
-      <div style={{ display: "flex", height: "100%", width: "100%", gap: 0, overflow: "hidden" }}>
+      <div className="flex h-full w-full overflow-hidden">
         {/* 左: エディタ */}
-        <div
-          data-label-wrapper
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "auto",
-            position: "relative",
-          }}
-        >
+        <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
           <LabelBadgeLayer />
           <MultiPageLayout
             pages={pages}
@@ -559,54 +523,20 @@ function NoteEditorInner({
         </div>
 
         {/* 右: PROV パネル */}
-        <div
-          style={{
-            width: 480,
-            flexShrink: 0,
-            borderLeft: "1px solid #e5e7eb",
-            background: "#fafbfc",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "8px 12px",
-              borderBottom: "1px solid #e5e7eb",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#6b7280",
-                letterSpacing: "0.05em",
-              }}
-            >
+        <div className="w-[480px] shrink-0 border-l border-border bg-muted flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+            <span className="text-xs font-bold text-muted-foreground tracking-wide">
               PROV
             </span>
             <button
               onClick={generateProv}
               title="手動で再生成"
-              style={{
-                padding: "3px 10px",
-                fontSize: 11,
-                fontWeight: 600,
-                borderRadius: 4,
-                border: "1px solid #3b82f6",
-                background: "#eff6ff",
-                color: "#3b82f6",
-                cursor: "pointer",
-              }}
+              className="px-2.5 py-0.5 text-xs font-semibold rounded border border-primary bg-primary/5 text-primary cursor-pointer hover:bg-primary/10 transition-colors"
             >
               生成
             </button>
           </div>
-          <div style={{ flex: 1, overflow: "auto" }}>
+          <div className="flex-1 overflow-auto">
             <ProvGraphPanel doc={provDoc} />
           </div>
         </div>
@@ -737,6 +667,51 @@ export function NoteApp() {
     [setActiveFileId]
   );
 
+  // 派生ノートを別ファイルとして作成
+  const handleDeriveNote = useCallback(
+    async (derivedTitle: string, sourceBlockId: string) => {
+      try {
+        // 派生先ノートを作成
+        const now = new Date().toISOString();
+        const newDoc: ProvNoteDocument = {
+          version: 1,
+          title: `↳ ${derivedTitle}`,
+          pages: [{ id: "main", title: `↳ ${derivedTitle}`, blocks: [], labels: {}, links: [] }],
+          derivedFromNoteId: activeFileIdRef.current ?? undefined,
+          derivedFromBlockId: sourceBlockId,
+          createdAt: now,
+          modifiedAt: now,
+        };
+        const newFileId = await createFile(newDoc.title, newDoc);
+
+        // 元ノートに noteLinks を追加して保存
+        if (activeFileIdRef.current && activeDoc) {
+          const noteLinks = activeDoc.noteLinks ?? [];
+          noteLinks.push({
+            targetNoteId: newFileId,
+            sourceBlockId,
+            type: "derived_from",
+          });
+          const updatedDoc = { ...activeDoc, noteLinks, modifiedAt: now };
+          await saveFile(activeFileIdRef.current, updatedDoc);
+          setActiveDoc(updatedDoc);
+        }
+
+        // ファイル一覧を更新
+        setFiles((prev) => [
+          { id: newFileId, name: `↳ ${derivedTitle}.provnote.json`, modifiedTime: now, createdTime: now },
+          ...prev,
+        ]);
+
+        // 派生先ノートを開く
+        handleOpenFile(newFileId);
+      } catch (err) {
+        console.error("派生ノートの作成に失敗:", err);
+      }
+    },
+    [activeDoc, handleOpenFile, setActiveFileId]
+  );
+
   // 削除
   const handleDelete = useCallback(
     async (fileId: string) => {
@@ -788,6 +763,7 @@ export function NoteApp() {
           fileId={activeFileId}
           initialDoc={activeDoc}
           onSave={handleSave}
+          onDeriveNote={handleDeriveNote}
           saving={saving}
         />
       </main>
