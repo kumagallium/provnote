@@ -8,7 +8,8 @@
 //   Parameter = ダイヤ・落ち着いたアンバー (#c08b3e)
 // ──────────────────────────────────────────────
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import cytoscape from "cytoscape";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ProvDocument, ProvNode } from "./generator";
@@ -444,6 +445,7 @@ function CytoscapeGraph({
  */
 export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
   const [activeSample, setActiveSample] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   // 試料分離（メモ化）
   const sampleSplits = useMemo(() => (doc ? splitDocBySample(doc) : []), [doc]);
@@ -459,6 +461,16 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
       setActiveSample(null);
     }
   }, [sampleSplits, activeSample]);
+
+  // Escape キーでモーダルを閉じる
+  useEffect(() => {
+    if (!expanded) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [expanded]);
 
   if (!doc) {
     return (
@@ -476,43 +488,67 @@ export function ProvGraphPanel({ doc }: { doc: ProvDocument | null }) {
     : doc;
   const showTabs = sampleSplits.length > 1;
 
-  return (
-    <div style={panelStyle}>
-      {/* 試料タブ */}
-      {showTabs && (
-        <div style={tabBarStyle}>
-          {sampleSplits.map(({ sampleId }) => (
-            <button
-              key={sampleId}
-              onClick={() => setActiveSample(sampleId)}
-              style={{
-                ...tabStyle,
-                borderBottom: activeSample === sampleId ? `2px solid ${THEME.primary}` : "2px solid transparent",
-                color: activeSample === sampleId ? THEME.primary : THEME.mutedFg,
-                fontWeight: activeSample === sampleId ? 600 : 400,
-              }}
-            >
-              {sampleId}
-            </button>
-          ))}
-        </div>
-      )}
+  const sampleTabs = showTabs ? (
+    <div style={tabBarStyle}>
+      {sampleSplits.map(({ sampleId }) => (
+        <button
+          key={sampleId}
+          onClick={() => setActiveSample(sampleId)}
+          style={{
+            ...tabStyle,
+            borderBottom: activeSample === sampleId ? `2px solid ${THEME.primary}` : "2px solid transparent",
+            color: activeSample === sampleId ? THEME.primary : THEME.mutedFg,
+            fontWeight: activeSample === sampleId ? 600 : 400,
+          }}
+        >
+          {sampleId}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
-      {/* 凡例 */}
-      <div style={legendBarStyle}>
-        <LegendDot color={THEME.activity.bg} shape="circle" label="手順" />
-        <LegendDot color={THEME.entity.bg} shape="square" label="使用" />
-        <LegendDot color={THEME.result.bg} shape="square" label="結果" />
-        <LegendDot color={THEME.parameter.bg} shape="diamond" label="属性" />
+  const legendBar = (
+    <div style={legendBarStyle}>
+      <LegendDot color={THEME.activity.bg} shape="circle" label="手順" />
+      <LegendDot color={THEME.entity.bg} shape="square" label="使用" />
+      <LegendDot color={THEME.result.bg} shape="square" label="結果" />
+      <LegendDot color={THEME.parameter.bg} shape="diamond" label="属性" />
 
-        <span style={{ marginLeft: "auto", color: "#9ca3af" }}>
+      <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+        <span style={{ color: "#9ca3af" }}>
           {activeDoc["@graph"].length} ノード · {activeDoc.relations.length} リレーション
         </span>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={expandBtnStyle}
+          title={expanded ? "閉じる" : "拡大表示"}
+        >
+          {expanded ? "✕" : "⤢"}
+        </button>
+      </span>
+    </div>
+  );
+
+  return (
+    <>
+      <div style={panelStyle}>
+        {sampleTabs}
+        {legendBar}
+        <CytoscapeGraph doc={activeDoc} />
       </div>
 
-      {/* グラフ（階層レイアウト固定） */}
-      <CytoscapeGraph doc={activeDoc} />
-    </div>
+      {/* 拡大モーダル */}
+      {expanded && createPortal(
+        <div style={modalOverlayStyle} onClick={() => setExpanded(false)}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            {sampleTabs}
+            {legendBar}
+            <CytoscapeGraph doc={activeDoc} height={window.innerHeight - 120} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -570,5 +606,37 @@ const legendBarStyle: React.CSSProperties = {
   fontSize: 10,
   color: THEME.mutedFg,
   alignItems: "center",
+};
+
+const expandBtnStyle: React.CSSProperties = {
+  padding: "2px 6px",
+  fontSize: 14,
+  lineHeight: 1,
+  background: THEME.muted,
+  border: `1px solid ${THEME.border}`,
+  borderRadius: 4,
+  cursor: "pointer",
+  color: THEME.mutedFg,
+};
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  background: "rgba(0, 0, 0, 0.5)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const modalContentStyle: React.CSSProperties = {
+  width: "calc(100vw - 64px)",
+  height: "calc(100vh - 64px)",
+  background: THEME.background,
+  borderRadius: 12,
+  border: `1px solid ${THEME.border}`,
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
 };
 

@@ -1,6 +1,11 @@
 [
   {
-    "sha": "304057b",
+    "sha": "e6b46dc",
+    "message": "[feat] Add expand button to open PROV graph in fullscreen modal",
+    "date": "2026-03-23"
+  },
+  {
+    "sha": "3a1366a",
     "message": "[refactor] Replace PROV panel tabs with per-sample tab navigation",
     "date": "2026-03-23"
   },
@@ -242,11 +247,6 @@
   {
     "sha": "2f34b4d",
     "message": "Fix stories to match actual block-level label data structure",
-    "date": "2026-03-23"
-  },
-  {
-    "sha": "1de386c",
-    "message": "Add placement-C (above) stories with bullet list and table patterns",
     "date": "2026-03-23"
   }
 ]
