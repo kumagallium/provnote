@@ -668,8 +668,10 @@ export function NoteApp() {
   );
 
   // 派生ノートを別ファイルとして作成
+  const [deriving, setDeriving] = useState(false);
   const handleDeriveNote = useCallback(
     async (derivedTitle: string, sourceBlockId: string) => {
+      setDeriving(true);
       try {
         // 派生先ノートを作成
         const now = new Date().toISOString();
@@ -707,6 +709,8 @@ export function NoteApp() {
         handleOpenFile(newFileId);
       } catch (err) {
         console.error("派生ノートの作成に失敗:", err);
+      } finally {
+        setDeriving(false);
       }
     },
     [activeDoc, handleOpenFile, setActiveFileId]
@@ -757,7 +761,7 @@ export function NoteApp() {
         onRefresh={refreshFiles}
         onSignOut={signOut}
       />
-      <main className="flex-1 overflow-hidden flex flex-col">
+      <main className="flex-1 overflow-hidden flex flex-col relative">
         <NoteEditor
           key={editorKey}
           fileId={activeFileId}
@@ -766,6 +770,15 @@ export function NoteApp() {
           onDeriveNote={handleDeriveNote}
           saving={saving}
         />
+        {/* 派生ノート作成中のオーバーレイ */}
+        {deriving && (
+          <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-50">
+            <div className="text-center space-y-2">
+              <div className="text-sm font-medium text-foreground">派生ノートを作成中...</div>
+              <div className="text-xs text-muted-foreground">Google Drive に保存しています</div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
