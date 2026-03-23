@@ -206,27 +206,279 @@ export const PlacementComparison: StoryObj = {
   ),
 };
 
-// 実際のノート風レイアウト
-export const RealisticNote: StoryObj = {
-  name: "実際のノート風",
+// C方式（上方配置）ノート風 — 基本パターン
+export const AboveNote: StoryObj = {
+  name: "C方式: ノート風（基本）",
   render: () => (
     <div style={{ maxWidth: 700, fontFamily: "Inter, sans-serif" }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>カレーの作り方</h1>
-      <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 24 }}>
-        作成日付: 2026-01-16 タグ: 料理、カレー
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>カレーの作り方</h1>
+      <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 24 }}>
+        作成日付: 2026-01-16&nbsp;&nbsp;最終編集日付: 2026-01-17&nbsp;&nbsp;タグ: 料理、カレー&nbsp;&nbsp;作成者: 熊谷 将也
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <BlockWithLabel label="[手順]" text="2.1 切る" blockType="heading" placement="gutter" />
-        <div style={{ paddingLeft: 90 }}>
-          <BlockWithLabel label="[使用したもの]" text="玉ねぎ 中 2個（400g）" blockType="list" placement="gutter" />
-          <BlockWithLabel label="[使用したもの]" text="じゃがいも 中 1個（230g）" blockType="list" placement="gutter" />
-          <BlockWithLabel label="[使用したもの]" text="にんじん 中 1/2本（100g）" blockType="list" placement="gutter" />
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>1. 目的</h2>
+      <p style={{ marginBottom: 20, color: "#374151" }}>
+        当日に食べたカレーと1晩寝かしたカレーがどちらのほうが美味しいか
+      </p>
+
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>2. 作り方</h2>
+
+      {/* 手順 2.1 */}
+      <div style={{ marginBottom: 20 }}>
+        <LabelBadge label="[手順]" size="small" />
+        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>2.1 切る</h3>
+
+        <div style={{ marginLeft: 8, marginBottom: 8 }}>
+          <LabelBadge label="[使用したもの]" size="small" />
+          <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+            <li>玉ねぎ
+              <ul><li>中</li><li>2個（400g）</li></ul>
+            </li>
+            <li>じゃがいも
+              <ul><li>中</li><li>1・1/2個（230g）</li></ul>
+            </li>
+            <li>にんじん
+              <ul><li>中</li><li>1/2本（100g）</li></ul>
+            </li>
+          </ul>
         </div>
-        <BlockWithLabel label="[条件]" text="くし切り、縦半分に切る" blockType="heading" placement="gutter" />
-        <BlockWithLabel label="[手順]" text="2.2 炒める" blockType="heading" placement="gutter" />
-        <BlockWithLabel label="[結果]" text="野菜に火が通り、しんなりする" blockType="paragraph" placement="gutter" />
+
+        <div style={{ marginLeft: 8 }}>
+          <LabelBadge label="[条件]" size="small" />
+          <ol style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+            <li>玉ねぎ — 縦半分に切り、放射線状のくし切りにする</li>
+            <li>じゃがいも — 半分に切り、6〜8等分に切る</li>
+            <li>にんじん — 乱切りにする</li>
+          </ol>
+        </div>
+      </div>
+
+      {/* 手順 2.2 */}
+      <div style={{ marginBottom: 20 }}>
+        <LabelBadge label="[手順]" size="small" />
+        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>2.2 炒める</h3>
+        <div style={{ marginLeft: 8 }}>
+          <LabelBadge label="[条件]" size="small" />
+          <p style={{ margin: "2px 0", color: "#374151" }}>
+            鍋にサラダ油を熱し、玉ねぎを中火で炒める。しんなりしたら肉を加え、色が変わるまで炒める。
+          </p>
+        </div>
+      </div>
+
+      {/* 手順 2.3 */}
+      <div style={{ marginBottom: 20 }}>
+        <LabelBadge label="[手順]" size="small" />
+        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>2.3 煮込む</h3>
+        <div style={{ marginLeft: 8, marginBottom: 8 }}>
+          <LabelBadge label="[条件]" size="small" />
+          <p style={{ margin: "2px 0", color: "#374151" }}>
+            水850mlを加え、沸騰したらアクを取り、弱火〜中火で約20分煮込む。
+          </p>
+        </div>
+        <div style={{ marginLeft: 8 }}>
+          <LabelBadge label="[結果]" size="small" />
+          <p style={{ margin: "2px 0", color: "#374151" }}>
+            じゃがいもに竹串がスッと通れば完成。
+          </p>
+        </div>
       </div>
     </div>
   ),
+};
+
+// C方式 — 箇条書きブロックにラベル
+export const AboveWithBulletList: StoryObj = {
+  name: "C方式: 箇条書きパターン",
+  render: () => (
+    <div style={{ maxWidth: 700, fontFamily: "Inter, sans-serif" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Cu粉末アニール実験</h2>
+
+      <div style={{ marginBottom: 20 }}>
+        <LabelBadge label="[手順]" size="small" />
+        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>1. 封入する</h3>
+
+        <div style={{ marginLeft: 8, marginBottom: 8 }}>
+          <LabelBadge label="[使用したもの]" size="small" />
+          <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+            <li>Cu粉末 1g</li>
+            <li>シリカ管（内径8mm）</li>
+            <li>真空ポンプ</li>
+          </ul>
+        </div>
+
+        <div style={{ marginLeft: 8 }}>
+          <LabelBadge label="[条件]" size="small" />
+          <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+            <li>真空度: 10⁻³ Pa 以下</li>
+            <li>封入時のバーナー温度: 約1200℃</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <LabelBadge label="[結果]" size="small" />
+        <p style={{ margin: "2px 0", color: "#374151" }}>封入されたCu粉末（目視で管内に粉末が均一に分布していることを確認）</p>
+      </div>
+    </div>
+  ),
+};
+
+// C方式 — テーブル（試料ラベル）パターン
+export const AboveWithTable: StoryObj = {
+  name: "C方式: テーブル（試料）パターン",
+  render: () => {
+    const thStyle: React.CSSProperties = {
+      padding: "6px 12px",
+      textAlign: "left",
+      fontSize: 13,
+      fontWeight: 600,
+      borderBottom: "2px solid #d1d5db",
+      color: "#374151",
+    };
+    const tdStyle: React.CSSProperties = {
+      padding: "6px 12px",
+      fontSize: 13,
+      borderBottom: "1px solid #e5e7eb",
+      color: "#374151",
+    };
+
+    return (
+      <div style={{ maxWidth: 700, fontFamily: "Inter, sans-serif" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Cu粉末アニール実験</h2>
+
+        <div style={{ marginBottom: 20 }}>
+          <LabelBadge label="[手順]" size="small" />
+          <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>2. アニールする</h3>
+
+          <div style={{ marginLeft: 8, marginBottom: 12 }}>
+            <LabelBadge label="[試料]" size="small" />
+            <table style={{ margin: "4px 0 0", borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>試料名</th>
+                  <th style={thStyle}>温度</th>
+                  <th style={thStyle}>時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style={tdStyle}>sample_A</td><td style={tdStyle}>600℃</td><td style={tdStyle}>24h</td></tr>
+                <tr><td style={tdStyle}>sample_B</td><td style={tdStyle}>700℃</td><td style={tdStyle}>24h</td></tr>
+                <tr><td style={tdStyle}>sample_C</td><td style={tdStyle}>800℃</td><td style={tdStyle}>24h</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginLeft: 8 }}>
+            <LabelBadge label="[条件]" size="small" />
+            <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+              <li>昇温速度: 5℃/min</li>
+              <li>雰囲気: 真空封入管内</li>
+              <li>冷却: 炉冷</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <LabelBadge label="[手順]" size="small" />
+          <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>3. 評価する</h3>
+          <div style={{ marginLeft: 8 }}>
+            <LabelBadge label="[結果]" size="small" />
+            <p style={{ margin: "2px 0", color: "#374151" }}>XRD測定により相同定を行う。</p>
+          </div>
+        </div>
+      </div>
+    );
+  },
+};
+
+// C方式 — 全要素を含むフルノート
+export const AboveFullNote: StoryObj = {
+  name: "C方式: フルノート（全要素）",
+  render: () => {
+    const thStyle: React.CSSProperties = {
+      padding: "6px 12px",
+      textAlign: "left",
+      fontSize: 13,
+      fontWeight: 600,
+      borderBottom: "2px solid #d1d5db",
+      color: "#374151",
+    };
+    const tdStyle: React.CSSProperties = {
+      padding: "6px 12px",
+      fontSize: 13,
+      borderBottom: "1px solid #e5e7eb",
+      color: "#374151",
+    };
+
+    return (
+      <div style={{ maxWidth: 700, fontFamily: "Inter, sans-serif" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Cu粉末アニール実験</h1>
+        <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 24 }}>
+          作成日付: 2026-03-20&nbsp;&nbsp;作成者: 熊谷 将也
+        </p>
+
+        {/* 手順 1 */}
+        <div style={{ marginBottom: 24 }}>
+          <LabelBadge label="[手順]" size="small" />
+          <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>1. 封入する</h3>
+
+          <div style={{ marginLeft: 8, marginBottom: 8 }}>
+            <LabelBadge label="[使用したもの]" size="small" />
+            <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+              <li>Cu粉末 1g</li>
+              <li>シリカ管</li>
+            </ul>
+          </div>
+
+          <div style={{ marginLeft: 8 }}>
+            <LabelBadge label="[結果]" size="small" />
+            <p style={{ margin: "2px 0", color: "#374151" }}>封入されたCu粉末</p>
+          </div>
+        </div>
+
+        {/* 手順 2 */}
+        <div style={{ marginBottom: 24 }}>
+          <LabelBadge label="[手順]" size="small" />
+          <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>2. アニールする</h3>
+
+          <div style={{ marginLeft: 8, marginBottom: 12 }}>
+            <LabelBadge label="[試料]" size="small" />
+            <table style={{ margin: "4px 0 0", borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>試料名</th>
+                  <th style={thStyle}>温度</th>
+                  <th style={thStyle}>時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style={tdStyle}>sample_A</td><td style={tdStyle}>600℃</td><td style={tdStyle}>24h</td></tr>
+                <tr><td style={tdStyle}>sample_B</td><td style={tdStyle}>700℃</td><td style={tdStyle}>24h</td></tr>
+                <tr><td style={tdStyle}>sample_C</td><td style={tdStyle}>800℃</td><td style={tdStyle}>24h</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginLeft: 8 }}>
+            <LabelBadge label="[条件]" size="small" />
+            <ul style={{ margin: "2px 0 0 12px", lineHeight: 1.8 }}>
+              <li>昇温速度: 5℃/min</li>
+              <li>冷却: 炉冷</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* 手順 3 */}
+        <div style={{ marginBottom: 24 }}>
+          <LabelBadge label="[手順]" size="small" />
+          <h3 style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 8px" }}>3. 評価する</h3>
+
+          <div style={{ marginLeft: 8 }}>
+            <LabelBadge label="[結果]" size="small" />
+            <p style={{ margin: "2px 0", color: "#374151" }}>XRD測定により相同定を行う。</p>
+          </div>
+        </div>
+      </div>
+    );
+  },
 };
