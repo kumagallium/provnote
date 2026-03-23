@@ -292,6 +292,7 @@ function NoteEditorInner({
   const [title, setTitle] = useState(initialDoc?.title || "新しいノート");
   const [dirty, setDirty] = useState(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSaveRef = useRef<() => void>(() => {});
 
   // エディタ参照を保持
   const handleEditorReady = useCallback((editor: any) => {
@@ -346,14 +347,19 @@ function NoteEditorInner({
     setDirty(false);
   }, [title, pages, labelStore, linkStore, initialDoc, onSave]);
 
-  // 変更をマーク → 3秒後に自動保存
+  // 常に最新の handleSave を ref に保持
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  }, [handleSave]);
+
+  // 変更をマーク → 3秒後に自動保存（ref 経由で常に最新の状態で保存）
   const markDirty = useCallback(() => {
     setDirty(true);
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      handleSave();
+      handleSaveRef.current();
     }, 3000);
-  }, [handleSave]);
+  }, []);
 
   // タイマーのクリーンアップ
   useEffect(() => {
