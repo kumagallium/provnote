@@ -64,10 +64,17 @@ function NoteLinkBadges({
 }) {
   if (!initialDoc) return null;
 
-  const derivedFrom = initialDoc.derivedFromNoteId;
-  const noteLinks = initialDoc.noteLinks ?? [];
+  // 存在するファイル ID のセット（孤児リンクをフィルタリング）
+  const fileIds = new Set(files.map((f) => f.id));
 
-  if (!derivedFrom && noteLinks.length === 0) return null;
+  const derivedFrom = initialDoc.derivedFromNoteId;
+  // 存在しないノートへのリンクを除外
+  const noteLinks = (initialDoc.noteLinks ?? []).filter((link) =>
+    fileIds.has(link.targetNoteId)
+  );
+  const showDerivedFrom = derivedFrom && fileIds.has(derivedFrom);
+
+  if (!showDerivedFrom && noteLinks.length === 0) return null;
 
   // ファイル ID からタイトルを取得
   const getTitle = (noteId: string) => {
@@ -78,7 +85,7 @@ function NoteLinkBadges({
   return (
     <div className="px-4 py-1.5 border-b border-border flex items-center gap-2 flex-wrap shrink-0 text-xs">
       {/* 派生元 */}
-      {derivedFrom && (
+      {showDerivedFrom && (
         <button
           onClick={() => onNavigate(derivedFrom)}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
@@ -816,6 +823,16 @@ export function NoteApp() {
       savingRef.current = true;
       setSaving(true);
       try {
+        // 孤児リンクをクリーンアップ（存在しないノートへの参照を除去）
+        const fileIds = new Set(files.map((f) => f.id));
+        if (doc.noteLinks) {
+          doc = { ...doc, noteLinks: doc.noteLinks.filter((l) => fileIds.has(l.targetNoteId)) };
+          if (doc.noteLinks!.length === 0) doc = { ...doc, noteLinks: undefined };
+        }
+        if (doc.derivedFromNoteId && !fileIds.has(doc.derivedFromNoteId)) {
+          doc = { ...doc, derivedFromNoteId: undefined, derivedFromBlockId: undefined };
+        }
+
         const currentFileId = activeFileIdRef.current;
         if (currentFileId) {
           // 既存ファイルを上書き
@@ -854,7 +871,7 @@ export function NoteApp() {
         setSaving(false);
       }
     },
-    [setActiveFileId]
+    [setActiveFileId, files]
   );
 
   // 派生ノートを別ファイルとして作成
@@ -906,10 +923,52 @@ export function NoteApp() {
     [activeDoc, handleOpenFile, setActiveFileId]
   );
 
-  // 削除
+  // 削除（関連ノートのリンク情報もクリーンアップ）
   const handleDelete = useCallback(
     async (fileId: string) => {
       try {
+        // 削除対象のドキュメントを取得
+        const targetDoc = docCacheRef.current.get(fileId);
+
+        if (targetDoc) {
+          // 1. 派生元ノートの noteLinks から削除対象への参照を除去
+          if (targetDoc.derivedFromNoteId) {
+            const parentDoc = docCacheRef.current.get(targetDoc.derivedFromNoteId);
+            if (parentDoc?.noteLinks) {
+              const filtered = parentDoc.noteLinks.filter(
+                (link) => link.targetNoteId !== fileId
+              );
+              const updatedParent = {
+                ...parentDoc,
+                noteLinks: filtered.length > 0 ? filtered : undefined,
+                modifiedAt: new Date().toISOString(),
+              };
+              await saveFile(targetDoc.derivedFromNoteId, updatedParent);
+              docCacheRef.current.set(targetDoc.derivedFromNoteId, updatedParent);
+            }
+          }
+
+          // 2. 派生先ノートの derivedFromNoteId を除去
+          if (targetDoc.noteLinks) {
+            for (const link of targetDoc.noteLinks) {
+              const childDoc = docCacheRef.current.get(link.targetNoteId);
+              if (childDoc?.derivedFromNoteId === fileId) {
+                const updatedChild = {
+                  ...childDoc,
+                  derivedFromNoteId: undefined,
+                  derivedFromBlockId: undefined,
+                  modifiedAt: new Date().toISOString(),
+                };
+                await saveFile(link.targetNoteId, updatedChild);
+                docCacheRef.current.set(link.targetNoteId, updatedChild);
+              }
+            }
+          }
+        }
+
+        // キャッシュから削除
+        docCacheRef.current.delete(fileId);
+
         await deleteFile(fileId);
         if (activeFileId === fileId) {
           setActiveFileId(null);
