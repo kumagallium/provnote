@@ -160,28 +160,24 @@ export async function saveFile(
   fileId: string,
   content: ProvNoteDocument
 ): Promise<void> {
+  // 1. メタデータ更新（ファイル名）
   const fileName = `${content.title}.provnote.json`;
-  const boundary = "provnote_boundary";
-  const body = [
-    `--${boundary}`,
-    "Content-Type: application/json; charset=UTF-8",
-    "",
-    JSON.stringify({ name: fileName }),
-    `--${boundary}`,
-    "Content-Type: application/json",
-    "",
-    JSON.stringify(content),
-    `--${boundary}--`,
-  ].join("\r\n");
-
   await authedFetch(
-    `${UPLOAD_API}/files/${fileId}?uploadType=multipart`,
+    `${DRIVE_API}/files/${fileId}`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": `multipart/related; boundary=${boundary}`,
-      },
-      body,
+      headers: { "Content-Type": MIME_JSON },
+      body: JSON.stringify({ name: fileName }),
+    }
+  );
+
+  // 2. コンテンツ更新
+  await authedFetch(
+    `${UPLOAD_API}/files/${fileId}?uploadType=media`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": MIME_JSON },
+      body: JSON.stringify(content),
     }
   );
 }
