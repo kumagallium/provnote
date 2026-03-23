@@ -135,12 +135,13 @@ export function generateProvDocument(input: GeneratorInput): ProvDocument {
     const blockId = act.block.id;
     const actLabel = getBlockText(act.block);
 
-    // このActivity配下（同一H2スコープ内）の [試料] テーブルを探す
+    // このActivity配下（同一スコープ内）の [試料] テーブルを探す
     const actIdx = flatBlocks.indexOf(act.block);
-    // 次のH1/H2見出しの位置を探す（スコープ境界）
+    const actLevel = act.block.props?.level ?? 2;
+    // 次の同レベル以上の見出しの位置を探す（スコープ境界）
     let scopeEnd = flatBlocks.length;
     for (let i = actIdx + 1; i < flatBlocks.length; i++) {
-      if (flatBlocks[i].type === "heading" && (flatBlocks[i].props?.level ?? 2) <= 2) {
+      if (flatBlocks[i].type === "heading" && (flatBlocks[i].props?.level ?? 2) <= actLevel) {
         scopeEnd = i;
         break;
       }
@@ -224,10 +225,11 @@ export function generateProvDocument(input: GeneratorInput): ProvDocument {
     }
   }
 
-  // ── スコープ解決: 見出しレベルに基づくスコープツリー ──
-  // H2 [手順] でActivityスコープ開始、同レベル以上の見出し(H1/H2)でスコープ終了
+  // ── スコープ解決: 見出しレベルに基づくスコープスタック ──
+  // 見出しレベル N の [手順] でスコープを push、同レベル以上の見出しでスコープを pop
+  // ブロックは常にスタック最上位（最も深い）Activity にスコープされる
   const blockToActivityId = new Map<string, string>();
-  let currentActivityId: string | null = null;
+  const scopeStack: { level: number; activityId: string }[] = [];
   for (const block of flatBlocks) {
     // 見出しブロックが来たらスコープを再評価
     if (block.type === "heading") {
@@ -235,23 +237,26 @@ export function generateProvDocument(input: GeneratorInput): ProvDocument {
       const label = labels.get(block.id);
       const normalized = label ? normalizeLabel(label) : null;
 
-      if (level <= 2) {
-        // H1 または H2 → 前のスコープをリセット
-        currentActivityId = null;
+      // 同レベル以上の見出し → そのレベル以深のスコープをすべて pop
+      while (scopeStack.length > 0 && scopeStack[scopeStack.length - 1].level >= level) {
+        scopeStack.pop();
+      }
 
-        // [手順] H2 なら新しいActivityスコープを開始
-        if (normalized === "[手順]") {
-          const role = getHeadingLabelRole(level, normalized);
-          if (role === "activity") {
-            const branch = branchMap.get(block.id);
-            currentActivityId = branch
-              ? branch.activities[0]?.id ?? `activity_${block.id}`
-              : `activity_${block.id}`;
-          }
+      // [手順] 見出し（H2+）なら新しいスコープを push
+      if (normalized === "[手順]") {
+        const role = getHeadingLabelRole(level, normalized);
+        if (role === "activity") {
+          const branch = branchMap.get(block.id);
+          const actId = branch
+            ? branch.activities[0]?.id ?? `activity_${block.id}`
+            : `activity_${block.id}`;
+          scopeStack.push({ level, activityId: actId });
         }
       }
-      // H3以下は現在のスコープを維持（サブセクション扱い）
     }
+    const currentActivityId = scopeStack.length > 0
+      ? scopeStack[scopeStack.length - 1].activityId
+      : null;
     if (currentActivityId) {
       blockToActivityId.set(block.id, currentActivityId);
     }

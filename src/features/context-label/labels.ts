@@ -76,7 +76,8 @@ export function normalizeLabel(label: string): string {
 
 // 見出しブロック上の [手順] ラベルのPROV挙動
 // H1 → セクションマーカー（Activity生成しない）
-// H2 → 個別の実験ステップ（Activity生成する）
+// H2+ → 個別の実験ステップ（Activity生成する）
+//   H2 = トップレベル Activity、H3 = サブ Activity、H4+ = さらに深いサブ Activity
 export function getHeadingLabelRole(
   level: number,
   label: string
