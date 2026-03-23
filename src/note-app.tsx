@@ -377,18 +377,24 @@ function NoteEditorInner({
     [markDirty]
   );
 
-  // Ctrl+S / Cmd+S で保存
+  // Ctrl+S / Cmd+S で保存（複数レベルでキャプチャ）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
+        e.stopPropagation();
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        handleSave();
+        handleSaveRef.current();
       }
     };
+    // document と window 両方でキャプチャフェーズに登録
+    document.addEventListener("keydown", handler, { capture: true });
     window.addEventListener("keydown", handler, { capture: true });
-    return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [handleSave]);
+    return () => {
+      document.removeEventListener("keydown", handler, { capture: true });
+      window.removeEventListener("keydown", handler, { capture: true });
+    };
+  }, []);
 
   // 前手順リンク
   useEffect(() => {
