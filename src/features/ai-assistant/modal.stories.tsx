@@ -3,6 +3,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
+import { Bot } from "lucide-react";
 
 // ── Crucible デザイントークン ──
 const tokens = {
@@ -64,7 +65,7 @@ function MockModal({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🤖</span>
+            <Bot size={16} color="#8b5cf6" />
             <span style={{ fontSize: 14, fontWeight: 500, color: tokens.fg }}>
               AI アシスタント
             </span>
