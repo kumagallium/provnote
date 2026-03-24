@@ -36,6 +36,7 @@ export type AgentRunResponse = {
   tool_calls: ToolCallRecord[];
   provenance_id: string | null;
   token_usage: TokenUsage;
+  model: string | null;
 };
 
 /**
