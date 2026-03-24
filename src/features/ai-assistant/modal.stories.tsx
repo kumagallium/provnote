@@ -261,3 +261,27 @@ export const WithError: Story = {
     error: "Agent API error 500: Internal Server Error",
   },
 };
+
+export const ScopeSelection: Story = {
+  name: "スコープ選択（見出し配下）",
+  args: {
+    quotedMarkdown: `## 実験手順
+
+1. Cu粉末をシリカ管に封入する
+2. 電気炉で 800°C まで昇温（10°C/min）
+3. 800°C で 2 時間保持
+4. 炉冷で室温まで冷却
+
+### 注意事項
+
+- 急激な温度変化は割れの原因になる
+- 粉塵吸入防止のため防護メガネ・マスクを着用`,
+  },
+};
+
+export const TextSelection: Story = {
+  name: "テキスト選択（部分引用）",
+  args: {
+    quotedMarkdown: "ボロシリケートガラス管（Borosilicate Glass Tube）は、実験・産業の多くの分野で広く利用されています。",
+  },
+};
