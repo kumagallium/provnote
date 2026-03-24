@@ -2,12 +2,12 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 
 import { useCreateBlockNote } from "@blocknote/react";
-import { SideMenuController } from "@blocknote/react";
+import { SideMenuController, FormattingToolbarController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { FC, useEffect } from "react";
 import type { CustomBlockEntry } from "./schema";
-import type { SideMenuProps } from "@blocknote/react";
+import type { SideMenuProps, FormattingToolbarProps } from "@blocknote/react";
 
 type SandboxEditorProps = {
   blocks?: CustomBlockEntry[];
@@ -19,6 +19,12 @@ type SandboxEditorProps = {
    * - FC: カスタムSideMenuコンポーネント
    */
   sideMenu?: FC<SideMenuProps> | false;
+  /**
+   * カスタムFormattingToolbarコンポーネントを渡す。
+   * - undefined: デフォルトのFormattingToolbar
+   * - FC: カスタムFormattingToolbar
+   */
+  formattingToolbar?: FC<FormattingToolbarProps>;
   /** エディタインスタンスを外部に公開するコールバック */
   onEditorReady?: (editor: any) => void;
   /** エディタの内容が変更されたときのコールバック */
@@ -31,6 +37,7 @@ export function SandboxEditor({
   blocks = [],
   initialContent,
   sideMenu,
+  formattingToolbar,
   onEditorReady,
   onChange,
 }: SandboxEditorProps) {
@@ -63,10 +70,14 @@ export function SandboxEditor({
       editor={editor as any}
       theme="light"
       sideMenu={sideMenu === false ? false : usesCustomSideMenu ? false : undefined}
+      formattingToolbar={formattingToolbar ? false : undefined}
       onChange={onChange}
     >
       {usesCustomSideMenu && (
         <SideMenuController sideMenu={sideMenu as FC<SideMenuProps>} />
+      )}
+      {formattingToolbar && (
+        <FormattingToolbarController formattingToolbar={formattingToolbar} />
       )}
     </BlockNoteView>
   );
