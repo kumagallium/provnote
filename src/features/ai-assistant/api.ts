@@ -1,7 +1,15 @@
 // crucible-agent API クライアント
 // POST /agent/run を呼び出して AI 回答を取得する
 
-import { getAgentUrl } from "../settings";
+import { getAgentUrl, getAgentApiKey } from "../settings";
+
+// API キー認証ヘッダーを含む共通ヘッダーを生成
+function agentHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = getAgentApiKey();
+  if (apiKey) h["X-API-Key"] = apiKey;
+  return h;
+}
 
 export type AgentRunRequest = {
   message: string;
@@ -45,7 +53,7 @@ export async function generateTitle(
 ): Promise<string> {
   const res = await fetch(`${getAgentUrl()}/sessions/title`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: agentHeaders(),
     body: JSON.stringify({ first_message: firstMessage }),
   });
 
@@ -74,7 +82,7 @@ export async function runAgent(
 ): Promise<AgentRunResponse> {
   const res = await fetch(`${getAgentUrl()}/agent/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: agentHeaders(),
     body: JSON.stringify(req),
     signal,
   });
