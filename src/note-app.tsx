@@ -5,17 +5,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SandboxEditor } from "./base/editor";
 // MultiPageLayout は派生ノートが別ファイルになったため不要
 import {
-  LabelBadgeLayer,
-  LabelDropdownPortal,
-  LabelSideMenuButton,
   LabelStoreProvider,
   useLabelStore,
-  LABEL_GUTTER_WIDTH,
 } from "./features/context-label";
-import { setOnPrevStepLinkSelected } from "./features/context-label/ui";
+import {
+  ProvIndicatorLayer,
+  ProvIndicatorHoverHint,
+  BlockHoverHighlight,
+  setOnPrevStepLinkSelected,
+} from "./features/context-label/prov-indicator";
+import {
+  labelSlashMenuItems,
+  setSlashMenuLabelCallback,
+} from "./features/context-label/slash-menu-items";
+import { setupLabelAutoAssign } from "./features/context-label/label-auto";
 import {
   LinkStoreProvider,
-  LinkBadgeLayer,
   useLinkStore,
 } from "./features/block-link";
 import {
@@ -53,15 +58,76 @@ import { cn } from "./lib/utils";
 import {
   AddBlockButton,
   DragHandleButton,
+  RemoveBlockItem,
+  BlockColorsItem,
   SideMenu,
   FormattingToolbar,
   getFormattingToolbarItems,
   useBlockNoteEditor,
   useExtensionState,
+  useComponentsContext,
 } from "@blocknote/react";
 import { SideMenuExtension } from "@blocknote/core/extensions";
 import { Bot } from "lucide-react";
 import type { FormattingToolbarProps } from "@blocknote/react";
+
+// ── ノート間リンクバッジ ──
+// 派生元・派生先のリンクをヘッダー下にバッジ表示
+function NoteLinkBadges({
+  initialDoc,
+  files,
+  onNavigate,
+}: {
+  initialDoc: ProvNoteDocument | null;
+  files: ProvNoteFile[];
+  onNavigate: (noteId: string) => void;
+}) {
+  if (!initialDoc) return null;
+
+  // 存在するファイル ID のセット（孤児リンクをフィルタリング）
+  const fileIds = new Set(files.map((f) => f.id));
+
+  const derivedFrom = initialDoc.derivedFromNoteId;
+  // 存在しないノートへのリンクを除外
+  const noteLinks = (initialDoc.noteLinks ?? []).filter((link) =>
+    fileIds.has(link.targetNoteId)
+  );
+  const showDerivedFrom = derivedFrom && fileIds.has(derivedFrom);
+
+  if (!showDerivedFrom && noteLinks.length === 0) return null;
+
+  // ファイル ID からタイトルを取得
+  const getTitle = (noteId: string) => {
+    const f = files.find((f) => f.id === noteId);
+    return f ? f.name.replace(/\.provnote\.json$/, "") : "ノート";
+  };
+
+  return (
+    <div className="px-4 py-1.5 border-b border-border flex items-center gap-2 flex-wrap shrink-0 text-xs">
+      {/* 派生元 */}
+      {showDerivedFrom && (
+        <button
+          onClick={() => onNavigate(derivedFrom)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+        >
+          <span>&#8592;</span>
+          <span>派生元: {getTitle(derivedFrom)}</span>
+        </button>
+      )}
+      {/* 派生先 */}
+      {noteLinks.map((link, i) => (
+        <button
+          key={i}
+          onClick={() => onNavigate(link.targetNoteId)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer"
+        >
+          <span>&#8594;</span>
+          <span>派生: {getTitle(link.targetNoteId)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ── ログイン画面 ──
 function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
@@ -224,11 +290,13 @@ let openLinkDropdownFn: ((params: {
 function NoteSideMenu() {
   return (
     <SideMenu>
-      <LabelSideMenuButton />
-      <NoteLinkSideMenuButton />
-      <AiSideMenuButton />
       <AddBlockButton />
-      <DragHandleButton />
+      <DragHandleButton>
+        <RemoveBlockItem>削除</RemoveBlockItem>
+        <BlockColorsItem>色</BlockColorsItem>
+        <DeriveNoteMenuItem />
+        <AiAssistantMenuItem />
+      </DragHandleButton>
     </SideMenu>
   );
 }
@@ -244,17 +312,42 @@ function collectHeadingScope(doc: any[], headingBlock: any): any[] {
   const scope = [blocks[idx]];
   for (let i = idx + 1; i < blocks.length; i++) {
     const b = blocks[i];
-    // 同じレベル以上の見出しが来たらスコープ終了
     if (b.type === "heading" && (b.props?.level ?? 1) <= level) break;
     scope.push(b);
   }
   return scope;
 }
 
-// AI アシスタントボタン（SideMenu 内）
-// 見出しブロック → スコープ選択（配下全ブロック）
-// それ以外 → 1ブロック選択
-function AiSideMenuButton() {
+// DragHandle メニュー内: 派生ノート作成
+function DeriveNoteMenuItem() {
+  const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor<any, any, any>();
+  const block = useExtensionState(SideMenuExtension, {
+    editor,
+    selector: (state) => state?.block,
+  });
+
+  if (!block) return null;
+
+  return (
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={() => {
+        openLinkDropdownFn?.({
+          type: "general",
+          sourceBlockId: block.id,
+          anchorRect: { top: 0, left: 0 },
+        });
+      }}
+    >
+      🔗 新ページを派生
+    </Components.Generic.Menu.Item>
+  );
+}
+
+// DragHandle メニュー内: AI アシスタント（スコープ選択対応）
+function AiAssistantMenuItem() {
+  const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor<any, any, any>();
   const block = useExtensionState(SideMenuExtension, {
     editor,
@@ -264,30 +357,25 @@ function AiSideMenuButton() {
 
   if (!block) return null;
 
-  const handleClick = async () => {
-    let targetBlocks: any[];
-    if (block.type === "heading") {
-      // スコープ選択: 見出し + 配下ブロック
-      targetBlocks = collectHeadingScope(editor.document, block);
-    } else {
-      targetBlocks = [block];
-    }
-
-    const markdown = await editor.blocksToMarkdownLossy(targetBlocks);
-    aiAssistant.open({
-      sourceBlockIds: targetBlocks.map((b: any) => b.id),
-      quotedMarkdown: markdown,
-    });
-  };
-
   return (
-    <button
-      onClick={handleClick}
-      title={block.type === "heading" ? "この見出し配下を AI に聞く" : "AI アシスタントに聞く"}
-      className="inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-dashed border-violet-400/40 bg-transparent cursor-pointer text-violet-400/60 hover:border-violet-500 hover:text-violet-500 transition-colors"
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={async () => {
+        let targetBlocks: any[];
+        if (block.type === "heading") {
+          targetBlocks = collectHeadingScope(editor.document, block);
+        } else {
+          targetBlocks = [block];
+        }
+        const markdown = await editor.blocksToMarkdownLossy(targetBlocks);
+        aiAssistant.open({
+          sourceBlockIds: targetBlocks.map((b: any) => b.id),
+          quotedMarkdown: markdown,
+        });
+      }}
     >
-      <Bot size={13} />
-    </button>
+      🤖 AI アシスタント
+    </Components.Generic.Menu.Item>
   );
 }
 
@@ -297,11 +385,9 @@ function NoteFormattingToolbar(props: FormattingToolbarProps) {
   const aiAssistant = useAiAssistant();
 
   const handleAiClick = async () => {
-    // 選択テキストを取得（ブロック丸ごとではなく選択部分のみ）
     const selectedText = window.getSelection()?.toString()?.trim();
     if (!selectedText) return;
 
-    // ブロック ID は選択範囲のブロックから取得
     const selection = editor.getSelection();
     const blockIds = selection?.blocks?.map((b: any) => b.id) ?? [];
 
@@ -323,35 +409,6 @@ function NoteFormattingToolbar(props: FormattingToolbarProps) {
         <Bot size={18} />
       </button>
     </FormattingToolbar>
-  );
-}
-
-function NoteLinkSideMenuButton() {
-  const editor = useBlockNoteEditor<any, any, any>();
-  const block = useExtensionState(SideMenuExtension, {
-    editor,
-    selector: (state) => state?.block,
-  });
-
-  if (!block) return null;
-
-  const handleClick = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    openLinkDropdownFn?.({
-      type: "general",
-      sourceBlockId: block.id,
-      anchorRect: { top: rect.bottom + 4, left: rect.left },
-    });
-  };
-
-  return (
-    <button
-      onClick={handleClick}
-      title="このブロックから新ページを派生"
-      className="inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-dashed border-primary/30 bg-transparent cursor-pointer text-primary/50 text-[11px] leading-none hover:border-primary hover:text-primary transition-colors"
-    >
-      &#128279;
-    </button>
   );
 }
 
@@ -455,10 +512,15 @@ function NoteEditorInner({
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<() => void>(() => {});
 
+  // ラベル自動設定のコールバック
+  const labelAutoRef = useRef<(() => void) | null>(null);
+
   // エディタ参照を保持
   const handleEditorReady = useCallback((editor: any) => {
     editorRef.current = editor;
-  }, []);
+    // ラベル自動設定をセットアップ
+    labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
+  }, [labelStore]);
 
   // AI アシスタント実行ハンドラー
   const handleAiSubmit = useCallback(
@@ -634,6 +696,14 @@ function NoteEditorInner({
     return () => { setOnPrevStepLinkSelected(null); };
   }, [linkStore]);
 
+  // スラッシュメニューからのラベル設定コールバック
+  useEffect(() => {
+    setSlashMenuLabelCallback((blockId: string, label: string) => {
+      labelStore.setLabel(blockId, label);
+    });
+    return () => { setSlashMenuLabelCallback(null); };
+  }, [labelStore]);
+
   // スコープ派生ボタン → 別ノートとして作成
   useEffect(() => {
     openLinkDropdownFn = (params) => {
@@ -668,9 +738,11 @@ function NoteEditorInner({
     };
   }, [generateProv]);
 
-  // エディタ内容変更時にも再生成をトリガー
+  // エディタ内容変更時にも再生成をトリガー + ラベル自動設定
   const handleContentChange = useCallback(() => {
     markDirty();
+    // ラベル自動設定（継承・インデント→属性）
+    labelAutoRef.current?.();
     if (provTimerRef.current) clearTimeout(provTimerRef.current);
     provTimerRef.current = setTimeout(generateProv, 500);
   }, [markDirty, generateProv]);
@@ -683,8 +755,9 @@ function NoteEditorInner({
 
   return (
     <>
-      <LabelDropdownPortal />
-      <LinkBadgeLayer />
+      <ProvIndicatorLayer />
+      <ProvIndicatorHoverHint />
+      <BlockHoverHighlight />
       <AiAssistantModal onSubmit={handleAiSubmit} />
 
       {/* ヘッダー */}
@@ -720,13 +793,14 @@ function NoteEditorInner({
       <div className="flex h-full w-full overflow-hidden">
         {/* 左: エディタ */}
         <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
-          <LabelBadgeLayer />
-          <div style={{ padding: "16px 0", paddingLeft: 160 }}>
+          {/* ProvIndicatorLayer は body ポータルで表示 */}
+          <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
             <SandboxEditor
               key={fileId || "new"}
               blocks={[]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
+              extraSlashMenuItems={labelSlashMenuItems}
               formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
               onChange={handleContentChange}
