@@ -71,9 +71,9 @@ graph LR
     Registry -- "tool discovery" --> Agent
     Agent -- "POST /agent/run" --> provnote
 
-    style Registry fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
-    style Agent fill:#1e293b,stroke:#8b5cf6,color:#e2e8f0
-    style provnote fill:#1e293b,stroke:#10b981,color:#e2e8f0
+    style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
+    style Agent fill:#ede8f5,stroke:#8b7ab5,stroke-width:2px,color:#4a3d6e
+    style provnote fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
 ```
 
 provnote sends requests to an external agent server. Any server that implements the `POST /agent/run` endpoint can be used:
