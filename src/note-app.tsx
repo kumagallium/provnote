@@ -42,6 +42,7 @@ import {
   generateTitle,
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
+import { SettingsModal, isAgentConfigured } from "./features/settings";
 import { useGoogleAuth } from "./lib/use-google-auth";
 import { PROV_TEMPLATE } from "./lib/prov-template";
 import {
@@ -171,6 +172,8 @@ function FileSidebar({
   userName,
   onSignOut,
   onShowReleaseNotes,
+  onShowSettings,
+  agentConfigured,
 }: {
   files: ProvNoteFile[];
   activeFileId: string | null;
@@ -183,6 +186,8 @@ function FileSidebar({
   userName?: string;
   onSignOut: () => void;
   onShowReleaseNotes: () => void;
+  onShowSettings: () => void;
+  agentConfigured: boolean;
 }) {
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col">
@@ -263,6 +268,17 @@ function FileSidebar({
 
       {/* フッター */}
       <div className="p-3 border-t border-sidebar-border space-y-1">
+        <button
+          onClick={onShowSettings}
+          className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+        >
+          設定
+          {agentConfigured ? (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" title="AI 接続済み" />
+          ) : (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" title="AI 未設定" />
+          )}
+        </button>
         <button
           onClick={onShowReleaseNotes}
           className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -526,6 +542,13 @@ function NoteEditorInner({
   const handleAiSubmit = useCallback(
     async (question: string) => {
       if (!fileId || !editorRef.current) return;
+
+      if (!isAgentConfigured()) {
+        aiAssistant.setError(
+          "AI エージェントの接続先が設定されていません。サイドバーの「設定」から URL を入力してください。",
+        );
+        return;
+      }
 
       aiAssistant.setLoading(true);
       try {
@@ -863,6 +886,8 @@ function NoteEditorInner({
 export function NoteApp() {
   const { authenticated, loading: authLoading, signIn, signOut } = useGoogleAuth();
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
   const [files, setFiles] = useState<ProvNoteFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [activeFileId, _setActiveFileId] = useState<string | null>(null);
@@ -1221,6 +1246,8 @@ export function NoteApp() {
         onRefresh={refreshFiles}
         onSignOut={signOut}
         onShowReleaseNotes={() => setShowReleaseNotes(true)}
+        onShowSettings={() => setShowSettings(true)}
+        agentConfigured={agentConfigured}
       />
       <main className="flex-1 overflow-hidden flex flex-col relative">
         <NoteEditor
@@ -1248,6 +1275,10 @@ export function NoteApp() {
       {showReleaseNotes && (
         <ReleaseNotesPanel onClose={() => setShowReleaseNotes(false)} />
       )}
+      <SettingsModal isOpen={showSettings} onClose={() => {
+        setShowSettings(false);
+        setAgentConfigured(isAgentConfigured());
+      }} />
     </div>
   );
 }
