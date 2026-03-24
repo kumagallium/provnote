@@ -60,12 +60,15 @@ import {
   RemoveBlockItem,
   BlockColorsItem,
   SideMenu,
+  FormattingToolbar,
+  getFormattingToolbarItems,
   useBlockNoteEditor,
   useExtensionState,
   useComponentsContext,
 } from "@blocknote/react";
 import { SideMenuExtension } from "@blocknote/core/extensions";
-// lucide-react: Bot は DragHandle メニューに絵文字で代替
+import { Bot } from "lucide-react";
+import type { FormattingToolbarProps } from "@blocknote/react";
 
 // ── ノート間リンクバッジ ──
 // 派生元・派生先のリンクをヘッダー下にバッジ表示
@@ -297,6 +300,23 @@ function NoteSideMenu() {
   );
 }
 
+// 見出しブロックの配下ブロックを収集する（スコープ選択）
+// 同じレベル以上の見出しが出てきたら終了
+function collectHeadingScope(doc: any[], headingBlock: any): any[] {
+  const level = headingBlock.props?.level ?? 1;
+  const blocks = Array.isArray(doc) ? doc : [];
+  const idx = blocks.findIndex((b: any) => b.id === headingBlock.id);
+  if (idx < 0) return [headingBlock];
+
+  const scope = [blocks[idx]];
+  for (let i = idx + 1; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.type === "heading" && (b.props?.level ?? 1) <= level) break;
+    scope.push(b);
+  }
+  return scope;
+}
+
 // DragHandle メニュー内: 派生ノート作成
 function DeriveNoteMenuItem() {
   const Components = useComponentsContext()!;
@@ -324,7 +344,7 @@ function DeriveNoteMenuItem() {
   );
 }
 
-// DragHandle メニュー内: AI アシスタント
+// DragHandle メニュー内: AI アシスタント（スコープ選択対応）
 function AiAssistantMenuItem() {
   const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor<any, any, any>();
@@ -340,15 +360,54 @@ function AiAssistantMenuItem() {
     <Components.Generic.Menu.Item
       className="bn-menu-item"
       onClick={async () => {
-        const markdown = await editor.blocksToMarkdownLossy([block]);
+        let targetBlocks: any[];
+        if (block.type === "heading") {
+          targetBlocks = collectHeadingScope(editor.document, block);
+        } else {
+          targetBlocks = [block];
+        }
+        const markdown = await editor.blocksToMarkdownLossy(targetBlocks);
         aiAssistant.open({
-          sourceBlockIds: [block.id],
+          sourceBlockIds: targetBlocks.map((b: any) => b.id),
           quotedMarkdown: markdown,
         });
       }}
     >
       🤖 AI アシスタント
     </Components.Generic.Menu.Item>
+  );
+}
+
+// テキスト選択時の FormattingToolbar に AI ボタンを追加
+function NoteFormattingToolbar(props: FormattingToolbarProps) {
+  const editor = useBlockNoteEditor<any, any, any>();
+  const aiAssistant = useAiAssistant();
+
+  const handleAiClick = async () => {
+    const selectedText = window.getSelection()?.toString()?.trim();
+    if (!selectedText) return;
+
+    const selection = editor.getSelection();
+    const blockIds = selection?.blocks?.map((b: any) => b.id) ?? [];
+
+    aiAssistant.open({
+      sourceBlockIds: blockIds,
+      quotedMarkdown: selectedText,
+    });
+  };
+
+  return (
+    <FormattingToolbar {...props}>
+      {getFormattingToolbarItems(props.blockTypeSelectItems)}
+      <button
+        onClick={handleAiClick}
+        title="選択範囲を AI に聞く"
+        className="bn-button inline-flex items-center justify-center rounded hover:bg-violet-100 text-violet-500 transition-colors"
+        data-test="aiButton"
+      >
+        <Bot size={18} />
+      </button>
+    </FormattingToolbar>
   );
 }
 
@@ -446,8 +505,8 @@ function NoteEditorInner({
   const aiAssistant = useAiAssistant();
   const editorRef = useRef<any>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
+  const [rightTab, setRightTab] = useState<"graph" | "prov">("graph");
   const [title, setTitle] = useState(initialDoc?.title || "新しいノート");
-  const [rightTab, setRightTab] = useState<"prov" | "graph">("prov");
   const [dirty, setDirty] = useState(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<() => void>(() => {});
@@ -729,13 +788,6 @@ function NoteEditorInner({
         </button>
       </div>
 
-      {/* ノート間リンクバッジ */}
-      <NoteLinkBadges
-        initialDoc={initialDoc}
-        files={files}
-        onNavigate={onNavigateNote}
-      />
-
       <div className="flex h-full w-full overflow-hidden">
         {/* 左: エディタ */}
         <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
@@ -747,27 +799,16 @@ function NoteEditorInner({
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
               extraSlashMenuItems={labelSlashMenuItems}
+              formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
               onChange={handleContentChange}
             />
           </div>
         </div>
 
-        {/* 右: PROV / Graph パネル */}
+        {/* 右: Graph / PROV パネル */}
         <div className="w-[480px] shrink-0 border-l border-border bg-muted flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-            {/* タブ切り替え */}
-            <button
-              onClick={() => setRightTab("prov")}
-              className={cn(
-                "text-xs font-bold tracking-wide px-1.5 py-0.5 rounded transition-colors",
-                rightTab === "prov"
-                  ? "text-foreground bg-background"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              PROV
-            </button>
             <button
               onClick={() => setRightTab("graph")}
               className={cn(
@@ -778,6 +819,17 @@ function NoteEditorInner({
               )}
             >
               Graph
+            </button>
+            <button
+              onClick={() => setRightTab("prov")}
+              className={cn(
+                "text-xs font-bold tracking-wide px-1.5 py-0.5 rounded transition-colors",
+                rightTab === "prov"
+                  ? "text-foreground bg-background"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              PROV
             </button>
             {rightTab === "prov" && (
               <button
@@ -790,13 +842,13 @@ function NoteEditorInner({
             )}
           </div>
           <div className="flex-1 overflow-auto">
-            {rightTab === "prov" ? (
-              <ProvGraphPanel doc={provDoc} />
-            ) : (
+            {rightTab === "graph" ? (
               <NetworkGraphPanel
                 data={noteGraphData}
                 onNavigate={onNavigateNote}
               />
+            ) : (
+              <ProvGraphPanel doc={provDoc} />
             )}
           </div>
         </div>

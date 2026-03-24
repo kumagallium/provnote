@@ -77,9 +77,7 @@ export function buildAiDerivedDocument(params: BuildParams): ProvNoteDocument {
     generatedBy: {
       agent: "crucible-agent",
       sessionId: agentResponse.session_id,
-      model: agentResponse.token_usage
-        ? `tokens: ${agentResponse.token_usage.total_tokens}`
-        : undefined,
+      model: agentResponse.model ?? undefined,
       tokenUsage: agentResponse.token_usage,
     },
     createdAt: now,

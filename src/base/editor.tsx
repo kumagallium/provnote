@@ -5,6 +5,7 @@ import {
   useCreateBlockNote,
   SideMenuController,
   SuggestionMenuController,
+  FormattingToolbarController,
   getDefaultReactSlashMenuItems,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -12,7 +13,7 @@ import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 import { FC, useEffect, useMemo } from "react";
 import type { CustomBlockEntry } from "./schema";
-import type { SideMenuProps } from "@blocknote/react";
+import type { SideMenuProps, FormattingToolbarProps } from "@blocknote/react";
 
 type SlashMenuItem = {
   title: string;
@@ -32,6 +33,12 @@ type SandboxEditorProps = {
    * - FC: カスタムSideMenuコンポーネント
    */
   sideMenu?: FC<SideMenuProps> | false;
+  /**
+   * カスタムFormattingToolbarコンポーネントを渡す。
+   * - undefined: デフォルトのFormattingToolbar
+   * - FC: カスタムFormattingToolbar
+   */
+  formattingToolbar?: FC<FormattingToolbarProps>;
   /** 追加のスラッシュメニューアイテム */
   extraSlashMenuItems?: SlashMenuItem[];
   /** エディタインスタンスを外部に公開するコールバック */
@@ -46,6 +53,7 @@ export function SandboxEditor({
   blocks = [],
   initialContent,
   sideMenu,
+  formattingToolbar,
   extraSlashMenuItems,
   onEditorReady,
   onChange,
@@ -90,11 +98,15 @@ export function SandboxEditor({
       editor={editor as any}
       theme="light"
       sideMenu={sideMenu === false ? false : usesCustomSideMenu ? false : undefined}
+      formattingToolbar={formattingToolbar ? false : undefined}
       slashMenu={hasExtraSlash ? false : undefined}
       onChange={onChange}
     >
       {usesCustomSideMenu && (
         <SideMenuController sideMenu={sideMenu as FC<SideMenuProps>} />
+      )}
+      {formattingToolbar && (
+        <FormattingToolbarController formattingToolbar={formattingToolbar} />
       )}
       {hasExtraSlash && (
         <SuggestionMenuController
