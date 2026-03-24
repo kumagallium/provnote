@@ -1,9 +1,7 @@
 // crucible-agent API クライアント
 // POST /agent/run を呼び出して AI 回答を取得する
 
-// crucible-agent のエンドポイント（環境変数 or デフォルト）
-const AGENT_BASE_URL =
-  import.meta.env.VITE_CRUCIBLE_AGENT_URL ?? "http://10.0.0.3:8090";
+import { getAgentUrl } from "../settings";
 
 export type AgentRunRequest = {
   message: string;
@@ -45,7 +43,7 @@ export type AgentRunResponse = {
 export async function generateTitle(
   firstMessage: string,
 ): Promise<string> {
-  const res = await fetch(`${AGENT_BASE_URL}/sessions/title`, {
+  const res = await fetch(`${getAgentUrl()}/sessions/title`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ first_message: firstMessage }),
@@ -74,7 +72,7 @@ export async function runAgent(
   req: AgentRunRequest,
   signal?: AbortSignal,
 ): Promise<AgentRunResponse> {
-  const res = await fetch(`${AGENT_BASE_URL}/agent/run`, {
+  const res = await fetch(`${getAgentUrl()}/agent/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
