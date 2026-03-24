@@ -3,6 +3,15 @@
 
 import { getAgentUrl } from "../settings";
 
+// API キー認証（環境変数で設定、未設定なら省略）
+const AGENT_API_KEY = import.meta.env.VITE_CRUCIBLE_AGENT_API_KEY ?? "";
+
+function agentHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (AGENT_API_KEY) h["X-API-Key"] = AGENT_API_KEY;
+  return h;
+}
+
 export type AgentRunRequest = {
   message: string;
   session_id?: string;
@@ -45,7 +54,7 @@ export async function generateTitle(
 ): Promise<string> {
   const res = await fetch(`${getAgentUrl()}/sessions/title`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: agentHeaders(),
     body: JSON.stringify({ first_message: firstMessage }),
   });
 
@@ -74,7 +83,7 @@ export async function runAgent(
 ): Promise<AgentRunResponse> {
   const res = await fetch(`${getAgentUrl()}/agent/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: agentHeaders(),
     body: JSON.stringify(req),
     signal,
   });
