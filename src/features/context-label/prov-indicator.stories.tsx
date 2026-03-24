@@ -241,12 +241,41 @@ export const PanelWithLabelAndLinks: StoryObj = {
           );
         })}
 
-        {/* 前手順リンク追加 */}
+        {/* 前手順リンク追加（[手順] ラベルのみ表示） */}
         <div style={dividerStyle} />
         <div style={{ ...sectionHeaderStyle, color: "#5b8fb9" }}>前手順リンク（wasInformedBy）</div>
         <button style={{ ...menuItemStyle, color: "#5b8fb9", background: "#eff6ff", borderRadius: 4, margin: "2px 6px", width: "calc(100% - 12px)" }}>
           <span style={{ marginRight: 4 }}>→</span>前の手順を選択してリンク
         </button>
+      </div>
+    );
+  },
+};
+
+// 統合パネル（[手順] 以外 — 前手順リンクなし）
+export const PanelWithoutPrevStep: StoryObj = {
+  name: "統合パネル（[使用したもの] — 前手順リンクなし）",
+  render: () => {
+    const label = "[使用したもの]";
+    const color = getLabelColor(label);
+
+    return (
+      <div style={panelStyle}>
+        <div style={{ padding: "6px 12px 4px", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            display: "inline-block", padding: "0px 6px", borderRadius: 9999,
+            fontSize: 11, fontWeight: 600, backgroundColor: color + "18",
+            color, border: `1px solid ${color}38`, lineHeight: 1.6,
+          }}>
+            {label}
+          </span>
+          <button style={{ marginLeft: "auto", fontSize: 10, color: "#5b8fb9", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+            変更
+          </button>
+        </div>
+        <p style={{ padding: "6px 12px", fontSize: 11, color: tokens.mutedFg }}>
+          前手順リンクセクションは [手順] ラベルのみに表示されます。
+        </p>
       </div>
     );
   },
