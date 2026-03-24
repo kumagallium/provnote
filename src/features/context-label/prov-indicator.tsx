@@ -162,72 +162,10 @@ export function ProvIndicatorLayer() {
     if (openBlockId) setActiveBlockId(openBlockId);
   }, [openBlockId]);
 
-  // ホバー中のブロック ID（ブロック本体 or ラベルバッジのホバーで設定）
-  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
-
-  // エディタ内のブロックホバーを監視（全ブロック対象）
-  useEffect(() => {
-    const wrapper = document.querySelector("[data-label-wrapper]");
-    if (!wrapper) return;
-
-    const handleOver = (e: Event) => {
-      const target = (e as MouseEvent).target as HTMLElement;
-      const blockOuter = target.closest('[data-node-type="blockOuter"]') as HTMLElement | null;
-      if (!blockOuter) {
-        setHoveredBlockId(null);
-        return;
-      }
-      const blockId = blockOuter.getAttribute("data-id");
-      setHoveredBlockId(blockId || null);
-    };
-
-    const handleOut = (e: Event) => {
-      const related = (e as MouseEvent).relatedTarget as HTMLElement | null;
-      if (!related?.closest('[data-node-type="blockOuter"]')) {
-        setHoveredBlockId(null);
-      }
-    };
-
-    wrapper.addEventListener("mouseover", handleOver);
-    wrapper.addEventListener("mouseout", handleOut);
-    return () => {
-      wrapper.removeEventListener("mouseover", handleOver);
-      wrapper.removeEventListener("mouseout", handleOut);
-    };
-  }, []);
-
-  // ホバー中のブロックの矩形を計算
-  const hoverOverlay = (() => {
-    if (!hoveredBlockId) return null;
-    const outer = document.querySelector(
-      `[data-id="${hoveredBlockId}"][data-node-type="blockOuter"]`
-    ) as HTMLElement | null;
-    if (!outer) return null;
-    const content = outer.querySelector(".bn-block-content") as HTMLElement | null;
-    return (content || outer).getBoundingClientRect();
-  })();
-
   if (indicators.length === 0) return null;
 
   return createPortal(
     <>
-      {/* ホバーハイライトオーバーレイ（全ブロック共通色） */}
-      {hoverOverlay && (
-        <div
-          style={{
-            position: "fixed",
-            top: hoverOverlay.top - 2,
-            left: hoverOverlay.left - 4,
-            width: hoverOverlay.width + 8,
-            height: hoverOverlay.height + 4,
-            borderRadius: 6,
-            background: "rgba(75, 122, 82, 0.05)",
-            border: "1.5px solid rgba(75, 122, 82, 0.15)",
-            pointerEvents: "none",
-            zIndex: 9996,
-          }}
-        />
-      )}
       {indicators.map(({ blockId, top, left, label, outgoing, incoming }) => {
         const isActive = activeBlockId === blockId;
         const color = label ? getLabelColor(label) : undefined;
@@ -245,8 +183,6 @@ export function ProvIndicatorLayer() {
               onClick={() =>
                 setActiveBlockId(isActive ? null : blockId)
               }
-              onPointerEnter={() => setHoveredBlockId(blockId)}
-              onPointerLeave={() => setHoveredBlockId(null)}
               data-prov-label-anchor={blockId}
               title={`${label} — クリックで詳細`}
               style={{
@@ -917,3 +853,72 @@ const dividerStyle: React.CSSProperties = {
   borderTop: "1px solid #f3f4f6",
   margin: "4px 0",
 };
+
+// ──────────────────────────────────
+// BlockHoverHighlight
+// エディタ内の全ブロックにホバーハイライトを表示する独立コンポーネント。
+// ラベルの有無に関係なく動作する。
+// ──────────────────────────────────
+export function BlockHoverHighlight() {
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const wrapper = document.querySelector("[data-label-wrapper]");
+    if (!wrapper) return;
+
+    const handleOver = (e: Event) => {
+      const target = (e as MouseEvent).target as HTMLElement;
+      const blockOuter = target.closest(
+        '[data-node-type="blockOuter"]'
+      ) as HTMLElement | null;
+      if (!blockOuter) {
+        setHoveredBlockId(null);
+        return;
+      }
+      const blockId = blockOuter.getAttribute("data-id");
+      setHoveredBlockId(blockId || null);
+    };
+
+    const handleOut = (e: Event) => {
+      const related = (e as MouseEvent).relatedTarget as HTMLElement | null;
+      if (!related?.closest('[data-node-type="blockOuter"]')) {
+        setHoveredBlockId(null);
+      }
+    };
+
+    wrapper.addEventListener("mouseover", handleOver);
+    wrapper.addEventListener("mouseout", handleOut);
+    return () => {
+      wrapper.removeEventListener("mouseover", handleOver);
+      wrapper.removeEventListener("mouseout", handleOut);
+    };
+  }, []);
+
+  if (!hoveredBlockId) return null;
+
+  const outer = document.querySelector(
+    `[data-id="${hoveredBlockId}"][data-node-type="blockOuter"]`
+  ) as HTMLElement | null;
+  if (!outer) return null;
+
+  const content = outer.querySelector(".bn-block-content") as HTMLElement | null;
+  const rect = (content || outer).getBoundingClientRect();
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        top: rect.top - 2,
+        left: rect.left - 4,
+        width: rect.width + 8,
+        height: rect.height + 4,
+        borderRadius: 6,
+        background: "rgba(75, 122, 82, 0.05)",
+        border: "1.5px solid rgba(75, 122, 82, 0.15)",
+        pointerEvents: "none",
+        zIndex: 9996,
+      }}
+    />,
+    document.body
+  );
+}

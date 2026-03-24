@@ -11,6 +11,7 @@ import {
 import {
   ProvIndicatorLayer,
   ProvIndicatorHoverHint,
+  BlockHoverHighlight,
   setOnPrevStepLinkSelected,
 } from "./features/context-label/prov-indicator";
 import {
@@ -756,6 +757,7 @@ function NoteEditorInner({
     <>
       <ProvIndicatorLayer />
       <ProvIndicatorHoverHint />
+      <BlockHoverHighlight />
       <AiAssistantModal onSubmit={handleAiSubmit} />
 
       {/* ヘッダー */}
