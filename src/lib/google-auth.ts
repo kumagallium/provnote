@@ -40,9 +40,13 @@ type AuthState = {
   expiresAt: number | null;
 };
 
+// トークン期限切れ前に自動更新するまでの余裕（5分）
+const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
 let tokenClient: TokenClient | null = null;
 let authState: AuthState = loadFromStorage();
 let authListeners: Array<(token: string | null) => void> = [];
+let refreshTimerId: ReturnType<typeof setTimeout> | null = null;
 
 // sessionStorage からトークンを復元
 function loadFromStorage(): AuthState {
@@ -109,8 +113,9 @@ export async function initGoogleAuth(): Promise<void> {
     },
   });
 
-  // sessionStorage に有効なトークンがあればリスナーに通知
+  // sessionStorage に有効なトークンがあればリスナーに通知 + 自動更新タイマーをセット
   if (authState.accessToken) {
+    scheduleTokenRefresh(authState.expiresAt);
     authListeners.forEach((fn) => fn(authState.accessToken));
   }
 }
@@ -118,7 +123,27 @@ export async function initGoogleAuth(): Promise<void> {
 function setAuthState(token: string | null, expiresAt: number | null) {
   authState = { accessToken: token, expiresAt };
   saveToStorage(authState);
+  scheduleTokenRefresh(expiresAt);
   authListeners.forEach((fn) => fn(token));
+}
+
+// トークン期限切れ前に自動更新をスケジュール
+function scheduleTokenRefresh(expiresAt: number | null) {
+  // 既存タイマーをクリア
+  if (refreshTimerId !== null) {
+    clearTimeout(refreshTimerId);
+    refreshTimerId = null;
+  }
+  if (!expiresAt || !tokenClient) return;
+
+  const delay = expiresAt - Date.now() - REFRESH_MARGIN_MS;
+  if (delay <= 0) return; // 既に余裕がない場合はスキップ
+
+  refreshTimerId = setTimeout(() => {
+    refreshTimerId = null;
+    // prompt: "" で同意済みユーザーはポップアップなしで更新
+    tokenClient?.requestAccessToken({ prompt: "" });
+  }, delay);
 }
 
 // サインイン（ポップアップ表示）
