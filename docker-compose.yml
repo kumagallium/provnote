@@ -8,7 +8,10 @@
 
 services:
   provnote:
-    build: .
+    build:
+      context: .
+      args:
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
     ports:
       - "5174:80"
     depends_on:
