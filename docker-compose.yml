@@ -16,8 +16,7 @@ services:
     restart: unless-stopped
 
   agent:
-    build:
-      context: https://github.com/kumagallium/crucible-agent.git
+    image: ghcr.io/kumagallium/crucible-agent:latest
     ports:
       - "8090:8090"
     environment:
