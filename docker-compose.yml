@@ -40,7 +40,7 @@ services:
       - ./docker/litellm_config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
-      - DATABASE_URL=postgresql://agent:agent@postgres:5432/crucible_agent
+      - DATABASE_URL=postgresql://agent:agent@postgres:5432/litellm
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +54,7 @@ services:
       POSTGRES_DB: crucible_agent
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent -d crucible_agent"]
       interval: 5s
