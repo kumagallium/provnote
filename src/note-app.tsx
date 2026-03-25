@@ -298,7 +298,7 @@ function FileSidebar({
         )}
         {!oauthAvailable && (
           <p className="text-xs text-muted-foreground">
-            ローカル保存モード
+            ブラウザに一時保存中
           </p>
         )}
       </div>
