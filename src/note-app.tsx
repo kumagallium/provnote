@@ -51,6 +51,7 @@ import {
   createFile,
   saveFile,
   deleteFile,
+  uploadMediaFile,
   type ProvNoteFile,
   type ProvNoteDocument,
 } from "./lib/google-drive";
@@ -827,6 +828,7 @@ function NoteEditorInner({
               formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
               onChange={handleContentChange}
+              uploadFile={uploadMediaFile}
             />
           </div>
         </div>

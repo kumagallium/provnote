@@ -45,6 +45,8 @@ type SandboxEditorProps = {
   onEditorReady?: (editor: any) => void;
   /** エディタの内容が変更されたときのコールバック */
   onChange?: () => void;
+  /** メディアファイルアップロードハンドラ（File → URL を返す） */
+  uploadFile?: (file: File) => Promise<string>;
 };
 
 // サンドボックス共通エディタ
@@ -57,6 +59,7 @@ export function SandboxEditor({
   extraSlashMenuItems,
   onEditorReady,
   onChange,
+  uploadFile,
 }: SandboxEditorProps) {
   const customSpecs = Object.fromEntries(
     blocks.map((b) => [b.type, typeof b.spec === "function" ? b.spec() : b.spec])
@@ -72,6 +75,7 @@ export function SandboxEditor({
   const editor = useCreateBlockNote({
     schema,
     initialContent: initialContent?.length ? (initialContent as any) : undefined,
+    uploadFile,
   });
 
   // エディタインスタンスを外部に公開
