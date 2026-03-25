@@ -48,6 +48,12 @@ docker compose up -d
 
 No `.env` editing required — everything is configured from the browser.
 
+> **Note:** Docker mode uses local storage by default. To enable Google Drive sync, add your Google OAuth client ID to `.env` and rebuild:
+> ```bash
+> echo "VITE_GOOGLE_CLIENT_ID=your-client-id" >> .env
+> docker compose up -d --build
+> ```
+
 ### Option 3: Run for development
 
 ```bash

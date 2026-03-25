@@ -7,20 +7,25 @@ import {
   signOut as gisSignOut,
   isSignedIn,
   onAuthChange,
+  isOAuthConfigured,
 } from "./google-auth";
 import { clearCache } from "./google-drive";
 
 export function useGoogleAuth() {
-  const [authenticated, setAuthenticated] = useState(isSignedIn());
-  const [loading, setLoading] = useState(true);
+  const oauthAvailable = isOAuthConfigured();
+  const [authenticated, setAuthenticated] = useState(
+    oauthAvailable ? isSignedIn() : true,
+  );
+  const [loading, setLoading] = useState(oauthAvailable);
 
   useEffect(() => {
+    if (!oauthAvailable) return;
     initGoogleAuth().then(() => setLoading(false));
     const unsubscribe = onAuthChange((token) => {
       setAuthenticated(token !== null);
     });
     return unsubscribe;
-  }, []);
+  }, [oauthAvailable]);
 
   const signIn = () => gisSignIn();
   const signOut = () => {
@@ -28,5 +33,5 @@ export function useGoogleAuth() {
     clearCache();
   };
 
-  return { authenticated, loading, signIn, signOut };
+  return { authenticated, loading, signIn, signOut, oauthAvailable };
 }

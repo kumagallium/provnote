@@ -2,6 +2,11 @@
 // クライアントIDは環境変数から取得（VITE_GOOGLE_CLIENT_ID）
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+
+/** Google OAuth が設定されているかどうか */
+export function isOAuthConfigured(): boolean {
+  return Boolean(CLIENT_ID);
+}
 const SCOPES = "https://www.googleapis.com/auth/drive.file";
 const STORAGE_KEY = "provnote_auth";
 
