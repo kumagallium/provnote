@@ -22,6 +22,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent
       - LITELLM_API_BASE=http://litellm:4000
+      - LITELLM_API_KEY=sk-crucible-dev
       - CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
       - CHAT_UI_ENABLED=true
     depends_on:
