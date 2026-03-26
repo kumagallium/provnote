@@ -313,7 +313,57 @@ let openLinkDropdownFn: ((params: {
   anchorRect: { top: number; left: number };
 }) => void) | null = null;
 
+// SideMenu の Floating UI 親は transform: translate(X,Y) で配置されるため、
+// その中の position:fixed なドロップダウンは containing block の影響で位置がずれる。
+// 親の transform を読み取り、ドロップダウン wrapper に逆オフセットを適用して打ち消す。
+function useFixDropdownPosition() {
+  useEffect(() => {
+    const fix = () => {
+      const wrapper = document.querySelector(
+        "[data-radix-popper-content-wrapper]"
+      ) as HTMLElement;
+      if (!wrapper) return;
+
+      // ドロップダウンのトリガー（⠿ ボタン）を探す
+      const trigger = document.querySelector(
+        ".bn-side-menu .bn-button[draggable]"
+      ) as HTMLElement;
+      if (!trigger) return;
+
+      // トリガーの viewport 位置
+      const triggerRect = trigger.getBoundingClientRect();
+      // ドロップダウンの viewport 位置・サイズ
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const dropdownHeight = wrapperRect.height || 160;
+
+      // 下にスペースがあれば下、なければ上に配置
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const expectedTop =
+        spaceBelow >= dropdownHeight + 8
+          ? triggerRect.bottom // 下に表示
+          : triggerRect.top - dropdownHeight; // 上に表示
+
+      const actualTop = wrapperRect.top;
+      const diffY = actualTop - expectedTop;
+
+      // 大きくずれている場合のみ補正
+      if (Math.abs(diffY) > 20) {
+        const currentMarginTop = parseFloat(wrapper.style.marginTop) || 0;
+        wrapper.style.marginTop = `${currentMarginTop - diffY}px`;
+      }
+    };
+
+    const observer = new MutationObserver(fix);
+    const root = document.getElementById("root");
+    if (root) {
+      observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+    }
+    return () => observer.disconnect();
+  }, []);
+}
+
 function NoteSideMenu() {
+  useFixDropdownPosition();
   return (
     <SideMenu>
       <AddBlockButton />
