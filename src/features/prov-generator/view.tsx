@@ -345,15 +345,7 @@ const cyStyles: cytoscape.StylesheetStyle[] = [
   {
     selector: "edge",
     style: {
-      label: "data(label)",
-      "font-size": "9px",
-      "font-family": "Inter, system-ui, sans-serif",
-      "text-rotation": "autorotate" as any,
-      "text-margin-y": -10,
-      "text-background-color": THEME.background,
-      "text-background-opacity": 0.85,
-      "text-background-padding": "2px" as any,
-      color: "#4a5568",
+      // エッジラベルは非表示（ユーザーに PROV 用語を意識させない）
       "line-color": THEME.edge.default,
       "target-arrow-color": THEME.edge.default,
       "target-arrow-shape": "triangle",
