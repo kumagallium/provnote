@@ -1,7 +1,7 @@
 // ノートアプリのメイン画面
 // Google Drive と連携してノートの作成・保存・読み込みを行う
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SandboxEditor } from "./base/editor";
 // MultiPageLayout は派生ノートが別ファイルになったため不要
 import {
@@ -13,6 +13,7 @@ import {
   ProvIndicatorLayer,
   ProvIndicatorHoverHint,
   BlockHoverHighlight,
+  ScopeHighlight,
   setOnPrevStepLinkSelected,
 } from "./features/context-label/prov-indicator";
 import {
@@ -42,7 +43,7 @@ import {
 import { ReleaseNotesPanel } from "./features/release-notes";
 import {
   AiAssistantProvider,
-  AiAssistantModal,
+  AiAssistantPanel,
   useAiAssistant,
   runAgent,
   generateTitle,
@@ -393,7 +394,7 @@ function AiAssistantMenuItem() {
           targetBlocks = [block];
         }
         const markdown = await editor.blocksToMarkdownLossy(targetBlocks);
-        aiAssistant.open({
+        aiAssistant.openChat({
           sourceBlockIds: targetBlocks.map((b: any) => b.id),
           quotedMarkdown: markdown,
         });
@@ -416,7 +417,7 @@ function NoteFormattingToolbar(props: FormattingToolbarProps) {
     const selection = editor.getSelection();
     const blockIds = selection?.blocks?.map((b: any) => b.id) ?? [];
 
-    aiAssistant.open({
+    aiAssistant.openChat({
       sourceBlockIds: blockIds,
       quotedMarkdown: selectedText,
     });
@@ -490,6 +491,42 @@ function extractBlockTitle(block: any): string {
   return "";
 }
 
+// ── 派生元ノート読み取り専用パネル ──
+function SourceDocPanel({ doc }: { doc: ProvNoteDocument }) {
+  return (
+    <div className="p-4 space-y-3">
+      <div className="text-xs font-semibold text-muted-foreground">派生元ノート</div>
+      <h3 className="text-sm font-bold text-foreground">{doc.title}</h3>
+      <div className="space-y-2">
+        {doc.pages[0]?.blocks?.map((block: any, i: number) => (
+          <div
+            key={block.id || i}
+            className="text-xs text-foreground/80 bg-background rounded p-2 border border-border"
+          >
+            {renderBlockText(block)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ブロックからテキストを抽出する簡易レンダラー
+function renderBlockText(block: any): string {
+  if (!block) return "";
+  // content が InlineContent の配列の場合
+  if (Array.isArray(block.content)) {
+    return block.content
+      .map((c: any) => (c.type === "text" ? c.text : c.type === "mention" ? `@${c.props?.id || ""}` : ""))
+      .join("");
+  }
+  // テーブルの場合
+  if (block.type === "table" && block.content?.rows) {
+    return "[テーブル]";
+  }
+  return "";
+}
+
 // ── エディタ本体 ──
 type NoteEditorProps = {
   fileId: string | null;
@@ -501,6 +538,9 @@ type NoteEditorProps = {
   saving: boolean;
   files: ProvNoteFile[];
   noteGraphData: NoteGraphData;
+  /** 派生元ノート（Split View 用、NoteApp が管理） */
+  sourceDoc: ProvNoteDocument | null;
+  onSourceDocChange: (doc: ProvNoteDocument | null) => void;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -525,13 +565,17 @@ function NoteEditorInner({
   saving,
   files,
   noteGraphData,
+  sourceDoc,
+  onSourceDocChange,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
   const aiAssistant = useAiAssistant();
   const editorRef = useRef<any>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
-  const [rightTab, setRightTab] = useState<"graph" | "prov">("graph");
+  const [rightTab, setRightTab] = useState<"graph" | "prov" | "chat" | "source">(
+    sourceDoc ? "source" : "graph"
+  );
   const [title, setTitle] = useState(initialDoc?.title || "新しいノート");
   const [dirty, setDirty] = useState(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -547,8 +591,9 @@ function NoteEditorInner({
     labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
   }, [labelStore]);
 
-  // AI アシスタント実行ハンドラー
-  const handleAiSubmit = useCallback(
+
+  // AI チャットパネル用ハンドラー（継続対話）
+  const handleAiChatSubmit = useCallback(
     async (question: string) => {
       if (!fileId || !editorRef.current) return;
 
@@ -559,48 +604,90 @@ function NoteEditorInner({
         return;
       }
 
+      // ユーザーメッセージを追加
+      const now = new Date().toISOString();
+      aiAssistant.addMessage({ role: "user", content: question, timestamp: now });
       aiAssistant.setLoading(true);
-      try {
-        const userMessage = [
-          "以下の内容について質問があります。",
-          "",
-          "---",
-          aiAssistant.quotedMarkdown,
-          "---",
-          "",
-          question,
-        ].join("\n");
 
-        // AI 回答を取得
+      try {
+        // 引用コンテキストがあれば初回メッセージに含める
+        const isFirstMessage = aiAssistant.messages.length === 0;
+        const userMessage = isFirstMessage && aiAssistant.quotedMarkdown
+          ? [
+              "以下の内容について質問があります。",
+              "",
+              "---",
+              aiAssistant.quotedMarkdown,
+              "---",
+              "",
+              question,
+            ].join("\n")
+          : question;
+
         const response = await runAgent({
           message: userMessage,
           profile: "science",
           options: { max_turns: 5 },
         });
 
-        // 回答をベースにタイトルを生成（回答の方が要約しやすい）
-        const title = await generateTitle(response.message);
-
-        // 派生ノートを構築
-        const doc = buildAiDerivedDocument({
-          title,
-          quotedMarkdown: aiAssistant.quotedMarkdown,
-          question,
-          agentResponse: response,
-          sourceNoteId: fileId,
-          sourceBlockIds: aiAssistant.sourceBlockIds,
-          parseMarkdown: (md) => editorRef.current.tryParseMarkdownToBlocks(md),
+        // アシスタント回答を追加
+        aiAssistant.addMessage({
+          role: "assistant",
+          content: response.message,
+          timestamp: new Date().toISOString(),
         });
-
-        await onAiDeriveNote(doc);
-        aiAssistant.close();
+        aiAssistant.setLoading(false);
       } catch (err) {
         aiAssistant.setError(
           err instanceof Error ? err.message : "AI 実行に失敗しました",
         );
       }
     },
-    [fileId, aiAssistant, onAiDeriveNote],
+    [fileId, aiAssistant],
+  );
+
+  // AI 回答から別ノートとして派生
+  const handleAiDeriveFromChat = useCallback(
+    async (question: string, answer: string) => {
+      if (!fileId || !editorRef.current) return;
+      const chatTitle = await generateTitle(answer).catch(() => question.slice(0, 25));
+      const doc = buildAiDerivedDocument({
+        title: chatTitle,
+        quotedMarkdown: aiAssistant.quotedMarkdown || question,
+        question,
+        agentResponse: {
+          session_id: "",
+          message: answer,
+          tool_calls: [],
+          provenance_id: null,
+          token_usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          model: null,
+        },
+        sourceNoteId: fileId,
+        sourceBlockIds: aiAssistant.sourceBlockIds,
+        parseMarkdown: (md) => editorRef.current.tryParseMarkdownToBlocks(md),
+      });
+
+      // Split View: 現在のドキュメントを派生元として保存（NoteApp レベル）
+      const currentBlocks = editorRef.current.document;
+      onSourceDocChange({
+        version: 2,
+        title,
+        pages: [{
+          id: "main",
+          title,
+          blocks: currentBlocks,
+          labels: Object.fromEntries(labelStore.getSnapshot().labels),
+          provLinks: [],
+          knowledgeLinks: [],
+        }],
+        createdAt: initialDoc?.createdAt || new Date().toISOString(),
+        modifiedAt: new Date().toISOString(),
+      });
+
+      await onAiDeriveNote(doc);
+    },
+    [fileId, title, aiAssistant, labelStore, initialDoc, onAiDeriveNote, onSourceDocChange],
   );
 
   // 初期データの復元
@@ -627,7 +714,11 @@ function NoteEditorInner({
         linkStore.restoreLinks(allLinks);
       }
     }
-  }, [initialDoc, labelStore, linkStore]);
+    // チャット履歴を復元
+    if (initialDoc.chats && initialDoc.chats.length > 0) {
+      aiAssistant.restoreChats(initialDoc.chats);
+    }
+  }, [initialDoc, labelStore, linkStore, aiAssistant]);
 
   // 保存
   const handleSave = useCallback(() => {
@@ -641,6 +732,18 @@ function NoteEditorInner({
     const allLinks = linkStore.getAllLinks();
     const provLinks = allLinks.filter((l) => l.layer === "prov");
     const knowledgeLinks = allLinks.filter((l) => l.layer === "knowledge");
+
+    // チャット履歴を収集（現在のアクティブチャットを含む）
+    const currentChat = aiAssistant.getCurrentChat();
+    const savedChats = [...aiAssistant.chats];
+    if (currentChat) {
+      const idx = savedChats.findIndex((c) => c.id === currentChat.id);
+      if (idx >= 0) {
+        savedChats[idx] = currentChat;
+      } else {
+        savedChats.push(currentChat);
+      }
+    }
 
     const doc: ProvNoteDocument = {
       version: 2,
@@ -659,12 +762,13 @@ function NoteEditorInner({
       noteLinks: initialDoc?.noteLinks,
       derivedFromNoteId: initialDoc?.derivedFromNoteId,
       derivedFromBlockId: initialDoc?.derivedFromBlockId,
+      chats: savedChats.length > 0 ? savedChats : undefined,
       createdAt: initialDoc?.createdAt || new Date().toISOString(),
       modifiedAt: new Date().toISOString(),
     };
     onSave(doc);
     setDirty(false);
-  }, [title, labelStore, linkStore, initialDoc, onSave]);
+  }, [title, labelStore, linkStore, aiAssistant, initialDoc, onSave]);
 
   // 常に最新の handleSave を ref に保持
   useEffect(() => {
@@ -697,6 +801,41 @@ function NoteEditorInner({
       markDirty();
     }
   }, [labelStore.labels, linkStore.links, markDirty]);
+
+  // AI 回答をスコープに反映
+  // 見出しスコープ: スコープ末尾に新ブロックとして挿入
+  // ブロック単体: 既存ブロックの content 末尾に追記
+  const handleInsertToScope = useCallback(
+    (markdown: string) => {
+      if (!editorRef.current) return;
+      const editor = editorRef.current;
+
+      const targetBlockId = aiAssistant.sourceBlockIds[0];
+      if (!targetBlockId) return;
+
+      const targetBlock = editor.getBlock(targetBlockId);
+      if (!targetBlock) return;
+
+      if (targetBlock.type === "heading") {
+        // 見出しスコープ: 末尾に新ブロックとして挿入
+        const blocks = editor.tryParseMarkdownToBlocks(markdown);
+        if (blocks.length === 0) return;
+        const scope = collectHeadingScope(editor.document, targetBlock);
+        const insertAfterBlock = scope[scope.length - 1];
+        editor.insertBlocks(blocks, insertAfterBlock, "after");
+      } else {
+        // ブロック単体: content 末尾に改行+テキストを追記
+        const existingContent = Array.isArray(targetBlock.content) ? targetBlock.content : [];
+        const newContent = [
+          ...existingContent,
+          { type: "text" as const, text: "\n" + markdown, styles: {} },
+        ];
+        editor.updateBlock(targetBlockId, { content: newContent });
+      }
+      markDirty();
+    },
+    [markDirty, aiAssistant.sourceBlockIds],
+  );
 
   // タイトル変更時に自動保存トリガー
   const handleTitleChange = useCallback(
@@ -796,14 +935,43 @@ function NoteEditorInner({
       ? initialDoc.pages[0].blocks
       : undefined;
 
+  // AI アシスタント起動 → Chat タブを開く
+  const chatReqRef = useRef(aiAssistant.chatRequestSeq);
+  useEffect(() => {
+    if (aiAssistant.chatRequestSeq > chatReqRef.current) {
+      chatReqRef.current = aiAssistant.chatRequestSeq;
+      setRightTab("chat");
+    }
+  }, [aiAssistant.chatRequestSeq]);
+
+  // Chat タブアクティブ時のスコープブロック ID リスト
+  // dirty を依存に含めることで、ブロック挿入後にハイライトが再計算される
+  const chatScopeBlockIds = useMemo(() => {
+    if (rightTab !== "chat" || aiAssistant.sourceBlockIds.length === 0 || !editorRef.current) {
+      return [];
+    }
+    const blockId = aiAssistant.sourceBlockIds[0];
+    const block = editorRef.current.getBlock(blockId);
+    if (!block) return [blockId];
+
+    if (block.type === "heading") {
+      // 見出し: 配下ブロック群をスコープとする
+      const scope = collectHeadingScope(editorRef.current.document, block);
+      return scope.map((b: any) => b.id);
+    }
+
+    // ブロック単体: そのブロックのみをハイライト
+    return [blockId];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rightTab, aiAssistant.sourceBlockIds, dirty]);
+
   return (
     <>
       <ProvIndicatorLayer />
       <ProvIndicatorHoverHint />
       <BlockHoverHighlight />
+      <ScopeHighlight blockIds={chatScopeBlockIds} />
       <LabelDropdownPortal />
-      <AiAssistantModal onSubmit={handleAiSubmit} />
-
       {/* ヘッダー */}
       <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0">
         <input
@@ -878,31 +1046,23 @@ function NoteEditorInner({
           </div>
         </div>
 
-        {/* 右: Graph / PROV パネル */}
+        {/* 右: Graph / PROV / Chat / Source パネル */}
         <div className="w-[480px] shrink-0 border-l border-border bg-muted flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-            <button
-              onClick={() => setRightTab("graph")}
-              className={cn(
-                "text-xs font-bold tracking-wide px-1.5 py-0.5 rounded transition-colors",
-                rightTab === "graph"
-                  ? "text-foreground bg-background"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Graph
-            </button>
-            <button
-              onClick={() => setRightTab("prov")}
-              className={cn(
-                "text-xs font-bold tracking-wide px-1.5 py-0.5 rounded transition-colors",
-                rightTab === "prov"
-                  ? "text-foreground bg-background"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              PROV
-            </button>
+            {(["graph", "prov", "chat", ...(sourceDoc ? ["source" as const] : [])] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setRightTab(tab)}
+                className={cn(
+                  "text-xs font-bold tracking-wide px-1.5 py-0.5 rounded transition-colors",
+                  rightTab === tab
+                    ? "text-foreground bg-background"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab === "graph" ? "Graph" : tab === "prov" ? "PROV" : tab === "chat" ? "Chat" : "Source"}
+              </button>
+            ))}
             {rightTab === "prov" && (
               <button
                 onClick={generateProv}
@@ -914,13 +1074,24 @@ function NoteEditorInner({
             )}
           </div>
           <div className="flex-1 overflow-auto">
-            {rightTab === "graph" ? (
+            {rightTab === "graph" && (
               <NetworkGraphPanel
                 data={noteGraphData}
                 onNavigate={onNavigateNote}
               />
-            ) : (
+            )}
+            {rightTab === "prov" && (
               <ProvGraphPanel doc={provDoc} />
+            )}
+            {rightTab === "chat" && (
+              <AiAssistantPanel
+                onSubmit={handleAiChatSubmit}
+                onInsertToScope={handleInsertToScope}
+                onDeriveNote={handleAiDeriveFromChat}
+              />
+            )}
+            {rightTab === "source" && sourceDoc && (
+              <SourceDocPanel doc={sourceDoc} />
             )}
           </div>
         </div>
@@ -956,6 +1127,8 @@ export function NoteApp() {
   const docCacheRef = useRef<Map<string, ProvNoteDocument>>(new Map());
   // ネットワークグラフデータ
   const [noteGraphData, setNoteGraphData] = useState<NoteGraphData>({ nodes: [], edges: [] });
+  // Split View 用の派生元ノート（NoteApp レベルで管理し、ファイル切り替えでも保持）
+  const [sourceDoc, setSourceDoc] = useState<ProvNoteDocument | null>(null);
 
   // ファイル一覧を取得
   const refreshFiles = useCallback(async () => {
@@ -1309,6 +1482,8 @@ export function NoteApp() {
           saving={saving}
           files={files}
           noteGraphData={noteGraphData}
+          sourceDoc={sourceDoc}
+          onSourceDocChange={setSourceDoc}
         />
         {/* 派生ノート作成中のオーバーレイ */}
         {deriving && (
