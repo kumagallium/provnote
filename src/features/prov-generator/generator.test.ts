@@ -88,12 +88,16 @@ describe("カレー実験シナリオ（基本形）", () => {
     expect(entities.some((e) => e["rdfs:label"] === "にんじん、じゃがいも")).toBe(true);
   });
 
-  it("[条件] が prov:Entity（属性）として生成される", () => {
+  it("[属性] が親ノード（Activity）の provnote:attributes に埋め込まれる", () => {
     const doc = generateProvDocument({ blocks: curryBlocks, labels: curryLabels, links: curryLinks });
+    // param_ ノードは生成されない
     const params = doc["@graph"].filter((n) => n["@id"].startsWith("param_"));
-    expect(params).toHaveLength(1);
-    expect(params[0]["@type"]).toBe("prov:Entity");
-    expect(params[0]["rdfs:label"]).toBe("中火 5分");
+    expect(params).toHaveLength(0);
+    // 「炒める」Activity に属性が埋め込まれている
+    const fryAct = doc["@graph"].find((n) => n["@id"] === "activity_h2-fry");
+    expect(fryAct?.["provnote:attributes"]).toBeDefined();
+    expect(fryAct!["provnote:attributes"]).toHaveLength(1);
+    expect(fryAct!["provnote:attributes"]![0]["rdfs:label"]).toBe("中火 5分");
   });
 
   it("[結果] が Entity として生成される", () => {
@@ -131,11 +135,13 @@ describe("カレー実験シナリオ（基本形）", () => {
 
   it("関係がノードに埋め込まれている（トップレベルの relations がない）", () => {
     const doc = generateProvDocument({ blocks: curryBlocks, labels: curryLabels, links: curryLinks });
-    // ProvJsonLd にはトップレベルの relations フィールドがない
     expect((doc as any).relations).toBeUndefined();
-    // 代わりにノードに埋め込み
     const actCut = doc["@graph"].find((n) => n["@id"] === "activity_h2-cut");
     expect(actCut?.["prov:used"]).toBeDefined();
+    // 属性は provnote:attributes として埋め込み（hasAttribute リレーションなし）
+    const relations = getRelations(doc);
+    const attrRels = relations.filter((r) => r["@type"] === "provnote:hasAttribute");
+    expect(attrRels).toHaveLength(0);
   });
 });
 
@@ -286,14 +292,12 @@ describe("スコープ境界テスト", () => {
     expect(memoUsed).toHaveLength(0);
   });
 
-  it("[条件] は新しいH2 [手順] のスコープに紐づく", () => {
+  it("[属性] は新しいH2 [手順] のスコープに埋め込まれる", () => {
     const doc = generateProvDocument({ blocks: scopeBlocks, labels: scopeLabels, links: [] });
-    const relations = getRelations(doc);
-    const paramRels = relations.filter(
-      (r) => r["@type"] === "provnote:hasAttribute" && r.to === "param_cond-fire"
-    );
-    expect(paramRels).toHaveLength(1);
-    expect(paramRels[0].from).toBe("activity_h2-fry");
+    // 「炒める」Activity に属性が埋め込まれている
+    const fryAct = doc["@graph"].find((n) => n["@id"] === "activity_h2-fry");
+    expect(fryAct?.["provnote:attributes"]).toBeDefined();
+    expect(fryAct!["provnote:attributes"]!.some((a: any) => a["rdfs:label"] === "中火")).toBe(true);
   });
 
   it("H1がスコープをリセットする", () => {
@@ -512,14 +516,11 @@ describe("見出しレベル階層スコープ", () => {
     expect(resultA2[0].to).toBe("activity_h3-a2");
   });
 
-  it("[属性] は H3 サブActivity にスコープされる", () => {
+  it("[属性] は H3 サブActivity の provnote:attributes に埋め込まれる", () => {
     const doc = generateProvDocument({ blocks: hierarchyBlocks, labels: hierarchyLabels, links: [] });
-    const relations = getRelations(doc);
-    const paramRels = relations.filter(
-      (r) => r["@type"] === "provnote:hasAttribute" && r.to === "param_param-a2"
-    );
-    expect(paramRels).toHaveLength(1);
-    expect(paramRels[0].from).toBe("activity_h3-a2");
+    const a2Act = doc["@graph"].find((n) => n["@id"] === "activity_h3-a2");
+    expect(a2Act?.["provnote:attributes"]).toBeDefined();
+    expect(a2Act!["provnote:attributes"]!.some((a: any) => a["rdfs:label"] === "Param A.2")).toBe(true);
   });
 
   it("次のH2で全スコープがリセットされる", () => {
@@ -874,10 +875,10 @@ describe("extractRelations", () => {
     const relations = extractRelations(doc);
     expect(relations.length).toBeGreaterThan(0);
 
-    // used, wasGeneratedBy, hasAttribute がすべて含まれる
+    // used, wasGeneratedBy が含まれる（hasAttribute は廃止 — 属性は埋め込み）
     const types = new Set(relations.map((r) => r["@type"]));
     expect(types.has("prov:used")).toBe(true);
     expect(types.has("prov:wasGeneratedBy")).toBe(true);
-    expect(types.has("provnote:hasAttribute")).toBe(true);
+    expect(types.has("provnote:hasAttribute")).toBe(false);
   });
 });

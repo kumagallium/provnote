@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import cytoscape from "cytoscape";
 import ELK from "elkjs/lib/elk.bundled.js";
-import type { ProvJsonLd, ProvJsonLdNode } from "./generator";
+import type { ProvJsonLd, ProvJsonLdNode, ProvAttribute } from "./generator";
 import { extractRelations, type FlatRelation } from "./generator";
 
 // 後方互換
@@ -95,27 +95,18 @@ function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefinition[]
   const elements: cytoscape.ElementDefinition[] = [];
   const nodeIdSet = new Set(doc["@graph"].map((n) => n["@id"]));
 
+  // 予約済み provnote: キー（ビュー表示対象外）
+  const RESERVED_KEYS = new Set([
+    "provnote:blockId", "provnote:sampleId", "provnote:attributes", "provnote:warnings",
+  ]);
+
+  let attrNodeIdx = 0;
+  let edgeIdx = 0;
+
   // ノード
   for (const node of doc["@graph"]) {
     let label = node["rdfs:label"];
     if (node["provnote:sampleId"]) label += `\n[${node["provnote:sampleId"]}]`;
-
-    // provnote: プロパティからパラメータを表示
-    const paramEntries: string[] = [];
-    for (const key of Object.keys(node)) {
-      if (key.startsWith("provnote:") &&
-          key !== "provnote:blockId" &&
-          key !== "provnote:sampleId" &&
-          key !== "provnote:hasAttribute" &&
-          key !== "provnote:warnings" &&
-          typeof node[key as `provnote:${string}`] === "string") {
-        const shortKey = key.replace("provnote:", "");
-        paramEntries.push(`${shortKey}=${node[key as `provnote:${string}`]}`);
-      }
-    }
-    if (paramEntries.length > 0) {
-      label += `\n${paramEntries.join("\n")}`;
-    }
 
     elements.push({
       data: {
@@ -125,14 +116,65 @@ function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefinition[]
         subtype: getNodeSubtype(node),
       },
     });
+
+    // ── provnote: key-value プロパティ → ダイヤモンドノード ──
+    for (const key of Object.keys(node)) {
+      if (key.startsWith("provnote:") &&
+          !RESERVED_KEYS.has(key) &&
+          typeof node[key as `provnote:${string}`] === "string") {
+        const shortKey = key.replace("provnote:", "");
+        const value = node[key as `provnote:${string}`] as string;
+        const attrId = `attr_${node["@id"]}_${attrNodeIdx++}`;
+
+        elements.push({
+          data: {
+            id: attrId,
+            label: `${shortKey}=${value}`,
+            type: "provnote:Attribute",
+            subtype: "parameter",
+          },
+        });
+        // エッジ: 親ノード → 属性ノード（フロー順方向）
+        elements.push({
+          data: {
+            id: `edge-${edgeIdx++}`,
+            source: node["@id"],
+            target: attrId,
+            label: "hasAttribute",
+          },
+        });
+      }
+    }
+
+    // ── provnote:attributes 配列 → ダイヤモンドノード ──
+    if (node["provnote:attributes"]) {
+      for (const attr of node["provnote:attributes"] as ProvAttribute[]) {
+        const attrId = `attr_${node["@id"]}_${attrNodeIdx++}`;
+
+        elements.push({
+          data: {
+            id: attrId,
+            label: attr["rdfs:label"],
+            type: "provnote:Attribute",
+            subtype: "parameter",
+          },
+        });
+        elements.push({
+          data: {
+            id: `edge-${edgeIdx++}`,
+            source: node["@id"],
+            target: attrId,
+            label: "hasAttribute",
+          },
+        });
+      }
+    }
   }
 
-  // エッジ: 埋め込み関係から抽出
+  // エッジ: 埋め込み PROV 関係から抽出
   const relations = extractRelations(doc);
-  let edgeIdx = 0;
 
   for (const rel of relations) {
-    // 両端のノードが現在のグラフに含まれていることを確認
     if (!nodeIdSet.has(rel.from) || !nodeIdSet.has(rel.to)) {
       continue;
     }
@@ -342,6 +384,11 @@ const cyStyles: cytoscape.StylesheetStyle[] = [
     selector: 'edge[label = "parameter"]',
     style: { "line-color": THEME.edge.parameter, "target-arrow-color": THEME.edge.parameter, "line-style": "dashed" },
   },
+  // hasAttribute エッジ（アンバー・点線 — 属性プロパティ）
+  {
+    selector: 'edge[label = "hasAttribute"]',
+    style: { "line-color": THEME.edge.parameter, "target-arrow-color": THEME.edge.parameter, "line-style": "dashed" },
+  },
 ];
 
 // ── ホバーイベント設定 ──
@@ -475,6 +522,14 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
 
   // 統計情報の計算
   const relations = extractRelations(activeDoc);
+  const attrCount = activeDoc["@graph"].reduce((sum, n) => {
+    let count = 0;
+    if (n["provnote:attributes"]) count += (n["provnote:attributes"] as ProvAttribute[]).length;
+    for (const key of Object.keys(n)) {
+      if (key.startsWith("provnote:") && !["provnote:blockId", "provnote:sampleId", "provnote:attributes", "provnote:warnings"].includes(key) && typeof n[key as `provnote:${string}`] === "string") count++;
+    }
+    return sum + count;
+  }, 0);
 
   const sampleTabs = showTabs ? (
     <div style={tabBarStyle}>
@@ -504,7 +559,7 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
 
       <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ color: "#9ca3af" }}>
-          {activeDoc["@graph"].length} ノード · {relations.length} リレーション
+          {activeDoc["@graph"].length + attrCount} ノード · {relations.length + attrCount} リレーション
         </span>
         <button
           onClick={() => setExpanded(!expanded)}

@@ -45,7 +45,7 @@ describe("リンクの二層分離", () => {
 // 1.4 [属性] の PROV 名変更
 // ──────────────────────────────────
 describe("[属性] の PROV 名変更", () => {
-  it("[属性] ブロックが prov:Entity として生成される", () => {
+  it("[属性] ブロックが独立ノードではなく親の provnote:attributes に埋め込まれる", () => {
     const blocks = [
       { id: "h2-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "焼結" }], children: [] },
       { id: "attr-1", type: "paragraph", content: [{ type: "text", text: "温度 800℃" }], children: [] },
@@ -53,12 +53,16 @@ describe("[属性] の PROV 名変更", () => {
     const labels = new Map([["h2-step", "[手順]"], ["attr-1", "[属性]"]]);
     const doc = generateProvDocument({ blocks, labels, links: [] });
 
+    // param_ ノードは生成されない
     const paramNode = doc["@graph"].find((n) => n["@id"] === "param_attr-1");
-    expect(paramNode).toBeDefined();
-    expect(paramNode!["@type"]).toBe("prov:Entity");
+    expect(paramNode).toBeUndefined();
+    // Activity に埋め込み
+    const act = doc["@graph"].find((n) => n["@id"] === "activity_h2-step");
+    expect(act?.["provnote:attributes"]).toHaveLength(1);
+    expect(act!["provnote:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
   });
 
-  it("[属性] の関係タイプが provnote:hasAttribute になる", () => {
+  it("[属性] が親 Activity の provnote:attributes に埋め込まれる", () => {
     const blocks = [
       { id: "h2-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "焼結" }], children: [] },
       { id: "attr-1", type: "paragraph", content: [{ type: "text", text: "温度 800℃" }], children: [] },
@@ -66,10 +70,12 @@ describe("[属性] の PROV 名変更", () => {
     const labels = new Map([["h2-step", "[手順]"], ["attr-1", "[属性]"]]);
     const doc = generateProvDocument({ blocks, labels, links: [] });
 
-    const relations = extractRelations(doc);
-    const attrRels = relations.filter((r) => r["@type"] === "provnote:hasAttribute");
-    expect(attrRels.length).toBeGreaterThan(0);
-    expect(attrRels[0].to).toBe("param_attr-1");
+    // param_ ノードは生成されない
+    expect(doc["@graph"].filter((n) => n["@id"].startsWith("param_"))).toHaveLength(0);
+    // Activity に属性が埋め込まれている
+    const act = doc["@graph"].find((n) => n["@id"] === "activity_h2-step");
+    expect(act?.["provnote:attributes"]).toBeDefined();
+    expect(act!["provnote:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
   });
 
   it("@context に provnote, rdfs, xsd が含まれる", () => {

@@ -58,7 +58,9 @@ const simpleProv: ProvJsonLd = {
       "@type": "prov:Activity",
       "rdfs:label": "アニールする",
       "provnote:blockId": "b2",
-      "provnote:hasAttribute": [{ "@id": "param_b5" }],
+      "provnote:attributes": [
+        { "rdfs:label": "昇温速度 5℃/min", "provnote:blockId": "b5" },
+      ],
     },
     {
       "@id": "entity_b3",
@@ -72,13 +74,6 @@ const simpleProv: ProvJsonLd = {
       "rdfs:label": "封入されたCu粉末",
       "provnote:blockId": "b4",
       "prov:wasGeneratedBy": { "@id": "activity_b1" },
-    },
-    {
-      "@id": "param_b5",
-      "@type": "prov:Entity",
-      "rdfs:label": "昇温速度",
-      "provnote:blockId": "b5",
-      "provnote:value": "5℃/min",
     },
   ],
 };

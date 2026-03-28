@@ -14,13 +14,19 @@ import { createWarning, type ProvWarning } from "./errors";
 
 // ── PROV-JSON-LD の型定義（Phase 3: 埋め込み形式） ──
 
+/** 埋め込み属性（[属性] ラベルの段落テキスト） */
+export type ProvAttribute = {
+  "rdfs:label": string;
+  "provnote:blockId"?: string;
+};
+
 export type ProvJsonLdNode = {
   "@id": string;
   "@type": string;
   "rdfs:label": string;
   "prov:used"?: { "@id": string }[];
   "prov:wasGeneratedBy"?: { "@id": string };
-  "provnote:hasAttribute"?: { "@id": string }[];
+  "provnote:attributes"?: ProvAttribute[];
   "provnote:blockId"?: string;
   "provnote:sampleId"?: string;
   [key: `provnote:${string}`]: any;
@@ -50,6 +56,7 @@ type InternalNode = {
   blockId: string;
   sampleId?: string;
   params?: Record<string, string>;
+  attributes?: { label: string; blockId: string }[];
 };
 
 type InternalRelation = {
@@ -363,23 +370,29 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
-  // ── [属性] → Entity（親ノードに紐づく末端ノード） ──
+  // ── [属性] → 親ノードの provnote:attributes に埋め込み ──
+  // 独立ノードは作らず、親の Entity/Activity のプロパティとして格納
   for (const lb of labeledBlocks) {
     if (lb.coreLabel === "[属性]") {
-      const paramId = `param_${lb.block.id}`;
-      nodes.push({
-        "@id": paramId,
-        "@type": "prov:Entity",
-        label: getBlockText(lb.block),
-        blockId: lb.block.id,
-      });
+      const attrText = getBlockText(lb.block);
+      const attrEntry = { label: attrText, blockId: lb.block.id };
 
+      // 親ブロックの PROV ノードを探す
       const parentNodeId = findParentLabeledNodeId(lb.block.id, blocks, labels, labeledBlocks);
       if (parentNodeId) {
-        relations.push({ "@type": "provnote:hasAttribute", from: parentNodeId, to: paramId });
+        const parentNode = nodes.find((n) => n["@id"] === parentNodeId);
+        if (parentNode) {
+          if (!parentNode.attributes) parentNode.attributes = [];
+          parentNode.attributes.push(attrEntry);
+        }
       } else {
+        // 親がない場合はスコープの Activity に埋め込む
         for (const actId of getActivityIdsForScope(lb.block.id)) {
-          relations.push({ "@type": "provnote:hasAttribute", from: actId, to: paramId });
+          const actNode = nodes.find((n) => n["@id"] === actId);
+          if (actNode) {
+            if (!actNode.attributes) actNode.attributes = [];
+            actNode.attributes.push(attrEntry);
+          }
         }
       }
     }
@@ -569,6 +582,13 @@ function buildProvJsonLd(
         jsonLdNode[`provnote:${k}` as `provnote:${string}`] = v;
       }
     }
+    // 埋め込み属性（[属性] ラベルの段落テキスト）
+    if (n.attributes && n.attributes.length > 0) {
+      jsonLdNode["provnote:attributes"] = n.attributes.map((a) => ({
+        "rdfs:label": a.label,
+        "provnote:blockId": a.blockId,
+      }));
+    }
     nodeMap.set(n["@id"], jsonLdNode);
   }
 
@@ -590,13 +610,7 @@ function buildProvJsonLd(
         sourceNode["prov:wasGeneratedBy"] = { "@id": rel.to };
         break;
       }
-      case "provnote:hasAttribute": {
-        if (!sourceNode["provnote:hasAttribute"]) {
-          sourceNode["provnote:hasAttribute"] = [];
-        }
-        sourceNode["provnote:hasAttribute"]!.push({ "@id": rel.to });
-        break;
-      }
+      // provnote:hasAttribute は廃止 — 属性は provnote:attributes に直接埋め込み
     }
   }
 
@@ -625,7 +639,7 @@ function coreToProvRole(label: CoreLabel, block: any): string | null {
       return "prov:Activity";
     }
     case "[使用したもの]": return "prov:Entity";
-    case "[属性]": return "prov:Entity";
+    case "[属性]": return null; // 親ノードのプロパティとして埋め込む
     case "[試料]": return null;
     case "[結果]": return "prov:Entity";
     default: return null;
@@ -764,11 +778,8 @@ export function extractRelations(doc: ProvJsonLd): FlatRelation[] {
         to: node["prov:wasGeneratedBy"]["@id"],
       });
     }
-    if (node["provnote:hasAttribute"]) {
-      for (const ref of node["provnote:hasAttribute"]) {
-        relations.push({ "@type": "provnote:hasAttribute", from: node["@id"], to: ref["@id"] });
-      }
-    }
+    // provnote:attributes はプロパティ埋め込み — extractRelations には含めない
+    // ビュー層が provnote:attributes を直接読んでダイヤモンドノードを生成する
   }
 
   return relations;
