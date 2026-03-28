@@ -28,6 +28,29 @@ export type NoteLink = {
   type: "derived_from";
 };
 
+// AI チャットメッセージ
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+};
+
+// スコープに紐づく AI チャット
+export type ScopeChat = {
+  id: string;
+  scopeBlockId: string;
+  scopeType: "heading" | "block";
+  messages: ChatMessage[];
+  generatedBy?: {
+    agent: string;
+    sessionId: string;
+    model?: string;
+    tokenUsage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+  };
+  createdAt: string;
+  modifiedAt: string;
+};
+
 // ProvNote ファイルの内容（エディタの完全な状態）
 export type ProvNoteDocument = {
   version: 1 | 2;
@@ -46,6 +69,8 @@ export type ProvNoteDocument = {
     model?: string;
     tokenUsage?: { input_tokens: number; output_tokens: number; total_tokens: number };
   };
+  /** スコープ別 AI チャット履歴 */
+  chats?: ScopeChat[];
   createdAt: string;
   modifiedAt: string;
 };

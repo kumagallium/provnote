@@ -1,11 +1,10 @@
 // AI アシスタントの状態管理
-// モーダルの開閉・引用ブロック・実行状態を管理する
+// チャットパネル・引用ブロック・チャット履歴・実行状態を管理する
 
 import { ReactNode, createContext, useCallback, useContext, useState } from "react";
+import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
 
 export type AiAssistantState = {
-  /** モーダルが開いているか */
-  isOpen: boolean;
   /** 引用元ブロックIDリスト */
   sourceBlockIds: string[];
   /** 引用テキスト（Markdown） */
@@ -14,17 +13,35 @@ export type AiAssistantState = {
   loading: boolean;
   /** エラーメッセージ */
   error: string | null;
+  /** チャット履歴 */
+  messages: ChatMessage[];
+  /** アクティブなチャット ID */
+  activeChatId: string | null;
+  /** 全チャット（ドキュメントから読み込み） */
+  chats: ScopeChat[];
+  /** Chat タブを開くリクエスト（カウンター。変化を検知して rightTab を切り替える） */
+  chatRequestSeq: number;
 };
 
 export type AiAssistantActions = {
-  /** モーダルを開く（引用ブロック情報を渡す） */
-  open: (params: { sourceBlockIds: string[]; quotedMarkdown: string }) => void;
-  /** モーダルを閉じる */
-  close: () => void;
+  /** Chat タブを開く（引用ブロック情報を渡し、rightTab 切り替えをリクエスト） */
+  openChat: (params: { sourceBlockIds: string[]; quotedMarkdown: string }) => void;
   /** ローディング状態を設定 */
   setLoading: (loading: boolean) => void;
   /** エラーを設定 */
   setError: (error: string | null) => void;
+  /** メッセージを追加 */
+  addMessage: (message: ChatMessage) => void;
+  /** チャットを選択（既存チャットを開く） */
+  selectChat: (chatId: string) => void;
+  /** チャット一覧を復元 */
+  restoreChats: (chats: ScopeChat[]) => void;
+  /** 現在のチャットを ScopeChat として取得 */
+  getCurrentChat: () => ScopeChat | null;
+  /** メッセージをクリア（新しい会話を開始） */
+  clearMessages: () => void;
+  /** 現在のチャットを退避して非アクティブにする（リスト表示用） */
+  parkChat: () => void;
 };
 
 export type AiAssistantStore = AiAssistantState & AiAssistantActions;
@@ -32,32 +49,58 @@ export type AiAssistantStore = AiAssistantState & AiAssistantActions;
 const AiAssistantContext = createContext<AiAssistantStore | null>(null);
 
 const INITIAL_STATE: AiAssistantState = {
-  isOpen: false,
   sourceBlockIds: [],
   quotedMarkdown: "",
   loading: false,
   error: null,
+  messages: [],
+  activeChatId: null,
+  chats: [],
+  chatRequestSeq: 0,
 };
 
 export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AiAssistantState>(INITIAL_STATE);
 
-  const open = useCallback(
+  const openChat = useCallback(
     (params: { sourceBlockIds: string[]; quotedMarkdown: string }) => {
-      setState({
-        isOpen: true,
-        sourceBlockIds: params.sourceBlockIds,
-        quotedMarkdown: params.quotedMarkdown,
-        loading: false,
-        error: null,
+      setState((prev) => {
+        // 現在進行中のチャットがあれば chats に退避
+        let updatedChats = prev.chats;
+        if (prev.messages.length > 0) {
+          const now = new Date().toISOString();
+          const existing = prev.activeChatId
+            ? prev.chats.find((c) => c.id === prev.activeChatId)
+            : null;
+          const currentChat: ScopeChat = {
+            id: existing?.id ?? crypto.randomUUID(),
+            scopeBlockId: prev.sourceBlockIds[0] ?? "",
+            scopeType: "heading",
+            messages: prev.messages,
+            generatedBy: existing?.generatedBy,
+            createdAt: existing?.createdAt ?? now,
+            modifiedAt: now,
+          };
+          const idx = updatedChats.findIndex((c) => c.id === currentChat.id);
+          updatedChats = idx >= 0
+            ? updatedChats.map((c, i) => i === idx ? currentChat : c)
+            : [...updatedChats, currentChat];
+        }
+        return {
+          ...prev,
+          chats: updatedChats,
+          sourceBlockIds: params.sourceBlockIds,
+          quotedMarkdown: params.quotedMarkdown,
+          loading: false,
+          error: null,
+          messages: [],
+          activeChatId: null,
+          chatRequestSeq: prev.chatRequestSeq + 1,
+        };
       });
     },
     [],
   );
-
-  const close = useCallback(() => {
-    setState(INITIAL_STATE);
-  }, []);
 
   const setLoading = useCallback((loading: boolean) => {
     setState((prev) => ({ ...prev, loading }));
@@ -67,8 +110,130 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, error, loading: false }));
   }, []);
 
+  const addMessage = useCallback((message: ChatMessage) => {
+    setState((prev) => ({
+      ...prev,
+      messages: [...prev.messages, message],
+    }));
+  }, []);
+
+  const selectChat = useCallback((chatId: string) => {
+    setState((prev) => {
+      const chat = prev.chats.find((c) => c.id === chatId);
+      if (!chat) return prev;
+      return {
+        ...prev,
+        activeChatId: chatId,
+        messages: chat.messages,
+        sourceBlockIds: [chat.scopeBlockId],
+        quotedMarkdown: "",
+        error: null,
+      };
+    });
+  }, []);
+
+  const restoreChats = useCallback((chats: ScopeChat[]) => {
+    setState((prev) => ({ ...prev, chats }));
+  }, []);
+
+  const getCurrentChat = useCallback((): ScopeChat | null => {
+    const s = state;
+    if (s.messages.length === 0) return null;
+    const now = new Date().toISOString();
+    const existing = s.activeChatId ? s.chats.find((c) => c.id === s.activeChatId) : null;
+    return {
+      id: existing?.id ?? crypto.randomUUID(),
+      scopeBlockId: s.sourceBlockIds[0] ?? "",
+      scopeType: "heading",
+      messages: s.messages,
+      generatedBy: existing?.generatedBy,
+      createdAt: existing?.createdAt ?? now,
+      modifiedAt: now,
+    };
+  }, [state]);
+
+  const clearMessages = useCallback(() => {
+    setState((prev) => {
+      // 現在のチャットを chats に退避してからクリア
+      let updatedChats = prev.chats;
+      if (prev.messages.length > 0) {
+        const now = new Date().toISOString();
+        const existing = prev.activeChatId
+          ? prev.chats.find((c) => c.id === prev.activeChatId)
+          : null;
+        const currentChat: ScopeChat = {
+          id: existing?.id ?? crypto.randomUUID(),
+          scopeBlockId: prev.sourceBlockIds[0] ?? "",
+          scopeType: "heading",
+          messages: prev.messages,
+          generatedBy: existing?.generatedBy,
+          createdAt: existing?.createdAt ?? now,
+          modifiedAt: now,
+        };
+        const idx = updatedChats.findIndex((c) => c.id === currentChat.id);
+        updatedChats = idx >= 0
+          ? updatedChats.map((c, i) => i === idx ? currentChat : c)
+          : [...updatedChats, currentChat];
+      }
+      return {
+        ...prev,
+        chats: updatedChats,
+        messages: [],
+        activeChatId: null,
+        error: null,
+      };
+    });
+  }, []);
+
+  const parkChat = useCallback(() => {
+    setState((prev) => {
+      let updatedChats = prev.chats;
+      if (prev.messages.length > 0) {
+        const now = new Date().toISOString();
+        const existing = prev.activeChatId
+          ? prev.chats.find((c) => c.id === prev.activeChatId)
+          : null;
+        const currentChat: ScopeChat = {
+          id: existing?.id ?? crypto.randomUUID(),
+          scopeBlockId: prev.sourceBlockIds[0] ?? "",
+          scopeType: "heading",
+          messages: prev.messages,
+          generatedBy: existing?.generatedBy,
+          createdAt: existing?.createdAt ?? now,
+          modifiedAt: now,
+        };
+        const idx = updatedChats.findIndex((c) => c.id === currentChat.id);
+        updatedChats = idx >= 0
+          ? updatedChats.map((c, i) => i === idx ? currentChat : c)
+          : [...updatedChats, currentChat];
+      }
+      return {
+        ...prev,
+        chats: updatedChats,
+        messages: [],
+        activeChatId: null,
+        sourceBlockIds: [],
+        quotedMarkdown: "",
+        error: null,
+      };
+    });
+  }, []);
+
   return (
-    <AiAssistantContext.Provider value={{ ...state, open, close, setLoading, setError }}>
+    <AiAssistantContext.Provider
+      value={{
+        ...state,
+        openChat,
+        setLoading,
+        setError,
+        addMessage,
+        selectChat,
+        restoreChats,
+        getCurrentChat,
+        clearMessages,
+        parkChat,
+      }}
+    >
       {children}
     </AiAssistantContext.Provider>
   );

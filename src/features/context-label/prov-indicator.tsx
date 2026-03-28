@@ -679,7 +679,7 @@ export function ProvIndicatorHoverHint() {
       {/* 対象ブロックのハイライト */}
       {highlightRect && (
         <div
-          className="fixed rounded-lg pointer-events-none z-[9995]"
+          className="fixed rounded-lg pointer-events-none z-[9]"
           style={{
             top: highlightRect.top - 2,
             left: highlightRect.left - 4,
@@ -707,6 +707,73 @@ export function ProvIndicatorHoverHint() {
         #
       </button>
     </>,
+    document.body
+  );
+}
+
+// ──────────────────────────────────
+// ScopeHighlight
+// Chat タブがアクティブなとき、対象スコープのブロック群をハイライトする。
+// blockIds に含まれるブロックの最小〜最大範囲を囲む。
+// ──────────────────────────────────
+export function ScopeHighlight({ blockIds }: { blockIds: string[] }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (blockIds.length === 0) {
+      setRect(null);
+      return;
+    }
+
+    const update = () => {
+      let top = Infinity;
+      let bottom = -Infinity;
+      let left = Infinity;
+      let right = -Infinity;
+      let found = false;
+
+      for (const id of blockIds) {
+        const el = document.querySelector(
+          `[data-id="${id}"][data-node-type="blockOuter"]`
+        ) as HTMLElement | null;
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        top = Math.min(top, r.top);
+        bottom = Math.max(bottom, r.bottom);
+        left = Math.min(left, r.left);
+        right = Math.max(right, r.right);
+        found = true;
+      }
+
+      setRect(found ? new DOMRect(left, top, right - left, bottom - top) : null);
+    };
+
+    update();
+    const wrapper = document.querySelector("[data-label-wrapper]");
+    wrapper?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    const interval = setInterval(update, 500);
+    return () => {
+      wrapper?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      clearInterval(interval);
+    };
+  }, [blockIds]);
+
+  if (!rect) return null;
+
+  return createPortal(
+    <div
+      className="fixed rounded-lg pointer-events-none z-[9]"
+      style={{
+        top: rect.top - 4,
+        left: rect.left - 6,
+        width: rect.width + 12,
+        height: rect.height + 8,
+        background: "rgba(139, 92, 246, 0.08)",
+        border: "1.5px solid rgba(139, 92, 246, 0.2)",
+      }}
+    />,
     document.body
   );
 }
@@ -763,7 +830,7 @@ export function BlockHoverHighlight() {
 
   return createPortal(
     <div
-      className="fixed rounded-lg pointer-events-none z-[9996]"
+      className="fixed rounded-lg pointer-events-none z-[9]"
       style={{
         top: rect.top - 2,
         left: rect.left - 4,
