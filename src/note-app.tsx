@@ -37,7 +37,11 @@ import {
 } from "./features/prov-generator";
 import {
   SampleScopeProvider,
-  SampleTabBarLayer,
+  useSampleScope,
+  sampleScopeBlockEntry,
+  detectSampleIds,
+  autoInsertSampleScopes,
+  syncSampleScopeIds,
 } from "./features/sample-scope";
 import {
   NetworkGraphPanel,
@@ -577,6 +581,7 @@ function NoteEditorInner({
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
   const aiAssistant = useAiAssistant();
+  const sampleScope = useSampleScope();
   const editorRef = useRef<any>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
   const [rightTab, setRightTab] = useState<"graph" | "prov" | "chat" | "source">(
@@ -595,7 +600,13 @@ function NoteEditorInner({
     editorRef.current = editor;
     // ラベル自動設定をセットアップ
     labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
-  }, [labelStore]);
+    // 初期コンテンツから試料 ID を検出
+    setTimeout(() => {
+      const blocks = editor.document;
+      const ids = detectSampleIds(blocks, labelStore.labels);
+      sampleScope.setSampleIds(ids);
+    }, 100);
+  }, [labelStore, sampleScope]);
 
 
   // AI チャットパネル用ハンドラー（継続対話）
@@ -926,6 +937,9 @@ function NoteEditorInner({
     };
   }, [generateProv]);
 
+  // sampleScope 自動挿入のデバウンスタイマー
+  const sampleScopeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // エディタ内容変更時にも再生成をトリガー + ラベル自動設定
   const handleContentChange = useCallback(() => {
     markDirty();
@@ -933,7 +947,20 @@ function NoteEditorInner({
     labelAutoRef.current?.();
     if (provTimerRef.current) clearTimeout(provTimerRef.current);
     provTimerRef.current = setTimeout(generateProv, 500);
-  }, [markDirty, generateProv]);
+
+    // sampleScope: 試料テーブル検出 → 自動挿入（デバウンス 1s）
+    if (sampleScopeTimerRef.current) clearTimeout(sampleScopeTimerRef.current);
+    sampleScopeTimerRef.current = setTimeout(() => {
+      if (!editorRef.current) return;
+      const blocks = editorRef.current.document;
+      const ids = detectSampleIds(blocks, labelStore.labels);
+      sampleScope.setSampleIds(ids);
+      if (ids.length > 0) {
+        autoInsertSampleScopes(editorRef.current, labelStore.labels, ids);
+        syncSampleScopeIds(editorRef.current, ids);
+      }
+    }, 1000);
+  }, [markDirty, generateProv, labelStore.labels, sampleScope]);
 
   // 初期コンテンツ（既存ファイルの場合はブロックを復元）
   const initialContent =
@@ -978,7 +1005,7 @@ function NoteEditorInner({
       <BlockHoverHighlight />
       <ScopeHighlight blockIds={chatScopeBlockIds} />
       <LabelDropdownPortal />
-      <SampleTabBarLayer />
+      {/* SampleTabBarLayer は Phase 4b で sampleScope カスタムブロックに置き換え済み */}
       {/* ヘッダー */}
       <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0">
         <input
@@ -1016,7 +1043,7 @@ function NoteEditorInner({
           <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
             <SandboxEditor
               key={fileId || "new"}
-              blocks={[]}
+              blocks={[sampleScopeBlockEntry]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
               extraSlashMenuItems={labelSlashMenuItems}

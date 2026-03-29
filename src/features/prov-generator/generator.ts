@@ -201,6 +201,27 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
+  // sampleScope ブロックからスキップ情報を収集
+  // activityBlockId → skippedSamples マップ
+  const skippedByScope = new Map<string, Record<string, string>>();
+  for (const block of flatBlocks) {
+    if (block.type === "sampleScope") {
+      let skipped: Record<string, string>;
+      try {
+        skipped = JSON.parse(block.props?.skippedSamples || "{}") || {};
+      } catch {
+        skipped = {};
+      }
+      if (Object.keys(skipped).length > 0) {
+        // sampleScope の親スコープの Activity を特定
+        const parentActId = findParentBlockId(blocks, block.id);
+        if (parentActId) {
+          skippedByScope.set(parentActId, skipped);
+        }
+      }
+    }
+  }
+
   for (const act of activities) {
     const blockId = act.block.id;
     const actLabel = getBlockText(act.block);
@@ -212,20 +233,30 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
 
       // 属性はテーブルが配置されたスコープの Activity にのみ埋め込む
       const isTableScope = blockId === sampleTableScopeBlockId;
+      const scopeSkipped = skippedByScope.get(blockId) ?? {};
 
       for (const a of expansion.activities) {
+        const skipReason = a.sampleId ? scopeSkipped[a.sampleId] : undefined;
+
         const attributes = (isTableScope && a.params)
           ? Object.entries(a.params).map(([k, v]) => ({ label: `${k}: ${v}`, blockId: noteLevelSample.block.id }))
           : undefined;
 
-        nodes.push({
+        const node: InternalNode = {
           "@id": a.id,
           "@type": "prov:Activity",
           label: a.label,
           blockId: a.blockId,
           sampleId: a.sampleId,
           attributes,
-        });
+        };
+
+        // スキップされた試料にはマーカーを付与
+        if (skipReason !== undefined) {
+          node.label = `${a.label} (skip: ${skipReason || "理由なし"})`;
+        }
+
+        nodes.push(node);
       }
     } else {
       // 試料テーブルなし → 単体 Activity
@@ -289,7 +320,29 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
+  /**
+   * blockId に対応する Activity ID を返す。
+   * sampleScope 内のブロックは対応する試料の Activity のみ返す。
+   * sampleScope 外の共通ブロックは全試料の Activity を返す。
+   */
   function getActivityIdsForScope(blockId: string): string[] {
+    // sampleScope 内のブロックか判定
+    const flatBlock = flatBlocks.find((b) => b.id === blockId);
+    if (flatBlock?.__ownerSampleId) {
+      // 試料固有ブロック → 対応する試料の Activity のみ
+      const ownerSampleId = flatBlock.__ownerSampleId;
+      const scopeActId = blockToActivityId.get(blockId);
+      if (!scopeActId) return [];
+      for (const [, branch] of branchMap) {
+        if (branch.activities.some((a) => a.id === scopeActId)) {
+          const matched = branch.activities.find((a) => a.sampleId === ownerSampleId);
+          return matched ? [matched.id] : [];
+        }
+      }
+      return [scopeActId];
+    }
+
+    // 共通ブロック → 全試料の Activity
     const scopeActId = blockToActivityId.get(blockId);
     if (!scopeActId) return [];
     for (const [, branch] of branchMap) {
@@ -664,13 +717,51 @@ function extractInlineText(inlines: any[]): string {
     .trim();
 }
 
-/** ネストされたブロックをフラット化 */
+/**
+ * ネストされたブロックをフラット化。
+ * sampleScope ブロックの props.samples 内のブロックも展開し、
+ * __ownerSampleId タグを付与する。
+ */
 function flattenBlocks(blocks: any[]): any[] {
   const result: any[] = [];
   for (const block of blocks) {
     result.push(block);
+    // sampleScope ブロック: props.samples 内のブロックを展開
+    if (block.type === "sampleScope") {
+      let samples: Record<string, any[]>;
+      try {
+        samples = JSON.parse(block.props?.samples || "{}") || {};
+      } catch {
+        samples = {};
+      }
+      for (const [sampleId, sampleBlocks] of Object.entries(samples)) {
+        if (!Array.isArray(sampleBlocks)) continue;
+        for (const sb of sampleBlocks) {
+          // 試料固有ブロックにタグを付与（元のブロックを変更しないようスプレッド）
+          const tagged = { ...sb, __ownerSampleId: sampleId, __sampleScopeBlockId: block.id };
+          result.push(tagged);
+          if (sb.children && Array.isArray(sb.children)) {
+            result.push(...flattenBlocksWithTag(sb.children, sampleId, block.id));
+          }
+        }
+      }
+      continue; // sampleScope の children は空なのでスキップ
+    }
     if (block.children && Array.isArray(block.children)) {
       result.push(...flattenBlocks(block.children));
+    }
+  }
+  return result;
+}
+
+/** sampleScope 内のブロックを再帰フラット化（タグ付き） */
+function flattenBlocksWithTag(blocks: any[], sampleId: string, scopeBlockId: string): any[] {
+  const result: any[] = [];
+  for (const block of blocks) {
+    const tagged = { ...block, __ownerSampleId: sampleId, __sampleScopeBlockId: scopeBlockId };
+    result.push(tagged);
+    if (block.children && Array.isArray(block.children)) {
+      result.push(...flattenBlocksWithTag(block.children, sampleId, scopeBlockId));
     }
   }
   return result;
