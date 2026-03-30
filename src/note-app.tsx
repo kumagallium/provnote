@@ -36,14 +36,6 @@ import {
   type ProvDocument,
 } from "./features/prov-generator";
 import {
-  SampleScopeProvider,
-  useSampleScope,
-  sampleScopeBlockEntry,
-  detectSampleIds,
-  autoInsertSampleScopes,
-  syncSampleScopeIds,
-} from "./features/sample-scope";
-import {
   NetworkGraphPanel,
   buildNoteGraph,
   type NoteGraphData,
@@ -556,9 +548,7 @@ function NoteEditor(props: NoteEditorProps) {
     <LabelStoreProvider>
       <LinkStoreProvider>
         <AiAssistantProvider>
-          <SampleScopeProvider>
-            <NoteEditorInner {...props} />
-          </SampleScopeProvider>
+          <NoteEditorInner {...props} />
         </AiAssistantProvider>
       </LinkStoreProvider>
     </LabelStoreProvider>
@@ -581,7 +571,6 @@ function NoteEditorInner({
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
   const aiAssistant = useAiAssistant();
-  const sampleScope = useSampleScope();
   const editorRef = useRef<any>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
   const [rightTab, setRightTab] = useState<"graph" | "prov" | "chat" | "source">(
@@ -729,24 +718,7 @@ function NoteEditorInner({
     if (initialDoc.chats && initialDoc.chats.length > 0) {
       aiAssistant.restoreChats(initialDoc.chats);
     }
-
-    // 試料テーブル検出 + sampleScope 自動挿入
-    // labelStore.labels は useState なのでクロージャ時点では空。
-    // initialDoc から直接 Map を構築して使う。
-    const restoredLabels = new Map<string, string>(
-      Object.entries(initialDoc.pages[0]?.labels || {}),
-    );
-    setTimeout(() => {
-      if (!editorRef.current) return;
-      const blocks = editorRef.current.document;
-      const ids = detectSampleIds(blocks, restoredLabels);
-      sampleScope.setSampleIds(ids);
-      if (ids.length > 0) {
-        autoInsertSampleScopes(editorRef.current, restoredLabels, ids);
-        syncSampleScopeIds(editorRef.current, ids);
-      }
-    }, 500);
-  }, [initialDoc, labelStore, linkStore, aiAssistant, sampleScope]);
+  }, [initialDoc, labelStore, linkStore, aiAssistant]);
 
   // 保存
   const handleSave = useCallback(() => {
@@ -948,10 +920,6 @@ function NoteEditorInner({
     };
   }, [generateProv]);
 
-  // sampleScope 自動挿入のデバウンスタイマー + 再入ガード
-  const sampleScopeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sampleScopeInsertingRef = useRef(false);
-
   // エディタ内容変更時にも再生成をトリガー + ラベル自動設定
   const handleContentChange = useCallback(() => {
     markDirty();
@@ -959,29 +927,7 @@ function NoteEditorInner({
     labelAutoRef.current?.();
     if (provTimerRef.current) clearTimeout(provTimerRef.current);
     provTimerRef.current = setTimeout(generateProv, 500);
-
-    // sampleScope: 試料テーブル検出 → 自動挿入（デバウンス 1s）
-    if (sampleScopeTimerRef.current) clearTimeout(sampleScopeTimerRef.current);
-    sampleScopeTimerRef.current = setTimeout(() => {
-      if (!editorRef.current || sampleScopeInsertingRef.current) return;
-      sampleScopeInsertingRef.current = true;
-      try {
-        const blocks = editorRef.current.document;
-        const ids = detectSampleIds(blocks, labelStore.labels);
-        sampleScope.setSampleIds(ids);
-        if (ids.length > 0) {
-          const inserted = autoInsertSampleScopes(editorRef.current, labelStore.labels, ids);
-          syncSampleScopeIds(editorRef.current, ids);
-          // 挿入後にレイアウトが変わるので PROV 再生成でバッジ位置を更新
-          if (inserted > 0) {
-            setTimeout(generateProv, 200);
-          }
-        }
-      } finally {
-        setTimeout(() => { sampleScopeInsertingRef.current = false; }, 500);
-      }
-    }, 1000);
-  }, [markDirty, generateProv, labelStore.labels, sampleScope]);
+  }, [markDirty, generateProv]);
 
   // 初期コンテンツ（既存ファイルの場合はブロックを復元）
   const initialContent =
@@ -1026,7 +972,6 @@ function NoteEditorInner({
       <BlockHoverHighlight />
       <ScopeHighlight blockIds={chatScopeBlockIds} />
       <LabelDropdownPortal />
-      {/* SampleTabBarLayer は Phase 4b で sampleScope カスタムブロックに置き換え済み */}
       {/* ヘッダー */}
       <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0">
         <input
@@ -1064,7 +1009,7 @@ function NoteEditorInner({
           <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
             <SandboxEditor
               key={fileId || "new"}
-              blocks={[sampleScopeBlockEntry]}
+              blocks={[]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
               extraSlashMenuItems={labelSlashMenuItems}

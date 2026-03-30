@@ -155,23 +155,9 @@ export function ProvIndicatorLayer() {
   useEffect(() => {
     window.addEventListener("scroll", compute, true);
     window.addEventListener("resize", compute);
-
-    // エディタ DOM の変更（ブロック挿入・削除）でバッジ位置を再計算
-    const wrapper = document.querySelector("[data-label-wrapper]");
-    let observer: MutationObserver | null = null;
-    if (wrapper) {
-      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-      observer = new MutationObserver(() => {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(compute, 100);
-      });
-      observer.observe(wrapper, { childList: true, subtree: true });
-    }
-
     return () => {
       window.removeEventListener("scroll", compute, true);
       window.removeEventListener("resize", compute);
-      observer?.disconnect();
     };
   }, [compute]);
 
