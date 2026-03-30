@@ -1194,8 +1194,8 @@ function NoteEditorInner({
                     const tableBlockId = ctx.tableBlockId;
                     const rowIndex = ctx.rowIndex;
 
-                    // linkedNotes を更新
-                    indexTableStore.setLinkedNote(tableBlockId, noteName, suggestion.id);
+                    // linkedNotes を更新（セルテキストは @noteName になる）
+                    indexTableStore.setLinkedNote(tableBlockId, `@${noteName}`, suggestion.id);
 
                     // セルにノート名を挿入（BlockNote が @テキスト を削除するため）
                     setTimeout(() => {
@@ -1206,7 +1206,7 @@ function NoteEditorInner({
                           return {
                             ...r,
                             cells: [
-                              [{ type: "text", text: noteName, styles: {} }],
+                              [{ type: "text", text: `@${noteName}`, styles: { textColor: "blue" } }],
                               ...r.cells.slice(1),
                             ],
                           };

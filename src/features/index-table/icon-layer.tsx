@@ -90,6 +90,42 @@ export function IndexTableIconLayer({ editorRef }: { editorRef: React.RefObject<
     };
   }, [compute]);
 
+  // テーブルの1列目セル: クリックでサイドピーク、ホバーでカーソル変更
+  useEffect(() => {
+    // 1列目のリンク済みセルか判定するヘルパー
+    const getLinkedNoteId = (target: HTMLElement): string | null => {
+      const cell = target.closest("td");
+      if (!cell) return null;
+      const row = cell.closest("tr");
+      if (!row) return null;
+      const cellIndex = Array.from(row.cells).indexOf(cell as HTMLTableCellElement);
+      if (cellIndex !== 0) return null;
+      const table = row.closest("table");
+      const blockOuter = table?.closest("[data-node-type='blockOuter']");
+      const blockId = blockOuter?.getAttribute("data-id");
+      if (!blockId) return null;
+      const linkedNotes = store.tables.get(blockId);
+      if (!linkedNotes) return null;
+      const cellText = cell.textContent?.trim() ?? "";
+      return linkedNotes[cellText] ?? linkedNotes[`@${cellText}`] ?? null;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const noteId = getLinkedNoteId(e.target as HTMLElement);
+      if (noteId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const callbacks = getIndexTableCallbacks();
+        callbacks?.onOpenSidePeek(noteId);
+      }
+    };
+
+    document.addEventListener("click", handleClick);
+    return () => {
+      document.removeEventListener("click", handleClick);
+    };
+  }, [store.tables]);
+
   // 未リンク行 → ノート作成
   const handleCreateNote = useCallback(
     async (blockId: string, rowIndex: number, sampleName: string) => {
@@ -128,18 +164,13 @@ export function IndexTableIconLayer({ editorRef }: { editorRef: React.RefObject<
     [editorRef, store]
   );
 
-  // リンク済み行 → サイドピークで開く
-  const handleOpenPeek = useCallback((noteId: string) => {
-    const callbacks = getIndexTableCallbacks();
-    if (!callbacks) return;
-    callbacks.onOpenSidePeek(noteId);
-  }, []);
 
-  if (icons.length === 0) return null;
+  // リンク済み行はアイコンを出さない（セルテキストクリックでサイドピークが開く）
+  const unlinkedIcons = icons.filter((icon) => !icon.linkedNoteId);
 
   return createPortal(
     <>
-      {icons.map((icon) => {
+      {unlinkedIcons.map((icon) => {
         const key = `${icon.blockId}:${icon.rowIndex}`;
         const isLoading = loading === key;
 
@@ -147,16 +178,12 @@ export function IndexTableIconLayer({ editorRef }: { editorRef: React.RefObject<
           <button
             key={key}
             onClick={() =>
-              icon.linkedNoteId
-                ? handleOpenPeek(icon.linkedNoteId)
-                : handleCreateNote(icon.blockId, icon.rowIndex, icon.sampleName)
+              handleCreateNote(icon.blockId, icon.rowIndex, icon.sampleName)
             }
             title={
-              icon.linkedNoteId
-                ? `${icon.sampleName} をサイドピークで開く`
-                : icon.sampleName
-                  ? `${icon.sampleName} のノートを作成`
-                  : "1列目にノートのタイトルを入力してください"
+              icon.sampleName
+                ? `${icon.sampleName} のノートを作成`
+                : "1列目にノートのタイトルを入力してください"
             }
             disabled={isLoading}
             style={{
@@ -170,7 +197,7 @@ export function IndexTableIconLayer({ editorRef }: { editorRef: React.RefObject<
               justifyContent: "center",
               borderRadius: 4,
               border: "1px solid #e2e8f0",
-              background: icon.linkedNoteId ? "#f0fdf4" : "#f8fafc",
+              background: "#f8fafc",
               cursor: icon.sampleName ? "pointer" : "default",
               opacity: icon.sampleName ? 1 : 0.5,
               fontSize: 14,
@@ -191,8 +218,6 @@ export function IndexTableIconLayer({ editorRef }: { editorRef: React.RefObject<
           >
             {isLoading ? (
               <span style={{ fontSize: 11, color: "#94a3b8" }}>...</span>
-            ) : icon.linkedNoteId ? (
-              <span style={{ color: "#22c55e", fontWeight: 700 }}>&#10003;</span>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
