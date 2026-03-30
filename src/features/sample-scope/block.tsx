@@ -4,16 +4,22 @@
 // 試料ごとに独立した Block[] を持つコンテナブロック。
 // タブ切替でアクティブな試料を変更し、
 // ネストされた BlockNote エディタで内容を編集する。
+//
+// ラベルは sampleLabels prop に試料別で保存する。
+// グローバル labelStore は使わない（PROV 生成時に試料ごとに分離するため）。
 // ──────────────────────────────────────────────
 
-import { createReactBlockSpec } from "@blocknote/react";
 import {
+  createReactBlockSpec,
   useCreateBlockNote,
   BlockNoteViewRaw,
+  SuggestionMenuController,
 } from "@blocknote/react";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { filterSuggestionItems } from "@blocknote/core/extensions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSampleScope } from "./context";
+import { buildSuggestionList } from "../context-label/hashtag-menu";
 
 // ── 型定義 ──
 
@@ -23,22 +29,54 @@ export type SamplesMap = Record<string, any[]>;
 /** props.skippedSamples をパースした型 */
 export type SkippedSamplesMap = Record<string, string>;
 
+/** props.sampleLabels をパースした型: sampleId → { blockId → label } */
+export type SampleLabelsMap = Record<string, Record<string, string>>;
+
 // ── ヘルパー ──
 
 function parseSamples(json: string): SamplesMap {
-  try {
-    return JSON.parse(json) || {};
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(json) || {}; } catch { return {}; }
 }
 
 function parseSkipped(json: string): SkippedSamplesMap {
-  try {
-    return JSON.parse(json) || {};
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(json) || {}; } catch { return {}; }
+}
+
+function parseSampleLabels(json: string): SampleLabelsMap {
+  try { return JSON.parse(json) || {}; } catch { return {}; }
+}
+
+// ── ラベルバッジ（タブ内に簡易表示） ──
+
+const LABEL_COLORS: Record<string, string> = {
+  "[手順]": "#2563eb",
+  "[使用したもの]": "#059669",
+  "[属性]": "#7c3aed",
+  "[パターン]": "#d97706",
+  "[結果]": "#dc2626",
+};
+
+function LabelBadge({ label }: { label: string }) {
+  const color = LABEL_COLORS[label] ?? "#6b7280";
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        fontSize: 10,
+        fontWeight: 600,
+        color,
+        background: `${color}14`,
+        border: `1px solid ${color}40`,
+        borderRadius: 3,
+        padding: "0 4px",
+        marginLeft: 6,
+        verticalAlign: "middle",
+        userSelect: "none",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 // ── ネストされたエディタコンポーネント ──
@@ -46,9 +84,14 @@ function parseSkipped(json: string): SkippedSamplesMap {
 function NestedEditor({
   blocks,
   onChange,
+  onHashtagSelect,
+  labels,
 }: {
   blocks: any[];
   onChange: (newBlocks: any[]) => void;
+  onHashtagSelect?: (blockId: string, label: string) => void;
+  /** 現在のタブのラベル: blockId → label */
+  labels: Record<string, string>;
 }) {
   const schema = useMemo(
     () => BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs } as any }),
@@ -66,15 +109,93 @@ function NestedEditor({
     onChange(doc as any[]);
   }, [editor, onChange]);
 
+  // # ラベルオートコンプリート
+  const labelSuggestions = useMemo(() => buildSuggestionList(), []);
+  const getHashtagItems = useCallback(
+    async (query: string) => {
+      const items = labelSuggestions.map((s) => ({
+        title: s.displayName,
+        group: s.group === "core" ? "コアラベル" : s.group === "alias" ? "エイリアス" : "フリーラベル",
+        onItemClick: () => {
+          const block = (editor as any).getTextCursorPosition?.()?.block;
+          if (block && onHashtagSelect) {
+            onHashtagSelect(block.id, s.label);
+          }
+        },
+      }));
+      return filterSuggestionItems(items as any, query) as any;
+    },
+    [editor, labelSuggestions, onHashtagSelect],
+  );
+
+  // ラベルバッジをオーバーレイ表示
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const [badgePositions, setBadgePositions] = useState<{ blockId: string; label: string; top: number }[]>([]);
+
+  useEffect(() => {
+    const container = editorContainerRef.current;
+    if (!container || Object.keys(labels).length === 0) {
+      setBadgePositions([]);
+      return;
+    }
+
+    // DOM が描画された後にバッジ位置を計算
+    const timer = setTimeout(() => {
+      const positions: { blockId: string; label: string; top: number }[] = [];
+      const containerRect = container.getBoundingClientRect();
+
+      for (const [blockId, label] of Object.entries(labels)) {
+        // BlockNote は data-id 属性でブロック ID を持つ
+        const el = container.querySelector(`[data-id="${blockId}"]`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          positions.push({
+            blockId,
+            label,
+            top: rect.top - containerRect.top,
+          });
+        }
+      }
+      setBadgePositions(positions);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [labels, blocks]);
+
   return (
-    <BlockNoteViewRaw
-      editor={editor as any}
-      theme="light"
-      onChange={handleChange}
-      // ネストエディタではサイドメニュー・スラッシュメニューを省略
-      sideMenu={false}
-      formattingToolbar={false}
-    />
+    <div ref={editorContainerRef} style={{ position: "relative" }}>
+      {/* ラベルバッジオーバーレイ */}
+      {badgePositions.map(({ blockId, label, top }) => (
+        <div
+          key={blockId}
+          style={{
+            position: "absolute",
+            right: 4,
+            top: top + 2,
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+        >
+          <LabelBadge label={label} />
+        </div>
+      ))}
+
+      <BlockNoteViewRaw
+        editor={editor as any}
+        theme="light"
+        onChange={handleChange}
+        sideMenu={false}
+        formattingToolbar={false}
+      >
+        {onHashtagSelect && (
+          <SuggestionMenuController
+            triggerCharacter="#"
+            getItems={getHashtagItems as any}
+            {...({} as any)}
+          />
+        )}
+      </BlockNoteViewRaw>
+    </div>
   );
 }
 
@@ -87,26 +208,45 @@ function SampleScopeRender(props: any) {
   const { sampleIds } = useSampleScope();
   const samples = useMemo(() => parseSamples(block.props.samples), [block.props.samples]);
   const skipped = useMemo(() => parseSkipped(block.props.skippedSamples), [block.props.skippedSamples]);
+  const sampleLabels = useMemo(() => parseSampleLabels(block.props.sampleLabels), [block.props.sampleLabels]);
 
   const activeSampleId = block.props.activeSampleId || sampleIds[0] || "";
+
+  // 現在のタブのラベル
+  const activeLabels = sampleLabels[activeSampleId] || {};
 
   // コンテキストメニュー制御
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sampleId: string } | null>(null);
 
-  // タブ切替
+  // ネストエディタの最新コンテンツを追跡（タブ切替時のフラッシュ用）
+  const lastContentRef = useRef<any[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // タブ切替: 現在のコンテンツを即座に保存してから切替
   const switchTab = useCallback(
     (id: string) => {
+      // デバウンス中のタイマーをキャンセル
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      // 現在タブのコンテンツを即座に保存 + タブ切替を同時に行う
+      const currentSamples = parseSamples(block.props.samples);
+      currentSamples[activeSampleId] = lastContentRef.current;
       editor.updateBlock(block.id, {
-        props: { activeSampleId: id },
+        props: {
+          samples: JSON.stringify(currentSamples),
+          activeSampleId: id,
+        },
       });
     },
-    [editor, block.id],
+    [editor, block.id, block.props.samples, activeSampleId],
   );
 
   // タブ内容更新（デバウンス付き）
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleTabContentChange = useCallback(
     (newBlocks: any[]) => {
+      lastContentRef.current = newBlocks;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         const updated = { ...parseSamples(block.props.samples), [activeSampleId]: newBlocks };
@@ -116,6 +256,19 @@ function SampleScopeRender(props: any) {
       }, 300);
     },
     [editor, block.id, block.props.samples, activeSampleId],
+  );
+
+  // ラベル設定（sampleLabels prop に試料別で保存）
+  const handleHashtagSelect = useCallback(
+    (blockId: string, label: string) => {
+      const current = parseSampleLabels(block.props.sampleLabels);
+      if (!current[activeSampleId]) current[activeSampleId] = {};
+      current[activeSampleId][blockId] = label;
+      editor.updateBlock(block.id, {
+        props: { sampleLabels: JSON.stringify(current) },
+      });
+    },
+    [editor, block.id, block.props.sampleLabels, activeSampleId],
   );
 
   // 右クリックでスキップ/スキップ解除
@@ -187,6 +340,7 @@ function SampleScopeRender(props: any) {
         border: "1px solid #e0e7ef",
         background: "#f8fafc",
         margin: "4px 0",
+        width: "100%",
       }}
       contentEditable={false}
     >
@@ -286,16 +440,31 @@ function SampleScopeRender(props: any) {
       )}
 
       {/* アクティブタブの内容 */}
-      <div style={{ padding: "8px 12px", minHeight: 48 }}>
+      <div className="sample-scope-content" style={{ padding: "4px 8px", minHeight: 40 }}>
         {activeSampleId in skipped ? (
-          <div style={{ color: "#dc2626", fontSize: 13, fontStyle: "italic" }}>
+          <div style={{ color: "#dc2626", fontSize: 13, fontStyle: "italic", padding: "4px 8px" }}>
             スキップ: {skipped[activeSampleId] || "（理由なし）"}
           </div>
         ) : null}
+        {/* ネストエディタのインデントを除去するスタイル */}
+        <style>{`
+          .sample-scope-content .bn-editor {
+            padding-left: 0 !important;
+          }
+          .sample-scope-content .bn-block-group {
+            padding-left: 0 !important;
+            margin-left: 0 !important;
+          }
+          .sample-scope-content .bn-block-content {
+            padding: 2px 0 !important;
+          }
+        `}</style>
         <NestedEditor
           key={activeSampleId}
           blocks={activeBlocks}
           onChange={handleTabContentChange}
+          onHashtagSelect={handleHashtagSelect}
+          labels={activeLabels}
         />
       </div>
     </div>
@@ -314,6 +483,8 @@ export const SampleScopeBlock = createReactBlockSpec(
       activeSampleId: { default: "" as string },
       // スキップされた試料とその理由
       skippedSamples: { default: "{}" as string },
+      // 試料ごとのラベル: { sampleId: { blockId: label } }
+      sampleLabels: { default: "{}" as string },
     },
     content: "none" as const,
   },

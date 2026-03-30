@@ -930,6 +930,11 @@ describe("Phase 4b: sampleScope ブロック", () => {
       }),
       activeSampleId: "S-A",
       skippedSamples: "{}",
+      // ラベルは sampleLabels に試料別で保存
+      sampleLabels: JSON.stringify({
+        "S-A": { "sa1": "[結果]" },
+        "S-B": { "sb1": "[結果]" },
+      }),
     },
     children: [],
   };
@@ -953,12 +958,11 @@ describe("Phase 4b: sampleScope ブロック", () => {
     },
   ];
 
+  // sa1, sb1 のラベルは sampleLabels に入っている（グローバル labels には含めない）
   const labelsWithSampleScope = new Map([
     ["tbl-sample", "[パターン]"],
     ["h-sinter", "[手順]"],
     ["p-common", "[使用したもの]"],
-    ["sa1", "[結果]"],
-    ["sb1", "[結果]"],
   ]);
 
   it("共通ブロックは全試料の Activity に共有される", () => {
@@ -1079,5 +1083,77 @@ describe("Phase 4b: sampleScope ブロック", () => {
       (r) => r["@type"] === "prov:used" && r.to === "entity_p-anneal-common"
     );
     expect(usedRelations).toHaveLength(2);
+  });
+
+  it("フラット構造: パターン1のみに結果ラベル → パターン2にはリンクしない", () => {
+    // BlockNote 実環境のフラット構造（heading の children は空）
+    const flatBlocks = [
+      sampleTableBlock,
+      {
+        id: "h-sinter",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "焼結" }],
+        children: [],
+      },
+      {
+        id: "p-common",
+        type: "paragraph",
+        content: [{ type: "text", text: "Cu粉末 1g" }],
+        children: [],
+      },
+      {
+        id: "ss-flat",
+        type: "sampleScope",
+        props: {
+          samples: JSON.stringify({
+            "S-A": [
+              { id: "sa-flat", type: "paragraph", content: [{ type: "text", text: "a" }], children: [] },
+            ],
+            "S-B": [],
+          }),
+          activeSampleId: "S-A",
+          skippedSamples: "{}",
+          sampleLabels: JSON.stringify({
+            "S-A": { "sa-flat": "[結果]" },
+            // S-B にはラベルなし
+          }),
+        },
+        children: [],
+      },
+    ];
+
+    const labels = new Map([
+      ["tbl-sample", "[パターン]"],
+      ["h-sinter", "[手順]"],
+      ["p-common", "[使用したもの]"],
+    ]);
+
+    const doc = generateProvDocument({
+      blocks: flatBlocks,
+      labels,
+      links: [],
+    });
+
+    const relations = extractRelations(doc);
+
+    // result_sa-flat は S-A の Activity にのみリンク
+    const saResultRels = relations.filter(
+      (r) => r.from === "result_sa-flat" && r["@type"] === "prov:wasGeneratedBy"
+    );
+    expect(saResultRels).toHaveLength(1);
+    expect(saResultRels[0].to).toBe("h-sinter__sample_S-A");
+
+    // S-B の Activity に wasGeneratedBy でリンクされた Entity は存在しない
+    const sbGenRels = relations.filter(
+      (r) => r["@type"] === "prov:wasGeneratedBy" && r.to === "h-sinter__sample_S-B"
+    );
+    expect(sbGenRels).toHaveLength(0);
+
+    // Entity "a" に sampleId = "S-A" が付いている
+    // → splitDocBySample でサンプルごとにフィルタリングされる
+    const resultNode = doc["@graph"].find((n) => n["@id"] === "result_sa-flat");
+    expect(resultNode).toBeDefined();
+    expect(resultNode!["provnote:sampleId"]).toBe("S-A");
   });
 });

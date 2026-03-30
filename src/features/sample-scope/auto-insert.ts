@@ -3,6 +3,9 @@
 //
 // [パターン]（[試料]）ラベル付きテーブルがノート内に存在するとき、
 // 全 [手順] スコープに sampleScope ブロックを自動挿入する。
+//
+// 注意: BlockNote のブロックはフラット構造。
+// 見出しの children ではなく、同レベルの sibling として並ぶ。
 // ──────────────────────────────────────────────
 
 import { normalizeLabel } from "../context-label/labels";
@@ -48,9 +51,44 @@ function findSampleTableRecursive(
 }
 
 /**
+ * フラットなブロック列で、各 [手順] heading の後に
+ * 既に sampleScope が存在するかを判定する。
+ *
+ * BlockNote はフラット構造: heading → paragraph → table → ... と並ぶ。
+ * [手順] heading と次の heading の間にある sampleScope を検出する。
+ */
+function findScopesWithSampleScope(
+  flat: any[],
+  labels: Map<string, string>,
+): Set<string> {
+  const result = new Set<string>();
+  let currentStepId: string | null = null;
+
+  for (const block of flat) {
+    // [手順] heading を見つけたらスコープ開始
+    if (block.type === "heading") {
+      const rawLabel = labels.get(block.id);
+      if (rawLabel && normalizeLabel(rawLabel) === "[手順]") {
+        currentStepId = block.id;
+      } else {
+        // 別の見出しでスコープリセット
+        currentStepId = null;
+      }
+    }
+
+    // 現在のスコープ内に sampleScope があればマーク
+    if (block.type === "sampleScope" && currentStepId) {
+      result.add(currentStepId);
+    }
+  }
+
+  return result;
+}
+
+/**
  * エディタに sampleScope ブロックを自動挿入する。
  *
- * - [手順] ラベル付きの見出しスコープの children 末尾に挿入
+ * - [手順] ラベル付きの見出しの直後に挿入
  * - 既に sampleScope ブロックが存在するスコープには二重挿入しない
  * - 新規挿入時は各試料の Block[] を空で初期化
  *
@@ -64,22 +102,22 @@ export function autoInsertSampleScopes(
   if (sampleIds.length === 0) return 0;
 
   const blocks = editor.document;
+  const flat = flattenBlocks(blocks);
+
+  // 既に sampleScope が存在するスコープを収集（フラット走査）
+  const scopesWithSampleScope = findScopesWithSampleScope(flat, labels);
+
   let insertCount = 0;
 
-  // [手順] ラベル付きブロックを探す
-  for (const block of flattenBlocks(blocks)) {
+  for (const block of flat) {
     const rawLabel = labels.get(block.id);
     if (!rawLabel) continue;
     const normalized = normalizeLabel(rawLabel);
     if (normalized !== "[手順]") continue;
-
-    // 見出しブロックのみ対象（段落の [手順] はスコープを持たない場合がある）
     if (block.type !== "heading") continue;
 
-    // 既に sampleScope が存在するか確認
-    const children = block.children || [];
-    const hasSampleScope = children.some((c: any) => c.type === "sampleScope");
-    if (hasSampleScope) continue;
+    // 既にこのスコープに sampleScope があればスキップ
+    if (scopesWithSampleScope.has(block.id)) continue;
 
     // 初期 samples: 全試料に空配列を設定
     const samplesInit: Record<string, any[]> = {};
@@ -87,7 +125,7 @@ export function autoInsertSampleScopes(
       samplesInit[id] = [];
     }
 
-    // 見出しの children 末尾に挿入
+    // 見出しの直後に挿入（フラット構造なので "after" で sibling として配置）
     try {
       editor.insertBlocks(
         [
@@ -101,7 +139,7 @@ export function autoInsertSampleScopes(
           },
         ],
         block.id,
-        "nested",
+        "after",
       );
       insertCount++;
     } catch (e) {

@@ -600,13 +600,7 @@ function NoteEditorInner({
     editorRef.current = editor;
     // ラベル自動設定をセットアップ
     labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
-    // 初期コンテンツから試料 ID を検出
-    setTimeout(() => {
-      const blocks = editor.document;
-      const ids = detectSampleIds(blocks, labelStore.labels);
-      sampleScope.setSampleIds(ids);
-    }, 100);
-  }, [labelStore, sampleScope]);
+  }, [labelStore]);
 
 
   // AI チャットパネル用ハンドラー（継続対話）
@@ -735,7 +729,24 @@ function NoteEditorInner({
     if (initialDoc.chats && initialDoc.chats.length > 0) {
       aiAssistant.restoreChats(initialDoc.chats);
     }
-  }, [initialDoc, labelStore, linkStore, aiAssistant]);
+
+    // 試料テーブル検出 + sampleScope 自動挿入
+    // labelStore.labels は useState なのでクロージャ時点では空。
+    // initialDoc から直接 Map を構築して使う。
+    const restoredLabels = new Map<string, string>(
+      Object.entries(initialDoc.pages[0]?.labels || {}),
+    );
+    setTimeout(() => {
+      if (!editorRef.current) return;
+      const blocks = editorRef.current.document;
+      const ids = detectSampleIds(blocks, restoredLabels);
+      sampleScope.setSampleIds(ids);
+      if (ids.length > 0) {
+        autoInsertSampleScopes(editorRef.current, restoredLabels, ids);
+        syncSampleScopeIds(editorRef.current, ids);
+      }
+    }, 500);
+  }, [initialDoc, labelStore, linkStore, aiAssistant, sampleScope]);
 
   // 保存
   const handleSave = useCallback(() => {
@@ -937,8 +948,9 @@ function NoteEditorInner({
     };
   }, [generateProv]);
 
-  // sampleScope 自動挿入のデバウンスタイマー
+  // sampleScope 自動挿入のデバウンスタイマー + 再入ガード
   const sampleScopeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sampleScopeInsertingRef = useRef(false);
 
   // エディタ内容変更時にも再生成をトリガー + ラベル自動設定
   const handleContentChange = useCallback(() => {
@@ -951,13 +963,22 @@ function NoteEditorInner({
     // sampleScope: 試料テーブル検出 → 自動挿入（デバウンス 1s）
     if (sampleScopeTimerRef.current) clearTimeout(sampleScopeTimerRef.current);
     sampleScopeTimerRef.current = setTimeout(() => {
-      if (!editorRef.current) return;
-      const blocks = editorRef.current.document;
-      const ids = detectSampleIds(blocks, labelStore.labels);
-      sampleScope.setSampleIds(ids);
-      if (ids.length > 0) {
-        autoInsertSampleScopes(editorRef.current, labelStore.labels, ids);
-        syncSampleScopeIds(editorRef.current, ids);
+      if (!editorRef.current || sampleScopeInsertingRef.current) return;
+      sampleScopeInsertingRef.current = true;
+      try {
+        const blocks = editorRef.current.document;
+        const ids = detectSampleIds(blocks, labelStore.labels);
+        sampleScope.setSampleIds(ids);
+        if (ids.length > 0) {
+          const inserted = autoInsertSampleScopes(editorRef.current, labelStore.labels, ids);
+          syncSampleScopeIds(editorRef.current, ids);
+          // 挿入後にレイアウトが変わるので PROV 再生成でバッジ位置を更新
+          if (inserted > 0) {
+            setTimeout(generateProv, 200);
+          }
+        }
+      } finally {
+        setTimeout(() => { sampleScopeInsertingRef.current = false; }, 500);
       }
     }, 1000);
   }, [markDirty, generateProv, labelStore.labels, sampleScope]);
