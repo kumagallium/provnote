@@ -86,6 +86,8 @@ export type ProvNotePage = {
   knowledgeLinks: any[];
   /** @deprecated v1 互換: 旧 links フィールド。読み込み時に provLinks/knowledgeLinks に変換する */
   links?: any[];
+  /** インデックステーブル: テーブルブロック ID → { サンプル名 → ノートファイル ID } */
+  indexTables?: Record<string, Record<string, string>>;
   derivedFromPageId?: string;
   derivedFromBlockId?: string;
 };
