@@ -896,3 +896,264 @@ describe("extractRelations", () => {
     expect(types.has("provnote:hasAttribute")).toBe(false);
   });
 });
+
+// ──────────────────────────────────
+// Phase 4b: sampleScope ブロック対応
+// ──────────────────────────────────
+
+describe("Phase 4b: sampleScope ブロック", () => {
+  // 試料テーブル + sampleScope 付きのテストデータ
+  const sampleTableBlock = {
+    id: "tbl-sample",
+    type: "table",
+    content: {
+      rows: [
+        { cells: [[{ type: "text", text: "試料" }], [{ type: "text", text: "温度" }]] },
+        { cells: [[{ type: "text", text: "S-A" }], [{ type: "text", text: "800℃" }]] },
+        { cells: [[{ type: "text", text: "S-B" }], [{ type: "text", text: "900℃" }]] },
+      ],
+    },
+    children: [],
+  };
+
+  const sampleScopeBlock = {
+    id: "ss1",
+    type: "sampleScope",
+    props: {
+      samples: JSON.stringify({
+        "S-A": [
+          { id: "sa1", type: "paragraph", content: [{ type: "text", text: "密度 8.2" }], children: [] },
+        ],
+        "S-B": [
+          { id: "sb1", type: "paragraph", content: [{ type: "text", text: "密度 8.7" }], children: [] },
+        ],
+      }),
+      activeSampleId: "S-A",
+      skippedSamples: "{}",
+      // ラベルは sampleLabels に試料別で保存
+      sampleLabels: JSON.stringify({
+        "S-A": { "sa1": "[結果]" },
+        "S-B": { "sb1": "[結果]" },
+      }),
+    },
+    children: [],
+  };
+
+  const blocksWithSampleScope = [
+    sampleTableBlock,
+    {
+      id: "h-sinter",
+      type: "heading",
+      props: { level: 2 },
+      content: [{ type: "text", text: "焼結" }],
+      children: [
+        {
+          id: "p-common",
+          type: "paragraph",
+          content: [{ type: "text", text: "Cu粉末 1g" }],
+          children: [],
+        },
+        sampleScopeBlock,
+      ],
+    },
+  ];
+
+  // sa1, sb1 のラベルは sampleLabels に入っている（グローバル labels には含めない）
+  const labelsWithSampleScope = new Map([
+    ["tbl-sample", "[パターン]"],
+    ["h-sinter", "[手順]"],
+    ["p-common", "[使用したもの]"],
+  ]);
+
+  it("共通ブロックは全試料の Activity に共有される", () => {
+    const doc = generateProvDocument({
+      blocks: blocksWithSampleScope,
+      labels: labelsWithSampleScope,
+      links: [],
+    });
+
+    // [使用したもの] "Cu粉末 1g" は両方の Activity に prov:used される
+    const relations = extractRelations(doc);
+    const usedRelations = relations.filter(
+      (r) => r["@type"] === "prov:used" && r.to === "entity_p-common"
+    );
+    expect(usedRelations).toHaveLength(2);
+    expect(usedRelations.map((r) => r.from).sort()).toEqual([
+      "h-sinter__sample_S-A",
+      "h-sinter__sample_S-B",
+    ]);
+  });
+
+  it("sampleScope 内のブロックは対応する試料の Activity のみに紐付く", () => {
+    const doc = generateProvDocument({
+      blocks: blocksWithSampleScope,
+      labels: labelsWithSampleScope,
+      links: [],
+    });
+
+    const relations = extractRelations(doc);
+
+    // sa1 (S-A の "密度 8.2") → S-A の Activity のみ
+    const sa1Relations = relations.filter(
+      (r) => r.from === "result_sa1" && r["@type"] === "prov:wasGeneratedBy"
+    );
+    expect(sa1Relations).toHaveLength(1);
+    expect(sa1Relations[0].to).toBe("h-sinter__sample_S-A");
+
+    // sb1 (S-B の "密度 8.7") → S-B の Activity のみ
+    const sb1Relations = relations.filter(
+      (r) => r.from === "result_sb1" && r["@type"] === "prov:wasGeneratedBy"
+    );
+    expect(sb1Relations).toHaveLength(1);
+    expect(sb1Relations[0].to).toBe("h-sinter__sample_S-B");
+  });
+
+  it("スキップされた試料のラベルに skip マーカーが付く", () => {
+    const skipScopeBlock = {
+      ...sampleScopeBlock,
+      props: {
+        ...sampleScopeBlock.props,
+        skippedSamples: JSON.stringify({ "S-B": "焼結中に破損" }),
+      },
+    };
+    const blocksWithSkip = [
+      sampleTableBlock,
+      {
+        ...blocksWithSampleScope[1],
+        children: [
+          blocksWithSampleScope[1].children[0],
+          skipScopeBlock,
+        ],
+      },
+    ];
+
+    const doc = generateProvDocument({
+      blocks: blocksWithSkip,
+      labels: labelsWithSampleScope,
+      links: [],
+    });
+
+    // S-B の Activity にスキップマーカーが付く
+    const sbActivity = doc["@graph"].find(
+      (n) => n["@id"] === "h-sinter__sample_S-B"
+    );
+    expect(sbActivity).toBeDefined();
+    expect(sbActivity!["rdfs:label"]).toContain("skip");
+    expect(sbActivity!["rdfs:label"]).toContain("焼結中に破損");
+  });
+
+  it("sampleScope がない [手順] は従来通り動作する", () => {
+    const blocksWithoutScope = [
+      sampleTableBlock,
+      {
+        id: "h-anneal",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "アニール" }],
+        children: [
+          {
+            id: "p-anneal-common",
+            type: "paragraph",
+            content: [{ type: "text", text: "N2雰囲気" }],
+            children: [],
+          },
+        ],
+      },
+    ];
+
+    const labels = new Map([
+      ["tbl-sample", "[パターン]"],
+      ["h-anneal", "[手順]"],
+      ["p-anneal-common", "[使用したもの]"],
+    ]);
+
+    const doc = generateProvDocument({
+      blocks: blocksWithoutScope,
+      labels,
+      links: [],
+    });
+
+    // パターンテーブルがあるので Activity は試料数分に分岐
+    const actNodes = doc["@graph"].filter((n) => n["@type"] === "prov:Activity");
+    expect(actNodes).toHaveLength(2); // S-A, S-B
+
+    // 共通ブロックは全試料にリンク
+    const relations = extractRelations(doc);
+    const usedRelations = relations.filter(
+      (r) => r["@type"] === "prov:used" && r.to === "entity_p-anneal-common"
+    );
+    expect(usedRelations).toHaveLength(2);
+  });
+
+  it("フラット構造: パターン1のみに結果ラベル → パターン2にはリンクしない", () => {
+    // BlockNote 実環境のフラット構造（heading の children は空）
+    const flatBlocks = [
+      sampleTableBlock,
+      {
+        id: "h-sinter",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "焼結" }],
+        children: [],
+      },
+      {
+        id: "p-common",
+        type: "paragraph",
+        content: [{ type: "text", text: "Cu粉末 1g" }],
+        children: [],
+      },
+      {
+        id: "ss-flat",
+        type: "sampleScope",
+        props: {
+          samples: JSON.stringify({
+            "S-A": [
+              { id: "sa-flat", type: "paragraph", content: [{ type: "text", text: "a" }], children: [] },
+            ],
+            "S-B": [],
+          }),
+          activeSampleId: "S-A",
+          skippedSamples: "{}",
+          sampleLabels: JSON.stringify({
+            "S-A": { "sa-flat": "[結果]" },
+            // S-B にはラベルなし
+          }),
+        },
+        children: [],
+      },
+    ];
+
+    const labels = new Map([
+      ["tbl-sample", "[パターン]"],
+      ["h-sinter", "[手順]"],
+      ["p-common", "[使用したもの]"],
+    ]);
+
+    const doc = generateProvDocument({
+      blocks: flatBlocks,
+      labels,
+      links: [],
+    });
+
+    const relations = extractRelations(doc);
+
+    // result_sa-flat は S-A の Activity にのみリンク
+    const saResultRels = relations.filter(
+      (r) => r.from === "result_sa-flat" && r["@type"] === "prov:wasGeneratedBy"
+    );
+    expect(saResultRels).toHaveLength(1);
+    expect(saResultRels[0].to).toBe("h-sinter__sample_S-A");
+
+    // S-B の Activity に wasGeneratedBy でリンクされた Entity は存在しない
+    const sbGenRels = relations.filter(
+      (r) => r["@type"] === "prov:wasGeneratedBy" && r.to === "h-sinter__sample_S-B"
+    );
+    expect(sbGenRels).toHaveLength(0);
+
+    // Entity "a" に sampleId = "S-A" が付いている
+    // → splitDocBySample でサンプルごとにフィルタリングされる
+    const resultNode = doc["@graph"].find((n) => n["@id"] === "result_sa-flat");
+    expect(resultNode).toBeDefined();
+    expect(resultNode!["provnote:sampleId"]).toBe("S-A");
+  });
+});
