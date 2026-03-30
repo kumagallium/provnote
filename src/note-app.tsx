@@ -28,6 +28,7 @@ import {
   setIndexTableCallbacks,
   setRegisterIndexTableCallback,
 } from "./features/index-table";
+import { SidePeek } from "./features/index-table/side-peek";
 import { setupLabelAutoAssign } from "./features/context-label/label-auto";
 import {
   LinkStoreProvider,
@@ -602,6 +603,7 @@ function NoteEditorInner({
   const indexTableStore = useIndexTableStore();
   const aiAssistant = useAiAssistant();
   const editorRef = useRef<any>(null);
+  const [sidePeekNoteId, setSidePeekNoteId] = useState<string | null>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
   const [rightTab, setRightTab] = useState<"graph" | "prov" | "chat" | "source">(
     sourceDoc ? "source" : "graph"
@@ -938,6 +940,7 @@ function NoteEditorInner({
       currentFileId: fileId,
       onNavigateNote,
       onRefreshFiles,
+      onOpenSidePeek: (noteId: string) => setSidePeekNoteId(noteId),
     });
     return () => { setIndexTableCallbacks(null); };
   }, [files, fileId, onNavigateNote, onRefreshFiles]);
@@ -1035,6 +1038,16 @@ function NoteEditorInner({
     <>
       <ProvIndicatorLayer />
       <IndexTableIconLayer editorRef={editorRef} />
+      {sidePeekNoteId && (
+        <SidePeek
+          noteId={sidePeekNoteId}
+          onClose={() => setSidePeekNoteId(null)}
+          onNavigate={(noteId) => {
+            setSidePeekNoteId(null);
+            onNavigateNote(noteId);
+          }}
+        />
+      )}
       <ProvIndicatorHoverHint />
       <BlockHoverHighlight />
       <ScopeHighlight blockIds={chatScopeBlockIds} />

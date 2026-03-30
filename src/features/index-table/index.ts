@@ -53,8 +53,10 @@ export const indexTableSlashItem = {
 
     // 挿入されたテーブルをインデックステーブルとして登録
     if (inserted?.[0]) {
-      _registerCallback?.(inserted[0].id);
-      editor.setTextCursorPosition(inserted[0], "end");
+      const blockId = inserted[0].id;
+      setTimeout(() => {
+        _registerCallback?.(blockId);
+      }, 0);
     }
 
     // 現在のブロックが空（スラッシュだけ）なら削除

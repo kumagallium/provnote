@@ -7,16 +7,30 @@ export function getFirstCellText(tableBlock: any, rowIndex: number): string {
   const rows = tableBlock.content?.rows;
   if (!rows || rowIndex >= rows.length) return "";
 
-  const firstCell = rows[rowIndex]?.cells?.[0];
+  const row = rows[rowIndex];
+  const firstCell = row?.cells?.[0];
   if (!firstCell) return "";
 
-  // セルの内容はインラインコンテンツの配列
+  // BlockNote テーブルセル: インラインコンテンツの配列
   if (Array.isArray(firstCell)) {
     return firstCell
-      .map((c: any) => (c.type === "text" ? c.text : ""))
+      .map((c: any) => (c.type === "text" ? c.text : c.text ?? ""))
       .join("")
       .trim();
   }
+
+  // オブジェクト形式のフォールバック
+  if (typeof firstCell === "object" && firstCell !== null) {
+    if (firstCell.text) return firstCell.text.trim();
+    if (Array.isArray(firstCell.content)) {
+      return firstCell.content
+        .map((c: any) => (typeof c === "string" ? c : c.text ?? ""))
+        .join("")
+        .trim();
+    }
+  }
+
+  if (typeof firstCell === "string") return firstCell.trim();
   return "";
 }
 
