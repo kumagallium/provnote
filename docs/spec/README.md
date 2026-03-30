@@ -17,6 +17,7 @@ BlockNote.js ベースのブロックエディタの上に、`@` 参照（知識
 | [05-ui.md](05-ui.md) | 画面構成と可視化 — レイアウト・右パネル・インジケーター |
 | [06-samples.md](06-samples.md) | 試料管理と実験の3層構造 — Protocol / Instruction / Result |
 | [07-phases.md](07-phases.md) | 段階的開発計画 — 5フェーズのロードマップ |
+| [08-scalability.md](08-scalability.md) | スケーラビリティと共同編集 — インデックスファイル・Yjs・制約 |
 
 ---
 
