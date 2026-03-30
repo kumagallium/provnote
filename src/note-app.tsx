@@ -21,10 +21,13 @@ import {
   setSlashMenuLabelCallback,
 } from "./features/context-label/slash-menu-items";
 import {
-  indexTableBlock,
+  IndexTableStoreProvider,
+  useIndexTableStore,
+  IndexTableIconLayer,
   indexTableSlashItem,
+  setIndexTableCallbacks,
+  setRegisterIndexTableCallback,
 } from "./features/index-table";
-import { setIndexTableCallbacks } from "./features/index-table/context";
 import { setupLabelAutoAssign } from "./features/context-label/label-auto";
 import {
   LinkStoreProvider,
@@ -553,9 +556,11 @@ function NoteEditor(props: NoteEditorProps) {
   return (
     <LabelStoreProvider>
       <LinkStoreProvider>
+        <IndexTableStoreProvider>
         <AiAssistantProvider>
           <NoteEditorInner {...props} />
         </AiAssistantProvider>
+        </IndexTableStoreProvider>
       </LinkStoreProvider>
     </LabelStoreProvider>
   );
@@ -566,7 +571,7 @@ function NoteEditor(props: NoteEditorProps) {
 const KNOWN_BLOCK_TYPES = new Set([
   "paragraph", "heading", "bulletListItem", "numberedListItem",
   "checkListItem", "table", "image", "video", "audio", "file",
-  "codeBlock", "indexTable",
+  "codeBlock",
 ]);
 
 function sanitizeBlocks(blocks: any[]): any[] {
@@ -594,6 +599,7 @@ function NoteEditorInner({
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
+  const indexTableStore = useIndexTableStore();
   const aiAssistant = useAiAssistant();
   const editorRef = useRef<any>(null);
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
@@ -737,12 +743,16 @@ function NoteEditorInner({
       if (allLinks.length > 0) {
         linkStore.restoreLinks(allLinks);
       }
+      // インデックステーブルを復元
+      if (page.indexTables) {
+        indexTableStore.restore(page.indexTables);
+      }
     }
     // チャット履歴を復元
     if (initialDoc.chats && initialDoc.chats.length > 0) {
       aiAssistant.restoreChats(initialDoc.chats);
     }
-  }, [initialDoc, labelStore, linkStore, aiAssistant]);
+  }, [initialDoc, labelStore, linkStore, indexTableStore, aiAssistant]);
 
   // 保存
   const handleSave = useCallback(() => {
@@ -769,6 +779,10 @@ function NoteEditorInner({
       }
     }
 
+    // インデックステーブルの状態を収集
+    const indexTablesSnapshot = indexTableStore.getSnapshot();
+    const hasIndexTables = Object.keys(indexTablesSnapshot).length > 0;
+
     const doc: ProvNoteDocument = {
       version: 2,
       title,
@@ -780,6 +794,7 @@ function NoteEditorInner({
           labels: labelsObj,
           provLinks,
           knowledgeLinks,
+          indexTables: hasIndexTables ? indexTablesSnapshot : undefined,
         },
       ],
       // ノート間リンクを保持
@@ -792,7 +807,7 @@ function NoteEditorInner({
     };
     onSave(doc);
     setDirty(false);
-  }, [title, labelStore, linkStore, aiAssistant, initialDoc, onSave]);
+  }, [title, labelStore, linkStore, indexTableStore, aiAssistant, initialDoc, onSave]);
 
   // 常に最新の handleSave を ref に保持
   useEffect(() => {
@@ -815,16 +830,22 @@ function NoteEditorInner({
     };
   }, []);
 
-  // ラベル・リンク変更時に自動保存トリガー
+  // ラベル・リンク・インデックステーブル変更時に自動保存トリガー
   const prevLabelsRef = useRef(labelStore.labels);
   const prevLinksRef = useRef(linkStore.links);
+  const prevTablesRef = useRef(indexTableStore.tables);
   useEffect(() => {
-    if (prevLabelsRef.current !== labelStore.labels || prevLinksRef.current !== linkStore.links) {
+    if (
+      prevLabelsRef.current !== labelStore.labels ||
+      prevLinksRef.current !== linkStore.links ||
+      prevTablesRef.current !== indexTableStore.tables
+    ) {
       prevLabelsRef.current = labelStore.labels;
       prevLinksRef.current = linkStore.links;
+      prevTablesRef.current = indexTableStore.tables;
       markDirty();
     }
-  }, [labelStore.labels, linkStore.links, markDirty]);
+  }, [labelStore.labels, linkStore.links, indexTableStore.tables, markDirty]);
 
   // AI 回答をスコープに反映
   // 見出しスコープ: スコープ末尾に新ブロックとして挿入
@@ -921,6 +942,14 @@ function NoteEditorInner({
     return () => { setIndexTableCallbacks(null); };
   }, [files, fileId, onNavigateNote, onRefreshFiles]);
 
+  // スラッシュメニューからのインデックステーブル登録コールバック
+  useEffect(() => {
+    setRegisterIndexTableCallback((blockId: string) => {
+      indexTableStore.register(blockId);
+    });
+    return () => { setRegisterIndexTableCallback(null); };
+  }, [indexTableStore]);
+
   // スコープ派生ボタン → 別ノートとして作成
   useEffect(() => {
     openLinkDropdownFn = (params) => {
@@ -1005,6 +1034,7 @@ function NoteEditorInner({
   return (
     <>
       <ProvIndicatorLayer />
+      <IndexTableIconLayer editorRef={editorRef} />
       <ProvIndicatorHoverHint />
       <BlockHoverHighlight />
       <ScopeHighlight blockIds={chatScopeBlockIds} />
@@ -1046,7 +1076,7 @@ function NoteEditorInner({
           <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
             <SandboxEditor
               key={fileId || "new"}
-              blocks={[indexTableBlock]}
+              blocks={[]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
               extraSlashMenuItems={[...labelSlashMenuItems, indexTableSlashItem]}

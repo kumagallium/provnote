@@ -1,13 +1,19 @@
 // インデックステーブル機能のエントリーポイント
+// カスタムブロック型は使わず、標準 table ブロック + 外部ストアで実装
 
-import { IndexTableBlock } from "./index-table-block";
-import type { CustomBlockEntry } from "../../base/schema";
+export { IndexTableStoreProvider, useIndexTableStore } from "./store";
+export { IndexTableIconLayer } from "./icon-layer";
+export { setIndexTableCallbacks } from "./context";
 
-// ブロック登録エントリー
-export const indexTableBlock: CustomBlockEntry = {
-  type: "indexTable",
-  spec: IndexTableBlock,
-};
+// インデックステーブル登録用のグローバルコールバック
+// スラッシュメニューから呼ばれるため、React Context にアクセスできない
+let _registerCallback: ((blockId: string) => void) | null = null;
+
+export function setRegisterIndexTableCallback(
+  fn: ((blockId: string) => void) | null
+) {
+  _registerCallback = fn;
+}
 
 // スラッシュメニュー用の挿入アイテム
 export const indexTableSlashItem = {
@@ -19,8 +25,7 @@ export const indexTableSlashItem = {
     const inserted = editor.insertBlocks(
       [
         {
-          type: "indexTable",
-          props: { linkedNotes: "{}" },
+          type: "table",
           content: {
             type: "tableContent",
             rows: [
@@ -46,7 +51,9 @@ export const indexTableSlashItem = {
       "after"
     );
 
+    // 挿入されたテーブルをインデックステーブルとして登録
     if (inserted?.[0]) {
+      _registerCallback?.(inserted[0].id);
       editor.setTextCursorPosition(inserted[0], "end");
     }
 
