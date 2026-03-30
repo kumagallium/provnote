@@ -22,6 +22,9 @@ services:
     image: ghcr.io/kumagallium/crucible-agent:latest
     ports:
       - "8090:8090"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker/litellm_config.yaml:/app/litellm_config.yaml
     environment:
       - DATABASE_URL=postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent
       - LLM_MODEL=
