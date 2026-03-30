@@ -131,7 +131,6 @@ function FileSidebar({
   onRefresh,
   userName,
   onSignOut,
-  oauthAvailable,
   onShowReleaseNotes,
   onShowSettings,
   agentConfigured,
@@ -146,7 +145,6 @@ function FileSidebar({
   onRefresh: () => void;
   userName?: string;
   onSignOut: () => void;
-  oauthAvailable: boolean;
   onShowReleaseNotes: () => void;
   onShowSettings: () => void;
   agentConfigured: boolean;
@@ -247,19 +245,12 @@ function FileSidebar({
         >
           Release Notes
         </button>
-        {oauthAvailable && (
-          <button
-            onClick={onSignOut}
-            className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            サインアウト
-          </button>
-        )}
-        {!oauthAvailable && (
-          <p className="text-xs text-muted-foreground">
-            ブラウザに一時保存中
-          </p>
-        )}
+        <button
+          onClick={onSignOut}
+          className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          サインアウト
+        </button>
       </div>
     </aside>
   );
@@ -1294,7 +1285,7 @@ function NoteEditorInner({
 
 // ── メインアプリ ──
 export function NoteApp() {
-  const { authenticated, loading: authLoading, signIn, signOut, oauthAvailable } = useGoogleAuth();
+  const { authenticated, loading: authLoading, signIn, signOut } = useGoogleAuth();
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
@@ -1657,7 +1648,6 @@ export function NoteApp() {
         onDelete={handleDelete}
         onRefresh={refreshFiles}
         onSignOut={signOut}
-        oauthAvailable={oauthAvailable}
         onShowReleaseNotes={() => setShowReleaseNotes(true)}
         onShowSettings={() => setShowSettings(true)}
         agentConfigured={agentConfigured}
