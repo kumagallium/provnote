@@ -1,7 +1,10 @@
 // Google Identity Services (GIS) による認証
-// クライアントIDは環境変数から取得（VITE_GOOGLE_CLIENT_ID）
+// クライアントIDは環境変数 → 組み込みデフォルト の優先順で取得
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+const DEFAULT_CLIENT_ID =
+  "743366655410-p5k3us8jof0ni4tintbkliq6dqhan13d.apps.googleusercontent.com";
+const CLIENT_ID =
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_CLIENT_ID;
 
 /** Google OAuth が設定されているかどうか */
 export function isOAuthConfigured(): boolean {
@@ -96,7 +99,7 @@ function loadGisScript(): Promise<void> {
 // 初期化
 export async function initGoogleAuth(): Promise<void> {
   if (!CLIENT_ID) {
-    console.warn("VITE_GOOGLE_CLIENT_ID が設定されていません");
+    console.warn("Google OAuth Client ID が設定されていません");
     return;
   }
   await loadGisScript();

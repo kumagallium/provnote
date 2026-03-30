@@ -46,25 +46,20 @@ docker compose up -d
 2. Add your LLM model (e.g., Claude, GPT-4o) with your API key from the UI
 3. Go to **http://localhost:5174/provnote/** and start using the AI assistant
 
-No `.env` editing required — everything is configured from the browser.
+No `.env` editing required — everything is configured from the browser. Google Drive sync and Google OAuth work out of the box.
 
-> **Note:** Docker mode uses local storage by default. To enable Google Drive sync, add your Google OAuth client ID to `.env` and rebuild:
-> ```bash
-> echo "VITE_GOOGLE_CLIENT_ID=your-client-id" >> .env
-> docker compose up -d --build
-> ```
+> **Note:** In Docker mode, the agent server runs without API key authentication. provnote connects to it directly at `http://localhost:8090` — no API key is needed in the Settings screen. This is safe because the agent is only accessible from your local machine.
 
 ### Option 3: Run for development
 
 ```bash
 git clone https://github.com/kumagallium/provnote.git
 cd provnote
-cp .env.example .env   # Edit with your Google OAuth client ID (optional)
 pnpm install
 pnpm dev --port 5174   # → http://localhost:5174/provnote/
 ```
 
-To enable AI features in dev mode, you need a separate [crucible-agent](https://github.com/kumagallium/crucible-agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
+Google Drive sync works without any configuration. To enable AI features, you need a separate [crucible-agent](https://github.com/kumagallium/crucible-agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
 
 ## Features
 
