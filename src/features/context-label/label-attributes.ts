@@ -35,17 +35,46 @@ export function hasLabelAttributes(label: string): label is keyof LabelAttribute
   return label === "[手順]";
 }
 
-// 実行者タイプの表示名
-export const EXECUTOR_LABELS: Record<ExecutorType, string> = {
-  human: "手動",
-  machine: "装置",
-  ai: "AI",
+import { t } from "../../i18n";
+
+// 実行者タイプの表示名（i18n 対応）
+export function getExecutorLabel(executor: ExecutorType): string {
+  const key = `executor.${executor}`;
+  return t(key);
+}
+
+// ステータスの色（言語非依存）
+export const STATUS_COLORS: Record<StepStatus, string> = {
+  planned: "#6b7280",
+  "in-progress": "#5b8fb9",
+  done: "#4B7A52",
+  skipped: "#9ca3af",
 };
 
-// ステータスの表示名と色
-export const STATUS_CONFIG: Record<StepStatus, { label: string; color: string }> = {
-  planned: { label: "予定", color: "#6b7280" },
-  "in-progress": { label: "実行中", color: "#5b8fb9" },
-  done: { label: "完了", color: "#4B7A52" },
-  skipped: { label: "スキップ", color: "#9ca3af" },
-};
+// ステータスの表示名（i18n 対応）
+export function getStatusLabel(status: StepStatus): string {
+  const keyMap: Record<StepStatus, string> = {
+    planned: "status.planned",
+    "in-progress": "status.inProgress",
+    done: "status.done",
+    skipped: "status.skipped",
+  };
+  return t(keyMap[status]);
+}
+
+// ステータスの表示名と色（互換用）
+export function getStatusConfig(status: StepStatus): { label: string; color: string } {
+  return { label: getStatusLabel(status), color: STATUS_COLORS[status] };
+}
+
+// 後方互換: 既存コードが EXECUTOR_LABELS, STATUS_CONFIG を参照している場合
+// NOTE: これらは呼び出し時の locale で解決されるため、静的な定数ではない
+export const EXECUTOR_LABELS: Record<ExecutorType, string> = new Proxy(
+  {} as Record<ExecutorType, string>,
+  { get: (_, key: string) => getExecutorLabel(key as ExecutorType) },
+);
+
+export const STATUS_CONFIG: Record<StepStatus, { label: string; color: string }> = new Proxy(
+  {} as Record<StepStatus, { label: string; color: string }>,
+  { get: (_, key: string) => getStatusConfig(key as StepStatus) },
+);
