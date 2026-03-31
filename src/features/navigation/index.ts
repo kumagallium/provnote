@@ -8,7 +8,16 @@ export {
   type RecentNote,
 } from "./recent-notes-store";
 export {
-  DriveDirectNoteListSource,
+  IndexFileNoteListSource,
   type NoteListEntry,
   type NoteListSource,
 } from "./note-list-source";
+export {
+  ensureIndex,
+  updateIndexEntry,
+  removeIndexEntry,
+  buildIndexEntry,
+  saveIndexFile,
+  type ProvNoteIndex,
+  type NoteIndexEntry,
+} from "./index-file";

@@ -2,12 +2,11 @@
 // 全ノートをテーブル形式で表示し、ソート・フィルタ・検索に対応
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ProvNoteFile, ProvNoteDocument } from "../../lib/google-drive";
-import { loadFile } from "../../lib/google-drive";
 import {
-  DriveDirectNoteListSource,
+  IndexFileNoteListSource,
   type NoteListEntry,
 } from "./note-list-source";
+import type { ProvNoteIndex } from "./index-file";
 import { NoteListToolbar, type SortKey, type SortDirection } from "./NoteListToolbar";
 import { formatRelativeTime } from "./recent-notes-store";
 
@@ -27,13 +26,11 @@ const LABEL_SHORT: Record<string, string> = {
 };
 
 export function NoteListView({
-  files,
-  docCache,
+  noteIndex,
   onOpenNote,
   onBack,
 }: {
-  files: ProvNoteFile[];
-  docCache: Map<string, ProvNoteDocument>;
+  noteIndex: ProvNoteIndex | null;
   onOpenNote: (noteId: string) => void;
   onBack: () => void;
 }) {
@@ -44,27 +41,16 @@ export function NoteListView({
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 未キャッシュのノートをバックグラウンドで読み込んでから一覧構築
+  // インデックスからノート一覧を構築
   useEffect(() => {
+    if (!noteIndex) {
+      setLoading(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
-      // キャッシュにないファイルを読み込み
-      const missing = files.filter((f) => !docCache.has(f.id));
-      if (missing.length > 0) {
-        await Promise.allSettled(
-          missing.map(async (f) => {
-            try {
-              const doc = await loadFile(f.id);
-              docCache.set(f.id, doc);
-            } catch {
-              // 読み込みエラーはスキップ
-            }
-          })
-        );
-      }
-      if (cancelled) return;
-      const source = new DriveDirectNoteListSource(files, docCache);
+      const source = new IndexFileNoteListSource(noteIndex);
       const result = await source.loadNoteList();
       if (!cancelled) {
         setEntries(result);
@@ -72,7 +58,7 @@ export function NoteListView({
       }
     })();
     return () => { cancelled = true; };
-  }, [files, docCache]);
+  }, [noteIndex]);
 
   // ソート切り替え
   const handleSort = useCallback((key: SortKey) => {
