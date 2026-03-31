@@ -23,6 +23,7 @@ import {
   type ProvDocument,
 } from "./features/prov-generator";
 import { NoteApp } from "./note-app";
+import { LocaleProvider } from "./i18n";
 import type { CustomBlockEntry } from "./base/schema";
 import { cn } from "./lib/utils";
 import {
@@ -380,6 +381,8 @@ function SandboxApp() {
 // ── エントリーポイント ──
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {isSandboxMode ? <SandboxApp /> : <NoteApp />}
+    <LocaleProvider>
+      {isSandboxMode ? <SandboxApp /> : <NoteApp />}
+    </LocaleProvider>
   </StrictMode>
 );

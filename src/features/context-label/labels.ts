@@ -43,6 +43,15 @@ export const ALIAS_MAP: Record<string, CoreLabel> = {
   "[mat]": "[使用したもの]",
   "[result]": "[結果]",
   "[attr]": "[属性]",
+  // 英語フルネーム
+  "[Procedure]": "[手順]",
+  "[procedure]": "[手順]",
+  "[Materials]": "[使用したもの]",
+  "[materials]": "[使用したもの]",
+  "[Attributes]": "[属性]",
+  "[attributes]": "[属性]",
+  "[Results]": "[結果]",
+  "[results]": "[結果]",
 };
 
 // 構造ラベル（リンク生成に使う特殊ラベル）
