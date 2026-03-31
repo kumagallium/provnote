@@ -50,6 +50,15 @@ No `.env` editing required — everything is configured from the browser. Google
 
 > **Note:** In Docker mode, the agent server runs without API key authentication. provnote connects to it directly at `http://localhost:8090` — no API key is needed in the Settings screen. This is safe because the agent is only accessible from your local machine.
 
+#### Updating to the latest version
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+The `--build` flag rebuilds images with the latest code changes.
+
 ### Option 3: Run for development
 
 ```bash
