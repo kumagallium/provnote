@@ -48,19 +48,32 @@ export class DriveDirectNoteListSource implements NoteListSource {
         incomingLinkCount: 0,
       });
 
-      // 出力リンクを収集（noteLinks + knowledgeLinks + indexTables）
+      // 出力リンクを収集（全種類のノート間参照）
       const outgoing = new Set<string>();
 
+      // derivedFromNoteId: 派生元ノートへの参照
+      if (doc.derivedFromNoteId) {
+        outgoing.add(doc.derivedFromNoteId);
+      }
+      // noteLinks: 派生先ノートへの参照
       if (doc.noteLinks) {
         for (const link of doc.noteLinks) {
           outgoing.add(link.targetNoteId);
         }
       }
+      // provLinks: PROV 層リンク（他ノート参照がある場合）
+      if (page.provLinks) {
+        for (const link of page.provLinks) {
+          if (link.targetNoteId) outgoing.add(link.targetNoteId);
+        }
+      }
+      // knowledgeLinks: 知識層リンク（@ メンションによる他ノート参照）
       if (page.knowledgeLinks) {
         for (const link of page.knowledgeLinks) {
           if (link.targetNoteId) outgoing.add(link.targetNoteId);
         }
       }
+      // indexTables: インデックステーブル内のリンク
       if (page.indexTables) {
         for (const linkedNotes of Object.values(page.indexTables)) {
           for (const noteId of Object.values(linkedNotes)) {
