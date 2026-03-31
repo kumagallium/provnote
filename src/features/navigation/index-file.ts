@@ -233,15 +233,19 @@ function extractInlineText(content: any): string {
 
 // ── インデックスの初期構築・差分更新 ──
 
-// 起動時: インデックスがなければ全ノートから構築
+// 起動時: インデックスを読み込み、古ければ再構築
 export async function ensureIndex(
   files: ProvNoteFile[],
   docCache: Map<string, ProvNoteDocument>,
 ): Promise<ProvNoteIndex> {
   const existing = await readIndexFile();
-  if (existing) return existing;
 
-  // インデックスが存在しない → 全ノートから初期構築
+  // 既存インデックスが最新かチェック（ファイル数一致 + 更新日が全て含まれている）
+  if (existing && isIndexFresh(existing, files)) {
+    return existing;
+  }
+
+  // インデックスが存在しないか古い → 全ノートから構築
   // キャッシュにないものは Drive から読み込み
   for (const file of files) {
     if (!docCache.has(file.id)) {
@@ -272,6 +276,23 @@ export async function ensureIndex(
   saveIndexFile(index).catch((err) => console.warn("インデックス保存失敗:", err));
 
   return index;
+}
+
+// インデックスがファイル一覧に対して最新かチェック
+function isIndexFresh(index: ProvNoteIndex, files: ProvNoteFile[]): boolean {
+  // ファイル数が一致しない → 古い
+  if (index.notes.length !== files.length) return false;
+
+  const indexMap = new Map(index.notes.map((n) => [n.noteId, n.modifiedAt]));
+  for (const file of files) {
+    const indexModified = indexMap.get(file.id);
+    // インデックスに含まれていない or 更新日が古い → 再構築
+    if (!indexModified) return false;
+    if (new Date(file.modifiedTime).getTime() > new Date(indexModified).getTime() + 1000) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // ノート保存時: 該当エントリだけ差分更新
