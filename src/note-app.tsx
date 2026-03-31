@@ -74,6 +74,20 @@ import {
 import type { NoteLink } from "./lib/google-drive";
 import { cn } from "./lib/utils";
 import {
+  RecentNotes,
+  NoteListView,
+  getRecentNotes,
+  addToRecent,
+  removeFromRecent,
+  ensureIndex,
+  updateIndexEntry,
+  removeIndexEntry,
+  buildIndexEntry,
+  saveIndexFile,
+  type RecentNote,
+  type ProvNoteIndex,
+} from "./features/navigation";
+import {
   AddBlockButton,
   DragHandleButton,
   RemoveBlockItem,
@@ -121,33 +135,29 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
 
 // ── ファイル一覧サイドバー ──
 function FileSidebar({
-  files,
   activeFileId,
-  loading,
   onSelect,
   onNewNote,
   onNewFromTemplate,
-  onDelete,
   onRefresh,
-  userName,
   onSignOut,
   onShowReleaseNotes,
   onShowSettings,
   agentConfigured,
+  recentNotes,
+  onShowNoteList,
 }: {
-  files: ProvNoteFile[];
   activeFileId: string | null;
-  loading: boolean;
   onSelect: (fileId: string) => void;
   onNewNote: () => void;
   onNewFromTemplate: () => void;
-  onDelete: (fileId: string) => void;
   onRefresh: () => void;
-  userName?: string;
   onSignOut: () => void;
   onShowReleaseNotes: () => void;
   onShowSettings: () => void;
   agentConfigured: boolean;
+  recentNotes: RecentNote[];
+  onShowNoteList: () => void;
 }) {
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col">
@@ -179,51 +189,14 @@ function FileSidebar({
         </button>
       </div>
 
-      {/* ファイル一覧 */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {loading ? (
-          <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-            読み込み中...
-          </p>
-        ) : files.length === 0 ? (
-          <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-            ノートがありません
-          </p>
-        ) : (
-          files.map((file) => (
-            <div
-              key={file.id}
-              className={cn(
-                "group flex items-center justify-between rounded-md px-2 py-1.5 mb-0.5 text-sm transition-colors cursor-pointer",
-                activeFileId === file.id
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
-              )}
-              onClick={() => onSelect(file.id)}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="break-words">
-                  {file.name.replace(/\.provnote\.json$/, "")}
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  {new Date(file.modifiedTime).toLocaleDateString("ja-JP")}
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm("このノートを削除しますか？")) {
-                    onDelete(file.id);
-                  }
-                }}
-                className="opacity-0 group-hover:opacity-100 text-xs text-muted-foreground hover:text-destructive px-1 transition-opacity"
-                title="削除"
-              >
-                &#128465;
-              </button>
-            </div>
-          ))
-        )}
+      {/* 最近のノート */}
+      <div className="flex-1 overflow-y-auto">
+        <RecentNotes
+          notes={recentNotes}
+          activeFileId={activeFileId}
+          onSelect={onSelect}
+          onShowNoteList={onShowNoteList}
+        />
       </div>
 
       {/* フッター */}
@@ -544,6 +517,8 @@ type NoteEditorProps = {
   /** 派生元ノート（Split View 用、NoteApp が管理） */
   sourceDoc: ProvNoteDocument | null;
   onSourceDocChange: (doc: ProvNoteDocument | null) => void;
+  /** ノートインデックス（@ オートコンプリート用） */
+  noteIndex?: ProvNoteIndex | null;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -591,6 +566,7 @@ function NoteEditorInner({
   sourceDoc,
   onSourceDocChange,
   getCachedDoc,
+  noteIndex,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -1159,7 +1135,7 @@ function NoteEditorInner({
                 }
                 return [
                   ...getHeadingSuggestions(),
-                  ...getNoteSuggestions(files, fileId ?? undefined),
+                  ...getNoteSuggestions(files, fileId ?? undefined, noteIndex),
                 ];
               }}
               onMentionSelect={(sourceBlockId, suggestion) => {
@@ -1316,6 +1292,13 @@ export function NoteApp() {
   const [noteGraphData, setNoteGraphData] = useState<NoteGraphData>({ nodes: [], edges: [] });
   // Split View 用の派生元ノート（NoteApp レベルで管理し、ファイル切り替えでも保持）
   const [sourceDoc, setSourceDoc] = useState<ProvNoteDocument | null>(null);
+  // ノート一覧ビューの表示状態
+  const [showNoteList, setShowNoteList] = useState(false);
+  // 最近のノート履歴
+  const [recentNotes, setRecentNotes] = useState<RecentNote[]>(() => getRecentNotes());
+  // ノートインデックス（.provnote-index.json）
+  const [noteIndex, setNoteIndex] = useState<ProvNoteIndex | null>(null);
+  const noteIndexRef = useRef<ProvNoteIndex | null>(null);
 
   // ファイル一覧を取得
   const refreshFiles = useCallback(async () => {
@@ -1361,6 +1344,8 @@ export function NoteApp() {
   // ファイルを開く（キャッシュ優先、cachedDoc が渡された場合はキャッシュを即時更新）
   const handleOpenFile = useCallback(async (fileId: string, cachedDoc?: ProvNoteDocument) => {
     try {
+      // ノート一覧ビューを閉じる
+      setShowNoteList(false);
       // サイドピーク等から保存済みドキュメントが渡された場合、キャッシュを即時更新
       if (cachedDoc) {
         docCacheRef.current.set(fileId, cachedDoc);
@@ -1371,6 +1356,8 @@ export function NoteApp() {
         setActiveFileId(fileId);
         setActiveDoc(cached);
         setEditorKey((k) => k + 1);
+        // 最近のノートに追加
+        setRecentNotes(addToRecent(fileId, cached.title));
         // バックグラウンドで最新を取得してキャッシュ更新
         loadFile(fileId).then((doc) => docCacheRef.current.set(fileId, doc)).catch(() => {});
         return;
@@ -1380,12 +1367,14 @@ export function NoteApp() {
       setActiveFileId(fileId);
       setActiveDoc(doc);
       setEditorKey((k) => k + 1);
+      // 最近のノートに追加
+      setRecentNotes(addToRecent(fileId, doc.title));
     } catch (err) {
       console.error("ファイルの読み込みに失敗:", err);
     }
   }, [setActiveFileId]);
 
-  // 認証完了後にファイル一覧を取得し、最後に開いたファイルを復元
+  // 認証完了後にファイル一覧を取得し、インデックスを構築、最後に開いたファイルを復元
   useEffect(() => {
     if (!authenticated) return;
     (async () => {
@@ -1396,6 +1385,20 @@ export function NoteApp() {
       }
     })();
   }, [authenticated, refreshFiles, handleOpenFile]);
+
+  // ファイル一覧が取得されたらインデックスを構築
+  useEffect(() => {
+    if (!authenticated || files.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const index = await ensureIndex(files, docCacheRef.current);
+      if (!cancelled) {
+        noteIndexRef.current = index;
+        setNoteIndex(index);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authenticated, files]);
 
   // activeFileId や files が変わったらグラフを再構築
   useEffect(() => {
@@ -1454,22 +1457,35 @@ export function NoteApp() {
                 : f
             )
           );
+          // 最近のノートを更新
+          setRecentNotes(addToRecent(currentFileId, doc.title));
         } else {
           // 新規作成
           const newId = await createFile(doc.title, doc);
           docCacheRef.current.set(newId, doc);
           setActiveDoc(doc);
           setActiveFileId(newId);
+          // 最近のノートに追加
+          setRecentNotes(addToRecent(newId, doc.title));
           // 新規ファイルを一覧に追加
-          setFiles((prev) => [
-            {
-              id: newId,
-              name: `${doc.title}.provnote.json`,
-              modifiedTime: new Date().toISOString(),
-              createdTime: new Date().toISOString(),
-            },
-            ...prev,
-          ]);
+          const newFile: ProvNoteFile = {
+            id: newId,
+            name: `${doc.title}.provnote.json`,
+            modifiedTime: new Date().toISOString(),
+            createdTime: new Date().toISOString(),
+          };
+          setFiles((prev) => [newFile, ...prev]);
+        }
+
+        // インデックスを差分更新
+        if (noteIndexRef.current) {
+          const savedFileId = currentFileId ?? activeFileIdRef.current;
+          if (savedFileId) {
+            const updated = updateIndexEntry(noteIndexRef.current, savedFileId, doc);
+            noteIndexRef.current = updated;
+            setNoteIndex(updated);
+            saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+          }
         }
       } catch (err) {
         console.error("保存に失敗:", err);
@@ -1520,6 +1536,17 @@ export function NoteApp() {
           ...prev,
         ]);
 
+        // インデックスを更新（派生先ノート + 元ノート両方）
+        if (noteIndexRef.current) {
+          let updated = updateIndexEntry(noteIndexRef.current, newFileId, newDoc);
+          if (activeFileIdRef.current && activeDoc) {
+            updated = updateIndexEntry(updated, activeFileIdRef.current, activeDoc);
+          }
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+
         // 派生先ノートを開く
         handleOpenFile(newFileId);
       } catch (err) {
@@ -1557,6 +1584,17 @@ export function NoteApp() {
           { id: newFileId, name: `${doc.title}.provnote.json`, modifiedTime: now, createdTime: now },
           ...prev,
         ]);
+
+        // インデックスを更新
+        if (noteIndexRef.current) {
+          let updated = updateIndexEntry(noteIndexRef.current, newFileId, doc);
+          if (activeFileIdRef.current && activeDoc) {
+            updated = updateIndexEntry(updated, activeFileIdRef.current, activeDoc);
+          }
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
 
         // 派生先ノートを開く
         handleOpenFile(newFileId);
@@ -1617,6 +1655,15 @@ export function NoteApp() {
         docCacheRef.current.delete(fileId);
 
         await deleteFile(fileId);
+        // 最近のノートからも除去
+        setRecentNotes(removeFromRecent(fileId));
+        // インデックスから除去
+        if (noteIndexRef.current) {
+          const updated = removeIndexEntry(noteIndexRef.current, fileId);
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
         if (activeFileId === fileId) {
           setActiveFileId(null);
           setActiveDoc(null);
@@ -1647,36 +1694,44 @@ export function NoteApp() {
   return (
     <div className="flex h-screen font-sans antialiased bg-background text-foreground">
       <FileSidebar
-        files={files}
         activeFileId={activeFileId}
-        loading={filesLoading}
         onSelect={handleOpenFile}
         onNewNote={handleNewNote}
         onNewFromTemplate={handleNewFromTemplate}
-        onDelete={handleDelete}
         onRefresh={refreshFiles}
         onSignOut={signOut}
         onShowReleaseNotes={() => setShowReleaseNotes(true)}
         onShowSettings={() => setShowSettings(true)}
         agentConfigured={agentConfigured}
+        recentNotes={recentNotes}
+        onShowNoteList={() => setShowNoteList(true)}
       />
       <main className="flex-1 overflow-hidden flex flex-col relative">
-        <NoteEditor
-          key={editorKey}
-          fileId={activeFileId}
-          initialDoc={activeDoc}
-          onSave={handleSave}
-          onDeriveNote={handleDeriveNote}
-          onAiDeriveNote={handleAiDeriveNote}
-          onNavigateNote={handleOpenFile}
-          getCachedDoc={(noteId) => docCacheRef.current.get(noteId)}
-          onRefreshFiles={refreshFiles}
-          saving={saving}
-          files={files}
-          noteGraphData={noteGraphData}
-          sourceDoc={sourceDoc}
-          onSourceDocChange={setSourceDoc}
-        />
+        {showNoteList ? (
+          <NoteListView
+            noteIndex={noteIndex}
+            onOpenNote={handleOpenFile}
+            onBack={() => setShowNoteList(false)}
+          />
+        ) : (
+          <NoteEditor
+            key={editorKey}
+            fileId={activeFileId}
+            initialDoc={activeDoc}
+            onSave={handleSave}
+            onDeriveNote={handleDeriveNote}
+            onAiDeriveNote={handleAiDeriveNote}
+            onNavigateNote={handleOpenFile}
+            getCachedDoc={(noteId) => docCacheRef.current.get(noteId)}
+            onRefreshFiles={refreshFiles}
+            saving={saving}
+            files={files}
+            noteGraphData={noteGraphData}
+            sourceDoc={sourceDoc}
+            onSourceDocChange={setSourceDoc}
+            noteIndex={noteIndex}
+          />
+        )}
         {/* 派生ノート作成中のオーバーレイ */}
         {deriving && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-50">

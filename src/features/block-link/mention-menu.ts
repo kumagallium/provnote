@@ -2,6 +2,7 @@
 // 知識層リンク（reference）を作成する
 
 import type { ProvNoteFile } from "../../lib/google-drive";
+import type { ProvNoteIndex } from "../navigation/index-file";
 
 // 参照候補の型
 export type ReferenceSuggestion = {
@@ -52,17 +53,41 @@ export function getHeadingSuggestions(currentBlockId?: string): ReferenceSuggest
 
 /**
  * 他ノートの候補を構築する。
+ * インデックスがあればそこから取得（見出し付き）、なければ files から取得。
  * @param files Google Drive のファイル一覧
  * @param currentFileId 現在開いているファイル ID（除外用）
+ * @param noteIndex インデックスファイル（オプション）
  */
 export function getNoteSuggestions(
   files: ProvNoteFile[],
   currentFileId?: string,
+  noteIndex?: ProvNoteIndex | null,
 ): ReferenceSuggestion[] {
+  // インデックスがあればノート + 見出しの候補を返す
+  if (noteIndex) {
+    const suggestions: ReferenceSuggestion[] = [];
+    const notes = noteIndex.notes
+      .filter((n) => n.noteId !== currentFileId)
+      .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+      .slice(0, 30);
+
+    for (const note of notes) {
+      // ノート自体を候補に
+      suggestions.push({
+        type: "note",
+        id: note.noteId,
+        label: note.title,
+        group: "他のノート",
+      });
+    }
+    return suggestions;
+  }
+
+  // フォールバック: files から取得
   return files
     .filter((f) => f.id !== currentFileId)
     .sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime())
-    .slice(0, 20) // 最大20件
+    .slice(0, 20)
     .map((f) => ({
       type: "note" as const,
       id: f.id,
