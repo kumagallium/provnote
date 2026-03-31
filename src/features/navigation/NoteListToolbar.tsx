@@ -2,11 +2,12 @@
 
 import { useCallback, useRef, useState } from "react";
 
-export type SortKey = "incomingLinkCount" | "modifiedAt" | "createdAt" | "title";
+export type SortKey = "outgoingLinkCount" | "incomingLinkCount" | "modifiedAt" | "createdAt" | "title";
 export type SortDirection = "asc" | "desc";
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "incomingLinkCount", label: "被参照数" },
+  { key: "outgoingLinkCount", label: "参照先" },
+  { key: "incomingLinkCount", label: "被参照" },
   { key: "modifiedAt", label: "更新日" },
   { key: "createdAt", label: "作成日" },
   { key: "title", label: "タイトル" },

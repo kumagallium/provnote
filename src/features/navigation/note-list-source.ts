@@ -10,6 +10,7 @@ export type NoteListEntry = {
   createdAt: string;
   labels: string[];
   incomingLinkCount: number;
+  outgoingLinkCount: number;
 };
 
 export interface NoteListSource {
@@ -32,6 +33,13 @@ export class IndexFileNoteListSource implements NoteListSource {
       }
     }
 
+    // outgoing: ユニークなターゲット数
+    const outgoingMap = new Map<string, number>();
+    for (const note of this.index.notes) {
+      const uniqueTargets = new Set(note.outgoingLinks.map((l) => l.targetNoteId));
+      outgoingMap.set(note.noteId, uniqueTargets.size);
+    }
+
     return this.index.notes.map((n) => ({
       noteId: n.noteId,
       title: n.title,
@@ -39,6 +47,7 @@ export class IndexFileNoteListSource implements NoteListSource {
       createdAt: n.createdAt,
       labels: [...new Set(n.labels.map((l) => l.label))],
       incomingLinkCount: incomingMap.get(n.noteId)?.size ?? 0,
+      outgoingLinkCount: outgoingMap.get(n.noteId) ?? 0,
     }));
   }
 

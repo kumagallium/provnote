@@ -36,7 +36,7 @@ export function NoteListView({
 }) {
   const [entries, setEntries] = useState<NoteListEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("incomingLinkCount");
+  const [sortKey, setSortKey] = useState<SortKey>("outgoingLinkCount");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +94,9 @@ export function NoteListView({
     const sorted = [...result].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
+        case "outgoingLinkCount":
+          cmp = a.outgoingLinkCount - b.outgoingLinkCount;
+          break;
         case "incomingLinkCount":
           cmp = a.incomingLinkCount - b.incomingLinkCount;
           break;
@@ -158,8 +161,16 @@ export function NoteListView({
               <tr className="text-left text-xs text-muted-foreground border-b border-border">
                 <th className="py-2 pr-3 font-medium">ノート</th>
                 <th
-                  className="py-2 px-3 font-medium w-[60px] cursor-pointer hover:text-foreground"
+                  className="py-2 px-2 font-medium w-[56px] cursor-pointer hover:text-foreground text-center"
+                  onClick={() => handleSort("outgoingLinkCount")}
+                  title="参照先（このノートが参照しているノート数）"
+                >
+                  参照先{sortKey === "outgoingLinkCount" && (sortDir === "desc" ? " ↓" : " ↑")}
+                </th>
+                <th
+                  className="py-2 px-2 font-medium w-[56px] cursor-pointer hover:text-foreground text-center"
                   onClick={() => handleSort("incomingLinkCount")}
+                  title="被参照（他ノートから参照されている数）"
                 >
                   被参照{sortKey === "incomingLinkCount" && (sortDir === "desc" ? " ↓" : " ↑")}
                 </th>
@@ -184,7 +195,20 @@ export function NoteListView({
                       {entry.title}
                     </span>
                   </td>
-                  <td className="py-2 px-3 text-center">
+                  <td className="py-2 px-2 text-center">
+                    {entry.outgoingLinkCount > 0 && (
+                      <span
+                        className={`inline-flex items-center justify-center text-xs px-1.5 py-0.5 rounded ${
+                          entry.outgoingLinkCount >= 3
+                            ? "bg-blue-100 text-blue-700 font-medium"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {entry.outgoingLinkCount} &rarr;
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 px-2 text-center">
                     {entry.incomingLinkCount > 0 && (
                       <span
                         className={`inline-flex items-center justify-center text-xs px-1.5 py-0.5 rounded ${
