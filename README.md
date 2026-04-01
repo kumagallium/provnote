@@ -1,18 +1,18 @@
-# provnote
+# Graphium
 
 Block-based note editor with **PROV-DM** provenance tracking — built on [BlockNote.js](https://www.blocknotejs.org/).
 
 ## Try it now
 
-**[→ Open provnote on GitHub Pages](https://kumagallium.github.io/provnote/)**
+**[→ Open Graphium on GitHub Pages](https://kumagallium.github.io/Graphium/)**
 
 No installation required — works in your browser. Notes are saved to Google Drive or your browser's local storage.
 
-## What is provnote?
+## What is Graphium?
 
-provnote is a **note-taking app** that automatically turns structured notes into traceable provenance graphs.
+Graphium is a **note-taking app** that automatically turns structured notes into traceable provenance graphs.
 
-Every note is a plain block-based document. When you add a **context label** (like `[Procedure]` or `[Result]`) to a block, provnote maps it to a [PROV-DM](https://www.w3.org/TR/prov-dm/) role and builds a provenance graph behind the scenes — no extra effort required.
+Every note is a plain block-based document. When you add a **context label** (like `[Procedure]` or `[Result]`) to a block, Graphium maps it to a [PROV-DM](https://www.w3.org/TR/prov-dm/) role and builds a provenance graph behind the scenes — no extra effort required.
 
 | Building block | What it does |
 |---------------|-------------|
@@ -26,41 +26,41 @@ Every note is a plain block-based document. When you add a **context label** (li
 - **Researchers** who want structured, traceable records with provenance — without leaving a familiar note-taking interface
 - **Anyone** who wants a Zettelkasten-style linked note editor with Google Drive sync
 
-PROV-DM labeling is entirely optional. Without labels, provnote works as a standard linked note editor.
+PROV-DM labeling is entirely optional. Without labels, Graphium works as a standard linked note editor.
 
 ## How to use
 
 ### Option 1: Use online (no setup)
 
-Visit **https://kumagallium.github.io/provnote/** and start writing. Your notes are saved in your browser's local storage.
+Visit **https://kumagallium.github.io/Graphium/** and start writing. Your notes are saved in your browser's local storage.
 
 To sync with Google Drive, sign in with your Google account from the sidebar.
 
 ### Option 2: Run with Docker — editor only
 
-Run provnote as a standalone editor — no AI, no external services. Just the note editor with Google Drive sync.
+Run Graphium as a standalone editor — no AI, no external services. Just the note editor with Google Drive sync.
 
 ```bash
-git clone https://github.com/kumagallium/provnote.git
-cd provnote
+git clone https://github.com/kumagallium/Graphium.git
+cd Graphium
 docker compose -f docker-compose.standalone.yml up -d
 ```
 
-Open **http://localhost:5174/provnote/** and start writing.
+Open **http://localhost:5174/Graphium/** and start writing.
 
 ### Option 3: Run with Docker — full Crucible stack (AI + MCP tools)
 
-Run provnote with the full [Crucible](https://github.com/kumagallium/Crucible) stack: AI chat, note derivation, provenance-tracked AI responses, and MCP tool management.
+Run Graphium with the full [Crucible](https://github.com/kumagallium/Crucible) stack: AI chat, note derivation, provenance-tracked AI responses, and MCP tool management.
 
 ```bash
-git clone https://github.com/kumagallium/provnote.git
-cd provnote
+git clone https://github.com/kumagallium/Graphium.git
+cd Graphium
 docker compose up -d
 ```
 
 | URL | What it is |
 |-----|------------|
-| http://localhost:5174/provnote/ | provnote editor |
+| http://localhost:5174/Graphium/ | Graphium editor |
 | http://localhost:8090 | Crucible Agent — AI Chat UI |
 | http://localhost:8081 | Crucible Registry — MCP server management |
 
@@ -68,7 +68,7 @@ docker compose up -d
 
 1. Open **http://localhost:8090** (Crucible Agent Chat UI)
 2. Add your LLM model (e.g., Claude, GPT-4o) with your API key from the UI
-3. Go to **http://localhost:5174/provnote/** and start using the AI assistant
+3. Go to **http://localhost:5174/Graphium/** and start using the AI assistant
 
 #### Add MCP tools (optional)
 
@@ -89,18 +89,18 @@ No `.env` editing required — everything is configured from the browser. Google
 Or manually:
 
 ```bash
-git pull                      # Get latest provnote code
+git pull                      # Get latest Graphium code
 docker compose pull           # Pull latest Crucible images
-docker compose up -d --build  # Rebuild provnote and restart all services
+docker compose up -d --build  # Rebuild Graphium and restart all services
 ```
 
 ### Option 4: Run for development
 
 ```bash
-git clone https://github.com/kumagallium/provnote.git
-cd provnote
+git clone https://github.com/kumagallium/Graphium.git
+cd Graphium
 pnpm install
-pnpm dev --port 5174   # → http://localhost:5174/provnote/
+pnpm dev --port 5174   # → http://localhost:5174/Graphium/
 ```
 
 Google Drive sync works without any configuration. To enable AI features, you need a separate [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
@@ -120,7 +120,7 @@ Google Drive sync works without any configuration. To enable AI features, you ne
 
 ## Architecture
 
-provnote is a **standalone note editor**. It does not require any backend server to function — notes are stored in Google Drive or the browser's local storage.
+Graphium is a **standalone note editor**. It does not require any backend server to function — notes are stored in Google Drive or the browser's local storage.
 
 AI features are provided by an **optional external agent server**. Any server that implements the `POST /agent/run` endpoint can be used:
 
@@ -131,25 +131,25 @@ AI features are provided by an **optional external agent server**. Any server th
 
 ### Crucible ecosystem (optional)
 
-provnote can integrate with the [Crucible](https://github.com/kumagallium/Crucible-Agent) ecosystem for AI capabilities, but this is entirely optional. The diagram below shows how the components connect when AI features are enabled:
+Graphium can integrate with the [Crucible](https://github.com/kumagallium/Crucible-Agent) ecosystem for AI capabilities, but this is entirely optional. The diagram below shows how the components connect when AI features are enabled:
 
 ```mermaid
 graph LR
-    provnote["📝 <b>provnote</b><br/><i>Provenance<br/>tracking editor</i>"]
+    Graphium["📝 <b>Graphium</b><br/><i>Provenance<br/>tracking editor</i>"]
     Agent["🤖 Crucible<br/><b>Agent</b><br/><i>AI agent<br/>runtime</i>"]
     Registry["🔧 Crucible<br/><b>Registry</b><br/><i>Build & deploy<br/>MCP servers</i>"]
 
-    provnote -- "POST /agent/run<br/>(optional)" --> Agent
+    Graphium -- "POST /agent/run<br/>(optional)" --> Agent
     Registry -- "tool discovery" --> Agent
 
-    style provnote fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
+    style Graphium fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
     style Agent fill:#ede8f5,stroke:#8b7ab5,stroke-width:2px,color:#4a3d6e
     style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
 ```
 
 ## Language & Internationalization
 
-The provnote UI currently uses **Japanese** for context labels and some interface elements. This reflects the project's origin in a Japanese research group.
+The Graphium UI currently uses **Japanese** for context labels and some interface elements. This reflects the project's origin in a Japanese research group.
 
 | Element | Current language | Planned |
 |---------|-----------------|---------|
