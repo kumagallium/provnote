@@ -103,7 +103,7 @@ pnpm install
 pnpm dev --port 5174   # → http://localhost:5174/provnote/
 ```
 
-Google Drive sync works without any configuration. To enable AI features, you need a separate [crucible-agent](https://github.com/kumagallium/crucible-agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
+Google Drive sync works without any configuration. To enable AI features, you need a separate [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
 
 ## Features
 
@@ -126,12 +126,12 @@ AI features are provided by an **optional external agent server**. Any server th
 
 | Server | Description |
 |--------|-------------|
-| [crucible-agent](https://github.com/kumagallium/crucible-agent) | Full-featured agent runtime with MCP tool support and LiteLLM multi-model proxy |
+| [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) | Full-featured agent runtime with MCP tool support and LiteLLM multi-model proxy |
 | Any compatible server | Must implement `POST /agent/run` with the same request/response format |
 
 ### Crucible ecosystem (optional)
 
-provnote can integrate with the [Crucible](https://github.com/kumagallium/crucible-agent) ecosystem for AI capabilities, but this is entirely optional. The diagram below shows how the components connect when AI features are enabled:
+provnote can integrate with the [Crucible](https://github.com/kumagallium/Crucible-Agent) ecosystem for AI capabilities, but this is entirely optional. The diagram below shows how the components connect when AI features are enabled:
 
 ```mermaid
 graph LR
