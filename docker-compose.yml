@@ -157,5 +157,10 @@ volumes:
   crucible_data:
 
 networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
   socket_proxy_net:
     internal: true
