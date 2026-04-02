@@ -183,6 +183,17 @@ export const en: Record<string, string> = {
   "settings.apiKeyPlaceholder": "Not set (no authentication)",
   "settings.apiKeyEnvNote": "Set via environment variable. Enter a new key to override.",
   "settings.apiKeyHelp": "Set the same value as AGENT_API_KEY in crucible-agent. If not set, connects without authentication.",
+  "settings.profile": "System Prompt",
+  "settings.profileDefault": "Default (science)",
+  "settings.profileLoading": "Loading profiles...",
+  "settings.profileNone": "No profiles available",
+  "settings.profileHelp": "Select the system prompt profile that defines how the AI behaves.",
+  "settings.model": "AI Model",
+  "settings.modelDefault": "Server default ({name})",
+  "settings.modelDefaultLabel": "default",
+  "settings.modelLoading": "Loading models...",
+  "settings.modelNone": "No models available",
+  "settings.modelHelp": "Select the AI model to use. If not specified, the server default is used.",
 
   // ── AI チャット追加 ──
   "aiChat.helpText": "Select a block and ask AI a question.\nCmd+Enter to send",
