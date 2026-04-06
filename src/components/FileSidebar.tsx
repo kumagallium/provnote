@@ -70,16 +70,28 @@ export function FileSidebar({
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
 
-  // ラベルカウント（全ノートから集計）
+  // ラベルカウント（全ノートから集計 + localStorage キャッシュで即時表示）
+  const LABEL_CACHE_KEY = "provnote_label_counts";
   const labelCounts = useMemo(() => {
-    if (!noteIndex) return new Map<string, number>();
-    const counts = new Map<string, number>();
-    for (const note of noteIndex.notes) {
-      for (const l of note.labels) {
-        counts.set(l.label, (counts.get(l.label) ?? 0) + 1);
+    if (noteIndex) {
+      const counts = new Map<string, number>();
+      for (const note of noteIndex.notes) {
+        for (const l of note.labels) {
+          counts.set(l.label, (counts.get(l.label) ?? 0) + 1);
+        }
       }
+      // キャッシュに保存
+      try {
+        localStorage.setItem(LABEL_CACHE_KEY, JSON.stringify([...counts]));
+      } catch {}
+      return counts;
     }
-    return counts;
+    // noteIndex 未ロード → キャッシュから先行表示
+    try {
+      const cached = localStorage.getItem(LABEL_CACHE_KEY);
+      if (cached) return new Map<string, number>(JSON.parse(cached));
+    } catch {}
+    return new Map<string, number>();
   }, [noteIndex]);
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col">
