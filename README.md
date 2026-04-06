@@ -1,6 +1,10 @@
-# Graphium
-
-Block-based note editor with **PROV-DM** provenance tracking — built on [BlockNote.js](https://www.blocknotejs.org/).
+<p align="center">
+  <img src="public/logo.png" alt="Graphium" width="80" />
+</p>
+<h1 align="center">Graphium</h1>
+<p align="center">
+  Block-based note editor with <b>PROV-DM</b> provenance tracking — built on <a href="https://www.blocknotejs.org/">BlockNote.js</a>.
+</p>
 
 ## Try it now
 
