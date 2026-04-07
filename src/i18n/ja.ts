@@ -308,4 +308,8 @@ export const ja: Record<string, string> = {
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "エクスポート中...",
+
+  // ── PROV-JSON-LD エクスポート ──
+  "prov.export": "PROV-JSON-LD",
+  "prov.exportDisabled": "エクスポートするプロヴェナンスデータがありません",
 };

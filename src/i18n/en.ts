@@ -308,4 +308,8 @@ export const en: Record<string, string> = {
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "Exporting...",
+
+  // ── PROV-JSON-LD エクスポート ──
+  "prov.export": "PROV-JSON-LD",
+  "prov.exportDisabled": "No provenance data to export",
 };
