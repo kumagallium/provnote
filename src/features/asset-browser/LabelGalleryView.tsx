@@ -45,7 +45,7 @@ type GroupedRow = {
   latestModifiedAt: string;
 };
 
-type SortKey = "modifiedAt" | "preview";
+type SortKey = "noteCount" | "modifiedAt" | "preview";
 
 export type LabelGalleryViewProps = {
   noteIndex: ProvNoteIndex | null;
@@ -310,7 +310,7 @@ export function LabelGalleryView({
 }: LabelGalleryViewProps) {
   const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("modifiedAt");
+  const [sortKey, setSortKey] = useState<SortKey>("noteCount");
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<GroupedRow | null>(null);
 
@@ -366,7 +366,11 @@ export function LabelGalleryView({
     }
     return [...result].sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "modifiedAt") {
+      if (sortKey === "noteCount") {
+        const aCount = new Set(a.entries.map((e) => e.noteId)).size;
+        const bCount = new Set(b.entries.map((e) => e.noteId)).size;
+        cmp = aCount - bCount;
+      } else if (sortKey === "modifiedAt") {
         cmp = new Date(a.latestModifiedAt).getTime() - new Date(b.latestModifiedAt).getTime();
       } else {
         cmp = a.preview.localeCompare(b.preview);
@@ -381,6 +385,7 @@ export function LabelGalleryView({
         setSortAsc((a) => !a);
         return key;
       }
+      // noteCount・modifiedAt は降順デフォルト、preview は昇順デフォルト
       setSortAsc(key === "preview");
       return key;
     });
@@ -433,6 +438,16 @@ export function LabelGalleryView({
           className="w-full max-w-xs text-xs px-3 py-1.5 rounded border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
         />
         <div className="flex items-center gap-1 ml-auto">
+          <button
+            onClick={() => handleSort("noteCount")}
+            className={`text-[11px] px-2 py-1 rounded transition-colors ${
+              sortKey === "noteCount"
+                ? "bg-primary/10 text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("label.noteCount")}{sortKey === "noteCount" && (sortAsc ? " ↑" : " ↓")}
+          </button>
           <button
             onClick={() => handleSort("modifiedAt")}
             className={`text-[11px] px-2 py-1 rounded transition-colors ${
