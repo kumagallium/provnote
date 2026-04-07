@@ -177,6 +177,10 @@ function NoteEditorInner({
   const prevPageRef = useRef<import("./lib/google-drive").ProvNotePage | null>(
     initialDoc?.pages[0] ?? null,
   );
+  // 最新の documentProvenance（保存ごとに更新）
+  const [currentProvenance, setCurrentProvenance] = useState(
+    initialDoc?.documentProvenance ?? undefined,
+  );
   // @ トリガー時のカーソル位置を保存（ドロップダウン表示後は DOM から取れなくなるため）
   const mentionContextRef = useRef<{ tableBlockId: string | null; rowIndex: number }>({ tableBlockId: null, rowIndex: -1 });
   const [rightTab, setRightTab] = useState<"graph" | "prov" | "chat" | "history" | "source">(
@@ -279,7 +283,7 @@ function NoteEditorInner({
       noteLinks: noteLinksRef.current.length > 0 ? noteLinksRef.current : undefined,
       derivedFromNoteId: initialDoc?.derivedFromNoteId,
       derivedFromBlockId: initialDoc?.derivedFromBlockId,
-      documentProvenance: initialDoc?.documentProvenance,
+      documentProvenance: currentProvenance,
       chats: savedChats.length > 0 ? savedChats : undefined,
       createdAt: initialDoc?.createdAt || new Date().toISOString(),
       modifiedAt: new Date().toISOString(),
@@ -292,11 +296,15 @@ function NoteEditorInner({
     prevPageRef.current = structuredClone(doc.pages[0]);
 
     return doc;
-  }, [title, labelStore, linkStore, indexTableStore, aiAssistant, initialDoc]);
+  }, [title, labelStore, linkStore, indexTableStore, aiAssistant, initialDoc, currentProvenance]);
 
   const handleSave = useCallback(() => {
     const doc = buildDocument();
     onSave(doc);
+    // 保存後に documentProvenance を state に反映（History パネル更新用）
+    if (doc.documentProvenance) {
+      setCurrentProvenance(doc.documentProvenance);
+    }
     // 保存後に Drive Revision ID を非同期で取得・紐付け
     if (fileId && doc.documentProvenance) {
       const revisions = doc.documentProvenance.revisions;
@@ -921,7 +929,7 @@ function NoteEditorInner({
               />
             )}
             {rightTab === "history" && (
-              <DocumentProvenancePanel provenance={initialDoc?.documentProvenance} />
+              <DocumentProvenancePanel provenance={currentProvenance} />
             )}
             {rightTab === "source" && sourceDoc && (
               <SourceDocPanel doc={sourceDoc} />
