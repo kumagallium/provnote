@@ -26,9 +26,10 @@ type ProvDocument = ProvJsonLd;
 const THEME = {
   // ノード色
   activity:  { bg: "#5b8fb9", border: "#4a7da6", text: "#ffffff" },
-  entity:    { bg: "#4B7A52", border: "#3d6844", text: "#ffffff" },
+  entity:    { bg: "#4B7A52", border: "#3d6844", text: "#ffffff" },  // 材料
+  tool:      { bg: "#c08b3e", border: "#a67630", text: "#ffffff" },  // ツール（菱形）
   result:    { bg: "#c26356", border: "#a8513f", text: "#ffffff" },
-  parameter: { bg: "#c08b3e", border: "#a67630", text: "#ffffff" },
+  parameter: { bg: "#8fa394", border: "#7a9082", text: "#ffffff" },  // 属性（グレー四角）
   sample:    { bg: "#8b7ab5", border: "#7466a0", text: "#ffffff" },
   // エッジ色
   edge: {
@@ -78,12 +79,14 @@ function splitDocBySample(doc: ProvJsonLd): SampleSplit[] {
 }
 
 /**
- * ノードのサブタイプを判定（Entity を [使用したもの] と [結果] に分離）
+ * ノードのサブタイプを判定（Entity を材料・ツール・結果に分離）
  */
 function getNodeSubtype(node: ProvJsonLdNode): string {
   if (node["@type"] === "prov:Entity") {
     if (node["@id"].startsWith("param_")) return "parameter";
-    return node["@id"].startsWith("result_") ? "result" : "entity";
+    if (node["@id"].startsWith("result_")) return "result";
+    if (node["provnote:entityType"] === "tool") return "tool";
+    return "entity"; // material またはサブタイプなし
   }
   return node["@type"];
 }
@@ -289,6 +292,16 @@ export const cyStyles: cytoscape.StylesheetStyle[] = [
     },
   },
   {
+    selector: 'node[subtype = "tool"]',
+    style: {
+      ...commonNodeStyle,
+      "background-color": THEME.tool.bg,
+      "border-color": THEME.tool.border,
+      color: THEME.tool.text,
+      shape: "diamond",
+    },
+  },
+  {
     selector: 'node[subtype = "result"]',
     style: {
       ...commonNodeStyle,
@@ -305,7 +318,7 @@ export const cyStyles: cytoscape.StylesheetStyle[] = [
       "background-color": THEME.parameter.bg,
       "border-color": THEME.parameter.border,
       color: THEME.parameter.text,
-      shape: "diamond",
+      shape: "round-rectangle",
     },
   },
   // ── ホバーエフェクト ──
@@ -546,9 +559,10 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
   const legendBar = (
     <div style={legendBarStyle}>
       <LegendDot color={THEME.activity.bg} shape="circle" label={t("provPanel.stepLegend")} />
-      <LegendDot color={THEME.entity.bg} shape="square" label={t("provPanel.usedLegend")} />
+      <LegendDot color={THEME.entity.bg} shape="square" label={t("provPanel.materialLegend")} />
+      <LegendDot color={THEME.tool.bg} shape="diamond" label={t("provPanel.toolLegend")} />
       <LegendDot color={THEME.result.bg} shape="square" label={t("provPanel.resultLegend")} />
-      <LegendDot color={THEME.parameter.bg} shape="diamond" label={t("provPanel.attrLegend")} />
+      <LegendDot color={THEME.parameter.bg} shape="square" label={t("provPanel.attrLegend")} />
 
       <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ color: "#9ca3af" }}>

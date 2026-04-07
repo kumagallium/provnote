@@ -225,7 +225,8 @@ export const en: Record<string, string> = {
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "Add labels to the editor, then run PROV generation",
   "provPanel.stepLegend": "Procedure",
-  "provPanel.usedLegend": "Materials",
+  "provPanel.materialLegend": "Material",
+  "provPanel.toolLegend": "Tool",
   "provPanel.resultLegend": "Results",
   "provPanel.attrLegend": "Attributes",
   "provPanel.graphStats": "{nodes} nodes · {relations} relations",

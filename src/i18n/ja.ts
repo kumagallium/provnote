@@ -225,7 +225,8 @@ export const ja: Record<string, string> = {
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "エディタにラベルを付けてから「PROV生成」を実行してください",
   "provPanel.stepLegend": "手順",
-  "provPanel.usedLegend": "使用",
+  "provPanel.materialLegend": "材料",
+  "provPanel.toolLegend": "ツール",
   "provPanel.resultLegend": "結果",
   "provPanel.attrLegend": "属性",
   "provPanel.graphStats": "{nodes} ノード · {relations} リレーション",
