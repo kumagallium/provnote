@@ -217,7 +217,7 @@ export function useFileManager(authenticated: boolean) {
   }, [setActiveFileId]);
 
   // PROV テンプレートから作成
-  const handleNewFromTemplate = useCallback(() => {
+  const handleNewFromTemplate = useCallback(async () => {
     setActiveFileId(null);
     let doc: ProvNoteDocument = {
       ...PROV_TEMPLATE,
@@ -225,7 +225,7 @@ export function useFileManager(authenticated: boolean) {
       modifiedAt: new Date().toISOString(),
     };
     // ドキュメント来歴: テンプレート作成を記録
-    doc = recordRevision(doc, null, "template_create");
+    doc = await recordRevision(doc, null, "template_create");
     setActiveDoc(doc);
     setEditorKey((k) => k + 1);
   }, [setActiveFileId]);
@@ -332,21 +332,24 @@ export function useFileManager(authenticated: boolean) {
           modifiedAt: now,
         };
         // ドキュメント来歴: 手動派生ノート作成を記録
-        newDoc = recordRevision(newDoc, null, "human_derivation");
+        newDoc = await recordRevision(newDoc, null, "human_derivation");
         const newFileId = await createFile(newDoc.title, newDoc);
 
-        // 元ノートに noteLinks を追加して保存
-        if (activeFileIdRef.current && activeDoc) {
-          const noteLinks = activeDoc.noteLinks ?? [];
+        // 元ノートに noteLinks を追加して保存（Drive から最新を読み直して provenance を引き継ぐ）
+        if (activeFileIdRef.current) {
+          const latestDoc = await loadFile(activeFileIdRef.current);
+          const noteLinks = latestDoc.noteLinks ?? [];
           noteLinks.push({
             targetNoteId: newFileId,
             sourceBlockId,
             type: "derived_from",
           });
-          let updatedDoc: ProvNoteDocument = { ...activeDoc, noteLinks, modifiedAt: now };
+          let updatedDoc: ProvNoteDocument = { ...latestDoc, noteLinks, modifiedAt: now };
           // ドキュメント来歴: 派生元として記録
-          updatedDoc = recordRevision(updatedDoc, activeDoc.pages[0], "derive_source", undefined, true);
+          updatedDoc = await recordRevision(updatedDoc, latestDoc.pages[0], "derive_source", { force: true });
           await saveFile(activeFileIdRef.current, updatedDoc);
+          // キャッシュも更新（次回 handleOpenFile でキャッシュから読む際に最新を返すため）
+          docCacheRef.current.set(activeFileIdRef.current, updatedDoc);
           setActiveDoc(updatedDoc);
         }
 
@@ -385,22 +388,24 @@ export function useFileManager(authenticated: boolean) {
       try {
         // ドキュメント来歴: AI 派生ノート作成を記録
         const model = doc.generatedBy?.model ?? doc.generatedBy?.agent;
-        doc = recordRevision(doc, null, "ai_derivation", model);
+        doc = await recordRevision(doc, null, "ai_derivation", { agentLabel: model });
         const newFileId = await createFile(doc.title, doc);
         const now = new Date().toISOString();
 
-        // 元ノートに noteLinks を追加して保存
-        if (activeFileIdRef.current && activeDoc && doc.derivedFromBlockId) {
-          const noteLinks = activeDoc.noteLinks ?? [];
+        // 元ノートに noteLinks を追加して保存（Drive から最新を読み直して provenance を引き継ぐ）
+        if (activeFileIdRef.current && doc.derivedFromBlockId) {
+          const latestDoc = await loadFile(activeFileIdRef.current);
+          const noteLinks = latestDoc.noteLinks ?? [];
           noteLinks.push({
             targetNoteId: newFileId,
             sourceBlockId: doc.derivedFromBlockId,
             type: "derived_from",
           });
-          let updatedDoc: ProvNoteDocument = { ...activeDoc, noteLinks, modifiedAt: now };
+          let updatedDoc: ProvNoteDocument = { ...latestDoc, noteLinks, modifiedAt: now };
           // ドキュメント来歴: 派生元として記録
-          updatedDoc = recordRevision(updatedDoc, activeDoc.pages[0], "derive_source", undefined, true);
+          updatedDoc = await recordRevision(updatedDoc, latestDoc.pages[0], "derive_source", { force: true });
           await saveFile(activeFileIdRef.current, updatedDoc);
+          docCacheRef.current.set(activeFileIdRef.current, updatedDoc);
           setActiveDoc(updatedDoc);
         }
 
