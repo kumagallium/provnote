@@ -7,8 +7,12 @@ export const ja: Record<string, string> = {
   "label.attr": "属性",
   "label.result": "結果",
   "label.prevStep": "前手順",
+  "label.material": "材料",
+  "label.tool": "ツール",
   "label.step.bracketed": "[手順]",
   "label.used.bracketed": "[使用したもの]",
+  "label.material.bracketed": "[材料]",
+  "label.tool.bracketed": "[ツール]",
   "label.attr.bracketed": "[属性]",
   "label.result.bracketed": "[結果]",
   "label.prevStep.bracketed": "[前手順]",
@@ -221,7 +225,8 @@ export const ja: Record<string, string> = {
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "エディタにラベルを付けてから「PROV生成」を実行してください",
   "provPanel.stepLegend": "手順",
-  "provPanel.usedLegend": "使用",
+  "provPanel.materialLegend": "材料",
+  "provPanel.toolLegend": "ツール",
   "provPanel.resultLegend": "結果",
   "provPanel.attrLegend": "属性",
   "provPanel.graphStats": "{nodes} ノード · {relations} リレーション",
@@ -308,4 +313,8 @@ export const ja: Record<string, string> = {
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "エクスポート中...",
+
+  // ── PROV-JSON-LD エクスポート ──
+  "prov.export": "PROV-JSON-LD",
+  "prov.exportDisabled": "エクスポートするプロヴェナンスデータがありません",
 };

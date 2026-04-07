@@ -5,7 +5,7 @@
 // Phase 3: 関係を埋め込み形式に、テーブルを構造化属性に展開
 // ──────────────────────────────────────────────
 
-import { CORE_LABELS, normalizeLabel, classifyLabel, getHeadingLabelRole, type CoreLabel } from "../context-label/labels";
+import { CORE_LABELS, normalizeLabel, classifyLabel, getHeadingLabelRole, LABEL_TO_ENTITY_SUBTYPE, type CoreLabel } from "../context-label/labels";
 import type { BlockLink } from "../block-link/link-types";
 import { isProvLink } from "../block-link/link-types";
 import { createWarning, type ProvWarning } from "./errors";
@@ -56,6 +56,8 @@ type InternalNode = {
   blockId: string;
   params?: Record<string, string>;
   attributes?: { label: string; blockId: string }[];
+  /** Entity サブタイプ（material / tool） */
+  entitySubtype?: import("../context-label/labels").EntitySubtype;
 };
 
 type InternalRelation = {
@@ -229,10 +231,12 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     return [scopeActId];
   }
 
-  // ── [使用したもの] → Entity + used 関係 ──
+  // ── [材料] / [ツール] → Entity + used 関係 ──
   // Phase 3: テーブルの場合は行ごとに個別 Entity に展開
+  const INPUT_LABELS: CoreLabel[] = ["[材料]", "[ツール]"];
   for (const lb of labeledBlocks) {
-    if (lb.coreLabel === "[使用したもの]") {
+    if (lb.coreLabel && INPUT_LABELS.includes(lb.coreLabel)) {
+      const subtype = lb.coreLabel ? LABEL_TO_ENTITY_SUBTYPE[lb.coreLabel] : undefined;
       if (lb.block.type === "table") {
         // テーブル: 行ごとに個別 Entity を生成
         const parsed = parseStructuredTable(lb.block);
@@ -245,6 +249,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
               label: row.name,
               blockId: lb.block.id,
               params: Object.keys(row.attrs).length > 0 ? row.attrs : undefined,
+              entitySubtype: subtype,
             });
             for (const actId of getActivityIdsForScope(lb.block.id)) {
               relations.push({ "@type": "prov:used", from: actId, to: entityId });
@@ -258,6 +263,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
             "@type": "prov:Entity",
             label: getBlockText(lb.block),
             blockId: lb.block.id,
+            entitySubtype: subtype,
           });
           for (const actId of getActivityIdsForScope(lb.block.id)) {
             relations.push({ "@type": "prov:used", from: actId, to: entityId });
@@ -271,6 +277,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
           "@type": "prov:Entity",
           label: getBlockText(lb.block),
           blockId: lb.block.id,
+          entitySubtype: subtype,
         });
         for (const actId of getActivityIdsForScope(lb.block.id)) {
           relations.push({ "@type": "prov:used", from: actId, to: entityId });
@@ -419,6 +426,10 @@ function buildProvJsonLd(
       "rdfs:label": n.label,
       "provnote:blockId": n.blockId,
     };
+    // Entity サブタイプ（material / tool）
+    if (n.entitySubtype) {
+      jsonLdNode["provnote:entityType"] = n.entitySubtype;
+    }
     // 構造化属性（テーブルから展開された params）
     if (n.params) {
       for (const [k, v] of Object.entries(n.params)) {
@@ -487,7 +498,8 @@ function coreToProvRole(label: CoreLabel, block: any): string | null {
       }
       return "prov:Activity";
     }
-    case "[使用したもの]": return "prov:Entity";
+    case "[材料]": return "prov:Entity";
+    case "[ツール]": return "prov:Entity";
     case "[属性]": return null; // 親ノードのプロパティとして埋め込む
     case "[結果]": return "prov:Entity";
     default: return null;
@@ -564,7 +576,8 @@ function findParentLabeledNodeId(
   const normalized = normalizeLabel(parentLabel);
 
   switch (normalized) {
-    case "[使用したもの]":
+    case "[材料]":
+    case "[ツール]":
       return `entity_${parentId}`;
     case "[結果]":
       return `result_${parentId}`;

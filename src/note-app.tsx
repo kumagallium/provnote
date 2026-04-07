@@ -78,6 +78,7 @@ import {
 } from "./features/asset-browser";
 import { useT, t as tStatic } from "./i18n";
 import { exportNoteToPdf } from "./features/pdf-export";
+import { exportProvJsonLd } from "./features/prov-export";
 
 // hooks
 import { useAutoSave } from "./hooks/use-auto-save";
@@ -388,6 +389,12 @@ function NoteEditorInner({
       setPdfExporting(false);
     }
   }, [title, provDoc, labelStore.labels]);
+
+  // ── PROV-JSON-LD エクスポートハンドラー ──
+  const handleExportProvJsonLd = useCallback(() => {
+    if (!provDoc || provDoc["@graph"].length === 0) return;
+    exportProvJsonLd({ title, provDoc });
+  }, [title, provDoc]);
 
   // ラベル・リンク・インデックステーブル変更時に自動保存トリガー
   const prevLabelsRef = useRef(labelStore.labels);
@@ -834,6 +841,19 @@ function NoteEditorInner({
           title={t("pdf.export")}
         >
           {pdfExporting ? t("pdf.exporting") : t("pdf.export")}
+        </button>
+        <button
+          onClick={handleExportProvJsonLd}
+          disabled={!provDoc || provDoc["@graph"].length === 0}
+          className={cn(
+            "px-3 py-1 text-xs font-medium rounded-md border transition-colors shrink-0",
+            !provDoc || provDoc["@graph"].length === 0
+              ? "border-border text-muted-foreground bg-muted cursor-not-allowed"
+              : "border-border text-muted-foreground hover:bg-muted/50"
+          )}
+          title={!provDoc || provDoc["@graph"].length === 0 ? t("prov.exportDisabled") : t("prov.export")}
+        >
+          {t("prov.export")}
         </button>
       </div>
 

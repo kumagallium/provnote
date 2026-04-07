@@ -7,8 +7,12 @@ export const en: Record<string, string> = {
   "label.attr": "Attributes",
   "label.result": "Results",
   "label.prevStep": "Prior step",
+  "label.material": "Material",
+  "label.tool": "Tool",
   "label.step.bracketed": "[Procedure]",
   "label.used.bracketed": "[Materials]",
+  "label.material.bracketed": "[Material]",
+  "label.tool.bracketed": "[Tool]",
   "label.attr.bracketed": "[Attributes]",
   "label.result.bracketed": "[Results]",
   "label.prevStep.bracketed": "[Prior step]",
@@ -221,7 +225,8 @@ export const en: Record<string, string> = {
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "Add labels to the editor, then run PROV generation",
   "provPanel.stepLegend": "Procedure",
-  "provPanel.usedLegend": "Materials",
+  "provPanel.materialLegend": "Material",
+  "provPanel.toolLegend": "Tool",
   "provPanel.resultLegend": "Results",
   "provPanel.attrLegend": "Attributes",
   "provPanel.graphStats": "{nodes} nodes · {relations} relations",
@@ -308,4 +313,8 @@ export const en: Record<string, string> = {
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "Exporting...",
+
+  // ── PROV-JSON-LD エクスポート ──
+  "prov.export": "PROV-JSON-LD",
+  "prov.exportDisabled": "No provenance data to export",
 };
