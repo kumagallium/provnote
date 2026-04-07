@@ -6,31 +6,31 @@
   Block-based note editor with <b>PROV-DM</b> provenance tracking — built on <a href="https://www.blocknotejs.org/">BlockNote.js</a>.
 </p>
 
+Graphium is an attempt to rethink how scientific notes work. It combines [Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten)-style atomic note-taking — where linking small ideas leads to unexpected discoveries — with [PROV-DM](https://www.w3.org/TR/prov-dm/), a W3C standard that gives those discoveries formal, traceable provenance. When AI enters the picture, it bridges both: AI-generated knowledge is recorded with the same provenance trail as human notes, so you always know where an idea came from.
+
+## Use as much — or as little — as you need
+
+Graphium is designed around **progressive disclosure**. You choose how deep to go:
+
+| Level | What you do | What you get |
+|-------|------------|--------------|
+| **Just notes** | Write and link notes with `@` references | A Zettelkasten-style linked notebook with Google Drive sync |
+| **Some labels** | Add `#` context labels to key blocks | Those blocks gain PROV-DM structure — a provenance graph emerges for the labeled parts |
+| **Full labeling** | Label all blocks systematically | Complete provenance tracking across your entire workflow |
+
+**You don't need to label anything** to get value from Graphium. Start with plain linked notes. When you want traceability for a specific experiment or project, add labels to just the blocks that matter. The provenance layer activates only where you choose.
+
+This gradient of label density is a core design decision — not a limitation.
+
 ## Try it now
 
 **[→ Open Graphium on GitHub Pages](https://kumagallium.github.io/Graphium/)**
 
 No installation required — works in your browser. Notes are saved to Google Drive or your browser's local storage.
 
-## What is Graphium?
+## Interoperability
 
-Graphium is a **note-taking app** that automatically turns structured notes into traceable provenance graphs.
-
-Every note is a plain block-based document. When you add a **context label** (like `[Procedure]` or `[Result]`) to a block, Graphium maps it to a [PROV-DM](https://www.w3.org/TR/prov-dm/) role and builds a provenance graph behind the scenes — no extra effort required.
-
-| Building block | What it does |
-|---------------|-------------|
-| **BlockNote.js** | A modern block-based rich text editor |
-| **Zettelkasten** | Atomic, interlinked note-taking via `@` references |
-| **PROV-DM** | W3C standard for provenance — applied via `#` context labels (optional) |
-| **AI assistant** | AI-powered note derivation with full provenance metadata (optional) |
-
-### Who is this for?
-
-- **Researchers** who want structured, traceable records with provenance — without leaving a familiar note-taking interface
-- **Anyone** who wants a Zettelkasten-style linked note editor with Google Drive sync
-
-PROV-DM labeling is entirely optional. Without labels, Graphium works as a standard linked note editor.
+Graphium exports provenance as **[PROV-JSON-LD](https://www.w3.org/submissions/2024/SUBM-prov-jsonld-20240825/)** — a W3C standard built on Linked Data. This is not a proprietary format: any tool that understands PROV-DM or JSON-LD can consume Graphium's output. Provenance data is portable by design.
 
 ## How to use
 
