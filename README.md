@@ -122,6 +122,27 @@ Google Drive sync works without any configuration. To enable AI features, you ne
 - **Google Drive storage** — notes saved as `.provnote.json` files
 - **Google OAuth 2.0** authentication
 
+### Screenshots
+
+<table>
+  <tr>
+    <td><b>Editor with context labels & sidebar</b></td>
+    <td><b>Provenance graph (PROV-DM)</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/sandbox.png" alt="Editor" width="400" /></td>
+    <td><img src="docs/screenshots/prov-generator.png" alt="Provenance graph" width="400" /></td>
+  </tr>
+  <tr>
+    <td><b>Inter-note network graph</b></td>
+    <td><b>Label gallery (index table)</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/graph.png" alt="Network graph" width="400" /></td>
+    <td><img src="docs/screenshots/label-gallery.png" alt="Label gallery" width="400" /></td>
+  </tr>
+</table>
+
 ## Architecture
 
 Graphium is a **standalone note editor**. It does not require any backend server to function — notes are stored in Google Drive or the browser's local storage.
