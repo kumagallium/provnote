@@ -1,13 +1,8 @@
 // .provnote-index.json の型定義と Drive 読み書き
 // 全ノートのメタデータを1ファイルに集約し、一覧・検索・被参照計算を高速化する
 
-import {
-  listFiles,
-  loadFile,
-  type ProvNoteDocument,
-  type ProvNoteFile,
-} from "../../lib/google-drive";
-import { getAccessToken } from "../../lib/google-auth";
+import type { ProvNoteDocument, ProvNoteFile } from "../../lib/document-types";
+import { getActiveProvider } from "../../lib/storage/registry";
 
 // ── 型定義 ──
 
@@ -49,18 +44,9 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const INDEX_FILE_NAME = ".provnote-index.json";
 
-async function authedFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  if (!token) throw new Error("未認証です");
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...options.headers, Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Drive API エラー (${res.status}): ${body}`);
-  }
-  return res;
+// ストレージプロバイダー経由の認証付き fetch
+function authedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  return getActiveProvider().authedFetch(url, options);
 }
 
 // ProvNote フォルダ ID を取得（google-drive.ts の getOrCreateFolder を再利用したいが、
@@ -309,7 +295,7 @@ export async function ensureIndex(
   for (const file of files) {
     if (!docCache.has(file.id)) {
       try {
-        const doc = await loadFile(file.id);
+        const doc = await getActiveProvider().loadFile(file.id);
         docCache.set(file.id, doc);
       } catch {
         // スキップ

@@ -1,7 +1,7 @@
 // .provnote-media-index.json の型定義と Drive 読み書き
 // 全メディアファイルのメタデータを1ファイルに集約し、ギャラリー表示を高速化する
 
-import { getAccessToken } from "../../lib/google-auth";
+import { getActiveProvider } from "../../lib/storage/registry";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -58,18 +58,9 @@ export function mimeToMediaType(mimeType: string): MediaType {
 
 // ── Drive API ──
 
-async function authedFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  if (!token) throw new Error("未認証です");
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...options.headers, Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Drive API エラー (${res.status}): ${body}`);
-  }
-  return res;
+// ストレージプロバイダー経由の認証付き fetch
+function authedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  return getActiveProvider().authedFetch(url, options);
 }
 
 // ProvNote フォルダ ID を取得

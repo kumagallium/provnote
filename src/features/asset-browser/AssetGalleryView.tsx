@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../../i18n";
-import { fetchMediaBlobUrl, extractDriveFileId } from "../../lib/google-drive";
+import { getActiveProvider } from "../../lib/storage/registry";
 /** 日付を YYYY-MM-DD 形式でフォーマット */
 function formatDate(isoDate: string): string {
   const d = new Date(isoDate);
@@ -80,11 +80,11 @@ function VideoThumbnail({ entry }: { entry: MediaIndexEntry }) {
   // visible になったら Blob URL を取得
   useEffect(() => {
     if (!visible) return;
-    const fileId = extractDriveFileId(entry.url);
+    const fileId = getActiveProvider().extractFileId(entry.url);
     if (!fileId || !videoRef.current) return;
 
     let cancelled = false;
-    fetchMediaBlobUrl(fileId).then((blobUrl) => {
+    getActiveProvider().getMediaBlobUrl(fileId).then((blobUrl) => {
       if (cancelled || !videoRef.current) return;
       videoRef.current.src = blobUrl;
       videoRef.current.load();

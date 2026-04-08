@@ -4,7 +4,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
-import { fetchMediaBlobUrl, extractDriveFileId } from "../../lib/google-drive";
+import { getActiveProvider } from "../../lib/storage/registry";
 import { useT } from "../../i18n";
 import type { MediaIndexEntry } from "./media-index";
 
@@ -95,11 +95,11 @@ function BlobMediaPlayer({
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const fileId = extractDriveFileId(entry.url);
+    const fileId = getActiveProvider().extractFileId(entry.url);
     if (!fileId) { setError(true); return; }
 
     let cancelled = false;
-    fetchMediaBlobUrl(fileId)
+    getActiveProvider().getMediaBlobUrl(fileId)
       .then((url) => { if (!cancelled) setBlobUrl(url); })
       .catch(() => { if (!cancelled) setError(true); });
 

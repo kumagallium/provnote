@@ -12,11 +12,8 @@ import {
   BlockColorsItem,
   SideMenu,
 } from "@blocknote/react";
-import {
-  loadFile,
-  saveFile,
-  type ProvNoteDocument,
-} from "../../lib/google-drive";
+import type { ProvNoteDocument } from "../../lib/document-types";
+import { getActiveProvider } from "../../lib/storage/registry";
 import { SandboxEditor } from "../../base/editor";
 import { LabelStoreProvider, useLabelStore } from "@features/context-label/store";
 import { LinkStoreProvider, useLinkStore } from "@features/block-link/store";
@@ -112,7 +109,7 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate }: SidePeekProps
     setSaveStatus("saved");
     docRef.current = null;
 
-    loadFile(noteId)
+    getActiveProvider().loadFile(noteId)
       .then((d) => {
         if (!cancelled) {
           setDoc(d);
@@ -207,7 +204,7 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate }: SidePeekProps
 
     setSaveStatus("saving");
     try {
-      await saveFile(noteId, updatedDoc);
+      await getActiveProvider().saveFile(noteId, updatedDoc);
       docRef.current = updatedDoc;
       setSaveStatus("saved");
     } catch (err) {

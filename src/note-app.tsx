@@ -54,15 +54,9 @@ import {
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
 import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile } from "./features/settings";
-import { useGoogleAuth } from "./lib/use-google-auth";
-import {
-  type ProvNoteDocument,
-  fetchMediaBlobUrl,
-  extractDriveFileId,
-  getLatestRevisionId,
-  getUserEmail,
-} from "./lib/google-drive";
-import type { NoteLink } from "./lib/google-drive";
+import { useStorage } from "./lib/storage/use-storage";
+import { getActiveProvider } from "./lib/storage/registry";
+import type { ProvNoteDocument, NoteLink } from "./lib/document-types";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
@@ -93,7 +87,7 @@ import { NoteSideMenu, collectHeadingScope, setOpenLinkDropdownFn } from "./comp
 import { NoteFormattingToolbar } from "./components/formatting-toolbar";
 import { SourceDocPanel, extractBlockTitle } from "./components/SourceDocPanel";
 
-import type { ProvNoteFile } from "./lib/google-drive";
+import type { ProvNoteFile } from "./lib/document-types";
 import type { NoteGraphData } from "./features/network-graph";
 
 // ── エディタ本体 ──
@@ -335,7 +329,7 @@ function NoteEditorInner({
       actType = detected.type;
       actLabel = detected.agentLabel;
     }
-    const email = await getUserEmail() ?? undefined;
+    const email = await getActiveProvider().getUserEmail() ?? undefined;
     doc = await recordRevision(doc, prevPageRef.current, actType, { agentLabel: actLabel, email });
     // 前回保存状態を更新
     prevPageRef.current = structuredClone(doc.pages[0]);
@@ -355,7 +349,7 @@ function NoteEditorInner({
       const revisions = doc.documentProvenance.revisions;
       const lastRev = revisions[revisions.length - 1];
       if (lastRev && !lastRev.driveRevisionId) {
-        getLatestRevisionId(fileId).then((driveRevId) => {
+        getActiveProvider().getRevisionId?.(fileId).then((driveRevId) => {
           if (driveRevId) lastRev.driveRevisionId = driveRevId;
         });
       }
@@ -694,10 +688,10 @@ function NoteEditorInner({
     const processElement = (el: Element) => {
       const src = el.getAttribute("src");
       if (!src || !src.includes("googleusercontent.com") || src.startsWith("blob:")) return;
-      const driveFileId = extractDriveFileId(src);
+      const driveFileId = getActiveProvider().extractFileId(src);
       if (!driveFileId) return;
 
-      fetchMediaBlobUrl(driveFileId).then((blobUrl) => {
+      getActiveProvider().getMediaBlobUrl(driveFileId).then((blobUrl) => {
         localBlobUrls.push(blobUrl);
         el.setAttribute("src", blobUrl);
         if (el instanceof HTMLVideoElement || el instanceof HTMLAudioElement) {
@@ -1038,7 +1032,7 @@ function NoteEditorInner({
 
 // ── メインアプリ ──
 export function NoteApp() {
-  const { authenticated, loading: authLoading, signIn, signOut } = useGoogleAuth();
+  const { authenticated, loading: authLoading, signIn, signOut } = useStorage();
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
