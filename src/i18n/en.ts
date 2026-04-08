@@ -217,12 +217,13 @@ export const en: Record<string, string> = {
   "settings.modelHelp": "Select the AI model to use. If not specified, the server default is used.",
 
   // ── AI チャット追加 ──
-  "aiChat.helpText": "Select a block and ask AI a question.\nCmd+Enter to send",
+  "aiChat.helpText": "Ask AI about this page, or select a block for focused questions.\nCmd+Enter to send",
   "aiChat.thinking": "Thinking...",
   "aiChat.sendHint": "Cmd+Enter to send",
   "aiChat.newChat": "+ New chat",
   "aiChat.emptyChat": "(empty chat)",
   "aiChat.messageCount": "{count} messages",
+  "aiChat.pageScope": "Page",
   "aiChat.insertToNote": "Insert into note",
   "aiChat.deriveAsNote": "Derive as note",
 

@@ -205,7 +205,10 @@ function ChatListView({
           {t("aiChat.newChat")}
         </button>
         {chats.map((chat) => {
-          const scopeId = chat.scopeBlockId ? chat.scopeBlockId.slice(0, 8) : "";
+          const isPageChat = chat.scopeType === "page";
+          const scopeLabel = isPageChat
+            ? t("aiChat.pageScope")
+            : chat.scopeBlockId ? chat.scopeBlockId.slice(0, 8) : "";
           const firstUserMsg = chat.messages.find((m) => m.role === "user");
           const preview = firstUserMsg?.content.slice(0, 60) || t("aiChat.emptyChat");
           const date = new Date(chat.modifiedAt).toLocaleDateString("ja-JP", {
@@ -218,7 +221,7 @@ function ChatListView({
               className="w-full text-left px-3 py-2 rounded-lg hover:bg-background transition-colors mb-1"
             >
               <div className="flex items-center gap-1.5 mb-0.5">
-                {scopeId && <span className="text-[10px] font-medium text-violet-600 truncate">{scopeId}</span>}
+                {scopeLabel && <span className={`text-[10px] font-medium truncate ${isPageChat ? "text-emerald-600" : "text-violet-600"}`}>{scopeLabel}</span>}
                 <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{date}</span>
               </div>
               <div className="text-xs text-foreground/70 truncate">{preview}</div>

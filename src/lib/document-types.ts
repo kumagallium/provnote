@@ -32,7 +32,7 @@ export type ChatMessage = {
 export type ScopeChat = {
   id: string;
   scopeBlockId: string;
-  scopeType: "heading" | "block";
+  scopeType: "heading" | "block" | "page";
   messages: ChatMessage[];
   generatedBy?: {
     agent: string;
