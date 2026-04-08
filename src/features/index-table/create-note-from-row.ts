@@ -1,6 +1,7 @@
 // インデックステーブルの行からノートを作成するロジック
 
-import { createFile, type ProvNoteDocument, type ProvNoteFile } from "../../lib/google-drive";
+import type { ProvNoteDocument, ProvNoteFile } from "../../lib/document-types";
+import { getActiveProvider } from "../../lib/storage/registry";
 
 // テーブル行の1列目テキストを取得する
 export function getFirstCellText(tableBlock: any, rowIndex: number): string {
@@ -85,7 +86,7 @@ export async function createNoteFromRow(
   };
 
   // Google Drive に作成
-  const fileId = await createFile(title, newDoc);
+  const fileId = await getActiveProvider().createFile(title, newDoc);
 
   // ストアの linkedNotes を更新
   store.setLinkedNote(tableBlockId, title, fileId);

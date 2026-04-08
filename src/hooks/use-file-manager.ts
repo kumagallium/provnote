@@ -2,16 +2,8 @@
 // NoteApp のファイル一覧/キャッシュ/開く/新規/保存/削除/派生/グラフ/インデックスを集約
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  listFiles,
-  loadFile,
-  createFile,
-  saveFile,
-  deleteFile,
-  uploadMediaFileWithMeta,
-  type ProvNoteFile,
-  type ProvNoteDocument,
-} from "../lib/google-drive";
+import type { ProvNoteFile, ProvNoteDocument } from "../lib/document-types";
+import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
 import {
@@ -46,6 +38,15 @@ import {
   type MediaIndexEntry,
   type MediaType,
 } from "../features/asset-browser";
+
+// ストレージプロバイダー経由のファイル操作ヘルパー
+const storage = () => getActiveProvider();
+const listFiles = () => storage().listFiles();
+const loadFile = (id: string) => storage().loadFile(id);
+const createFile = (title: string, content: ProvNoteDocument) => storage().createFile(title, content);
+const saveFile = (id: string, content: ProvNoteDocument) => storage().saveFile(id, content);
+const deleteFile = (id: string) => storage().deleteFile(id);
+const uploadMediaFileWithMeta = (file: File) => storage().uploadMedia(file);
 
 export function useFileManager(authenticated: boolean) {
   const [files, setFiles] = useState<ProvNoteFile[]>([]);

@@ -4,7 +4,7 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { fetchMediaBlobUrl, extractDriveFileId } from "../../lib/google-drive";
+import { getActiveProvider } from "../../lib/storage/registry";
 
 // pdf.js ワーカーの設定（react-pdf v10 推奨）
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -32,7 +32,7 @@ export const PdfViewerBlock = createReactBlockSpec(
       // Google Drive URL → Blob URL に変換（CORS 回避）
       useEffect(() => {
         if (!url) return;
-        const fileId = extractDriveFileId(url);
+        const fileId = getActiveProvider().extractFileId(url);
         if (!fileId) {
           // Drive URL でなければそのまま使用（ローカル blob URL など）
           setBlobUrl(url);
@@ -40,7 +40,7 @@ export const PdfViewerBlock = createReactBlockSpec(
         }
         let cancelled = false;
         setLoading(true);
-        fetchMediaBlobUrl(fileId)
+        getActiveProvider().getMediaBlobUrl(fileId)
           .then((blob) => {
             if (!cancelled) setBlobUrl(blob);
           })

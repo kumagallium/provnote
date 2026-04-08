@@ -1,8 +1,22 @@
 // Google Drive API v3 操作
 // ProvNote 専用フォルダ内にノートファイルを保存・読み込み
+//
+// 注意: このファイルは StorageProvider 抽象化後も残しているが、
+// 新規コードは src/lib/storage/ 経由でアクセスすること。
+// 型定義は src/lib/document-types.ts に移動済み（ここから再エクスポート）。
 
 import { getAccessToken } from "./google-auth";
-import type { DocumentProvenance } from "../features/document-provenance/types";
+import type { ProvNoteDocument, ProvNoteFile } from "./document-types";
+
+// ドメイン型を再エクスポート（既存コードの互換性維持）
+export type {
+  ProvNoteFile,
+  ProvNoteDocument,
+  ProvNotePage,
+  NoteLink,
+  ChatMessage,
+  ScopeChat,
+} from "./document-types";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -10,90 +24,6 @@ const FOLDER_NAME = "ProvNote";
 const UPLOAD_FILES_FOLDER = "uploadFiles";
 const MIME_FOLDER = "application/vnd.google-apps.folder";
 const MIME_JSON = "application/json";
-
-// ProvNote ファイルのメタデータ
-export type ProvNoteFile = {
-  id: string;
-  name: string;
-  modifiedTime: string;
-  createdTime: string;
-};
-
-// ノート間リンク（派生関係）
-export type NoteLink = {
-  /** リンク先ノートの Google Drive ファイル ID */
-  targetNoteId: string;
-  /** リンク元のブロック ID */
-  sourceBlockId: string;
-  /** リンクの種類 */
-  type: "derived_from";
-};
-
-// AI チャットメッセージ
-export type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-};
-
-// スコープに紐づく AI チャット
-export type ScopeChat = {
-  id: string;
-  scopeBlockId: string;
-  scopeType: "heading" | "block";
-  messages: ChatMessage[];
-  generatedBy?: {
-    agent: string;
-    sessionId: string;
-    model?: string;
-    tokenUsage?: { input_tokens: number; output_tokens: number; total_tokens: number };
-  };
-  createdAt: string;
-  modifiedAt: string;
-};
-
-// ProvNote ファイルの内容（エディタの完全な状態）
-export type ProvNoteDocument = {
-  version: 1 | 2;
-  title: string;
-  pages: ProvNotePage[];
-  /** ノート間リンク（派生先ノートへの参照） */
-  noteLinks?: NoteLink[];
-  /** このノートの派生元ノート ID */
-  derivedFromNoteId?: string;
-  /** このノートの派生元ブロック ID */
-  derivedFromBlockId?: string;
-  /** AI エージェントによる生成メタデータ */
-  generatedBy?: {
-    agent: string;
-    sessionId: string;
-    model?: string;
-    tokenUsage?: { input_tokens: number; output_tokens: number; total_tokens: number };
-  };
-  /** スコープ別 AI チャット履歴 */
-  chats?: ScopeChat[];
-  /** ドキュメント来歴（編集操作の PROV-DM 記録） */
-  documentProvenance?: DocumentProvenance;
-  createdAt: string;
-  modifiedAt: string;
-};
-
-export type ProvNotePage = {
-  id: string;
-  title: string;
-  blocks: any[];
-  labels: Record<string, string>;
-  /** PROV 層リンク（DAG 制約） */
-  provLinks: any[];
-  /** 知識層リンク（循環 OK） */
-  knowledgeLinks: any[];
-  /** @deprecated v1 互換: 旧 links フィールド。読み込み時に provLinks/knowledgeLinks に変換する */
-  links?: any[];
-  /** インデックステーブル: テーブルブロック ID → { サンプル名 → ノートファイル ID } */
-  indexTables?: Record<string, Record<string, string>>;
-  derivedFromPageId?: string;
-  derivedFromBlockId?: string;
-};
 
 // 認証付き fetch
 async function authedFetch(

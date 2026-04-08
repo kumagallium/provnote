@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../../i18n";
-import { fetchMediaBlobUrl, extractDriveFileId } from "../../lib/google-drive";
+import { getActiveProvider } from "../../lib/storage/registry";
 import type { MediaIndex, MediaIndexEntry, MediaType } from "./media-index";
 
 // 動画サムネイル（AssetGalleryView と同じパターン）
@@ -12,10 +12,10 @@ function VideoThumb({ entry }: { entry: MediaIndexEntry }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const fileId = extractDriveFileId(entry.url);
+    const fileId = getActiveProvider().extractFileId(entry.url);
     if (!fileId || !videoRef.current) return;
     let cancelled = false;
-    fetchMediaBlobUrl(fileId).then((blobUrl) => {
+    getActiveProvider().getMediaBlobUrl(fileId).then((blobUrl) => {
       if (cancelled || !videoRef.current) return;
       videoRef.current.src = blobUrl;
       videoRef.current.load();

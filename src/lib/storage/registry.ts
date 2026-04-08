@@ -1,0 +1,57 @@
+// ストレージプロバイダーの登録・切り替え管理
+
+import type { StorageProvider } from "./types";
+import { GoogleDriveProvider } from "./providers/google-drive";
+
+const STORAGE_KEY = "provnote_storage_provider";
+
+const providers = new Map<string, StorageProvider>();
+let activeProvider: StorageProvider | null = null;
+
+/** プロバイダーを登録 */
+export function registerProvider(provider: StorageProvider): void {
+  providers.set(provider.id, provider);
+}
+
+/** アクティブなプロバイダーを設定 */
+export function setActiveProvider(id: string): StorageProvider {
+  const provider = providers.get(id);
+  if (!provider) throw new Error(`未知のストレージプロバイダー: ${id}`);
+  activeProvider = provider;
+  localStorage.setItem(STORAGE_KEY, id);
+  return provider;
+}
+
+/** 現在のアクティブプロバイダーを取得 */
+export function getActiveProvider(): StorageProvider {
+  if (!activeProvider) throw new Error("ストレージプロバイダーが未設定です");
+  return activeProvider;
+}
+
+/** 利用可能なプロバイダー一覧を取得 */
+export function getAvailableProviders(): StorageProvider[] {
+  return Array.from(providers.values());
+}
+
+/** デフォルトプロバイダーで初期化 */
+export function initProviders(): void {
+  // 既に初期化済みならスキップ
+  if (providers.size > 0) return;
+
+  // Google Drive を登録（現時点で唯一のプロバイダー）
+  registerProvider(new GoogleDriveProvider());
+
+  // 保存された設定を復元、なければ Google Drive をデフォルトに
+  const savedId = localStorage.getItem(STORAGE_KEY) ?? "google-drive";
+  const provider = providers.get(savedId);
+  if (provider) {
+    activeProvider = provider;
+  } else {
+    // 不明なプロバイダーが保存されていた場合はフォールバック
+    activeProvider = providers.get("google-drive")!;
+    localStorage.setItem(STORAGE_KEY, "google-drive");
+  }
+}
+
+// モジュール読み込み時に即座に初期化（getActiveProvider() が常に使えるようにする）
+initProviders();
