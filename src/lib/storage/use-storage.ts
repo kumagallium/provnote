@@ -49,6 +49,9 @@ export function useStorage() {
     (providerId?: string) => {
       if (providerId && provider?.id !== providerId) {
         // 別プロバイダーへの切り替えサインイン（例: ログイン画面 → Google）
+        // 旧プロバイダーの UI キャッシュをクリア（ファイル ID 体系が異なるため）
+        localStorage.removeItem("provnote_last_file");
+        localStorage.removeItem("provnote-recent-notes");
         // init 完了後に signIn を自動実行するようフラグを立てる
         pendingSignInRef.current = true;
         setActiveProvider(providerId);
