@@ -163,6 +163,23 @@ export function useFileManager(authenticated: boolean) {
     }
   }, [setActiveFileId]);
 
+  // 認証が切れたら全 state をリセット（プロバイダー切り替え時に古いデータが残るのを防ぐ）
+  useEffect(() => {
+    if (!authenticated) {
+      setFiles([]);
+      setNoteIndex(null);
+      noteIndexRef.current = null;
+      setMediaIndex(null);
+      mediaIndexRef.current = null;
+      setActiveDoc(null);
+      setSourceDoc(null);
+      _setActiveFileId(null);
+      activeFileIdRef.current = null;
+      docCacheRef.current.clear();
+      setNoteGraphData({ nodes: [], edges: [] });
+    }
+  }, [authenticated]);
+
   // 認証完了後にファイル一覧を取得し、インデックスを構築、最後に開いたファイルを復元
   useEffect(() => {
     if (!authenticated) return;
