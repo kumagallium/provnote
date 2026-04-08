@@ -1,9 +1,11 @@
 // ストレージプロバイダーの React Hook
 // useGoogleAuth の代替として、プロバイダー非依存の認証状態管理を提供
 
-import { useEffect, useState } from "react";
-import { getActiveProvider, initProviders } from "./registry";
+import { useCallback, useEffect, useState } from "react";
+import { getActiveProvider, setActiveProvider, initProviders } from "./registry";
 import type { StorageProvider } from "./types";
+
+const STORAGE_KEY = "provnote_storage_provider";
 
 /** ストレージプロバイダーの認証状態を管理する Hook */
 export function useStorage() {
@@ -35,7 +37,24 @@ export function useStorage() {
   }, []);
 
   const signIn = () => provider?.signIn();
-  const signOut = () => provider?.signOut();
 
-  return { authenticated, loading, signIn, signOut, provider };
+  // サインアウト: プロバイダー設定をリセットしてログイン画面に戻す
+  const signOut = useCallback(() => {
+    provider?.signOut();
+    // プロバイダー設定をクリア（次回リロード時にログイン画面を表示）
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("provnote_last_file");
+    localStorage.removeItem("provnote-recent-notes");
+  }, [provider]);
+
+  // プロバイダーを切り替え（ページリロードで全状態をリセット）
+  const switchProvider = useCallback((id: string) => {
+    setActiveProvider(id);
+    // 旧プロバイダーのキャッシュをクリア
+    localStorage.removeItem("provnote_last_file");
+    localStorage.removeItem("provnote-recent-notes");
+    window.location.reload();
+  }, []);
+
+  return { authenticated, loading, signIn, signOut, provider, switchProvider };
 }

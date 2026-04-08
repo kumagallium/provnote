@@ -1,0 +1,240 @@
+// ローカルストレージプロバイダー（IndexedDB ベース）
+// Google アカウント不要でオフライン利用可能
+
+import type { StorageProvider, AuthState, MediaUploadResult } from "../types";
+import type { ProvNoteDocument, ProvNoteFile } from "../../document-types";
+
+const DB_NAME = "provnote-local";
+const DB_VERSION = 1;
+
+// IndexedDB ストア名
+const STORE_FILES = "files";        // ノートファイル
+const STORE_MEDIA = "media";        // メディアファイル（Blob）
+
+/** IndexedDB から DB を取得 */
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_FILES)) {
+        db.createObjectStore(STORE_FILES, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(STORE_MEDIA)) {
+        db.createObjectStore(STORE_MEDIA, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** IndexedDB トランザクションヘルパー */
+async function withStore<T>(
+  storeName: string,
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+    const req = fn(store);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** 全件取得ヘルパー */
+async function getAll<T>(storeName: string): Promise<T[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** UUID 生成 */
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
+// 認証状態リスナー
+let authListeners: Array<(state: AuthState) => void> = [];
+let signedIn = false;
+
+export class LocalStorageProvider implements StorageProvider {
+  readonly id = "local";
+  readonly displayName = "Local (Offline)";
+
+  async init(): Promise<void> {
+    // IndexedDB が使えるか確認
+    await openDB();
+    // ローカルは即座にサインイン状態
+    signedIn = true;
+    authListeners.forEach((fn) => fn(this.getAuthState()));
+  }
+
+  signIn(): void {
+    signedIn = true;
+    authListeners.forEach((fn) => fn(this.getAuthState()));
+  }
+
+  signOut(): void {
+    signedIn = false;
+    authListeners.forEach((fn) => fn(this.getAuthState()));
+  }
+
+  getAuthState(): AuthState {
+    return { isSignedIn: signedIn, userEmail: null };
+  }
+
+  onAuthChange(fn: (state: AuthState) => void): () => void {
+    authListeners.push(fn);
+    return () => {
+      authListeners = authListeners.filter((l) => l !== fn);
+    };
+  }
+
+  async listFiles(): Promise<ProvNoteFile[]> {
+    const records = await getAll<{ id: string; name: string; content: ProvNoteDocument; modifiedTime: string; createdTime: string }>(STORE_FILES);
+    return records
+      // アプリ内部データ（インデックス等）を除外
+      .filter((r) => !r.id.startsWith("__app__"))
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        modifiedTime: r.modifiedTime,
+        createdTime: r.createdTime,
+      }))
+      .sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime());
+  }
+
+  async loadFile(fileId: string): Promise<ProvNoteDocument> {
+    const record = await withStore<any>(STORE_FILES, "readonly", (store) =>
+      store.get(fileId)
+    );
+    if (!record) throw new Error(`ファイルが見つかりません: ${fileId}`);
+    return record.content;
+  }
+
+  async createFile(title: string, content: ProvNoteDocument): Promise<string> {
+    const id = generateId();
+    const now = new Date().toISOString();
+    const name = `${title}.provnote.json`;
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.put({ id, name, content, modifiedTime: now, createdTime: now })
+    );
+    return id;
+  }
+
+  async saveFile(fileId: string, content: ProvNoteDocument): Promise<void> {
+    const existing = await withStore<any>(STORE_FILES, "readonly", (store) =>
+      store.get(fileId)
+    );
+    const now = new Date().toISOString();
+    const name = `${content.title}.provnote.json`;
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.put({
+        id: fileId,
+        name,
+        content,
+        modifiedTime: now,
+        createdTime: existing?.createdTime ?? now,
+      })
+    );
+  }
+
+  async deleteFile(fileId: string): Promise<void> {
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.delete(fileId)
+    );
+  }
+
+  async uploadMedia(file: File): Promise<MediaUploadResult> {
+    const id = generateId();
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+    const url = URL.createObjectURL(blob);
+
+    // IndexedDB にメタデータと Blob を保存
+    await withStore(STORE_MEDIA, "readwrite", (store) =>
+      store.put({ id, name: file.name, mimeType: file.type, blob, createdTime: new Date().toISOString() })
+    );
+
+    return { fileId: id, url, name: file.name, mimeType: file.type };
+  }
+
+  async getMediaBlobUrl(fileId: string): Promise<string> {
+    const record = await withStore<any>(STORE_MEDIA, "readonly", (store) =>
+      store.get(fileId)
+    );
+    if (!record?.blob) throw new Error(`メディアが見つかりません: ${fileId}`);
+    return URL.createObjectURL(record.blob);
+  }
+
+  extractFileId(url: string): string | null {
+    // ローカルの Blob URL からは ID を抽出できない
+    // メディアインデックスの fileId で管理する
+    return null;
+  }
+
+  async getUserEmail(): Promise<string | null> {
+    return null;
+  }
+
+  // ローカルはリビジョン管理なし
+  // getRevisionId は定義しない（オプショナル）
+
+  async authedFetch(_url: string, _options?: RequestInit): Promise<Response> {
+    throw new Error("ローカルストレージでは authedFetch は使用できません");
+  }
+
+  // --- アプリデータ（インデックスファイル等を IndexedDB に保存） ---
+
+  async readAppData(key: string): Promise<unknown | null> {
+    try {
+      const record = await withStore<any>(STORE_FILES, "readonly", (store) =>
+        store.get(`__app__${key}`)
+      );
+      return record?.content ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async writeAppData(key: string, data: unknown): Promise<void> {
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.put({ id: `__app__${key}`, name: key, content: data, modifiedTime: new Date().toISOString(), createdTime: new Date().toISOString() })
+    );
+  }
+
+  // --- メディア管理 ---
+
+  async renameMedia(fileId: string, newName: string): Promise<void> {
+    const record = await withStore<any>(STORE_MEDIA, "readonly", (store) =>
+      store.get(fileId)
+    );
+    if (record) {
+      record.name = newName;
+      await withStore(STORE_MEDIA, "readwrite", (store) => store.put(record));
+    }
+  }
+
+  async deleteMedia(fileId: string): Promise<void> {
+    await withStore(STORE_MEDIA, "readwrite", (store) =>
+      store.delete(fileId)
+    );
+  }
+
+  async listMediaFiles(): Promise<{ id: string; name: string; mimeType: string; createdTime: string }[]> {
+    const records = await getAll<{ id: string; name: string; mimeType: string; createdTime: string }>(STORE_MEDIA);
+    return records;
+  }
+
+  clearCache(): void {
+    // ローカルにキャッシュ管理は不要
+  }
+}

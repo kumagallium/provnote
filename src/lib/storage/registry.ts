@@ -2,6 +2,7 @@
 
 import type { StorageProvider } from "./types";
 import { GoogleDriveProvider } from "./providers/google-drive";
+import { LocalStorageProvider } from "./providers/local";
 
 const STORAGE_KEY = "provnote_storage_provider";
 
@@ -40,8 +41,9 @@ export function initProviders(): void {
   // 既に初期化済みならスキップ
   if (providers.size > 0) return;
 
-  // Google Drive を登録（現時点で唯一のプロバイダー）
+  // プロバイダーを登録
   registerProvider(new GoogleDriveProvider());
+  registerProvider(new LocalStorageProvider());
 
   // 保存された設定を復元、なければ Google Drive をデフォルトに
   const savedId = (typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null) ?? "google-drive";

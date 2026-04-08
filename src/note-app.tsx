@@ -1032,7 +1032,7 @@ function NoteEditorInner({
 
 // ── メインアプリ ──
 export function NoteApp() {
-  const { authenticated, loading: authLoading, signIn, signOut } = useStorage();
+  const { authenticated, loading: authLoading, signIn, signOut, switchProvider } = useStorage();
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
@@ -1052,7 +1052,7 @@ export function NoteApp() {
 
   // 未認証
   if (!authenticated) {
-    return <LoginScreen onSignIn={signIn} />;
+    return <LoginScreen onSignIn={signIn} onSelectLocal={() => switchProvider("local")} />;
   }
 
   return (
