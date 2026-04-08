@@ -86,6 +86,12 @@ async function findIndexFileId(): Promise<string | null> {
 
 // インデックスファイルを読み込み
 export async function readIndexFile(): Promise<ProvNoteIndex | null> {
+  // プロバイダーが readAppData をサポートしていればそちらを使う
+  const provider = getActiveProvider();
+  if (provider.readAppData) {
+    return (await provider.readAppData("note-index")) as ProvNoteIndex | null;
+  }
+  // Drive API 経由（Google Drive プロバイダー）
   const fileId = await findIndexFileId();
   if (!fileId) return null;
   const res = await authedFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
@@ -94,6 +100,13 @@ export async function readIndexFile(): Promise<ProvNoteIndex | null> {
 
 // インデックスファイルを保存（新規作成 or 上書き）
 export async function saveIndexFile(index: ProvNoteIndex): Promise<void> {
+  // プロバイダーが writeAppData をサポートしていればそちらを使う
+  const provider = getActiveProvider();
+  if (provider.writeAppData) {
+    await provider.writeAppData("note-index", index);
+    return;
+  }
+  // Drive API 経由（Google Drive プロバイダー）
   const fileId = await findIndexFileId();
   const body = JSON.stringify(index);
 

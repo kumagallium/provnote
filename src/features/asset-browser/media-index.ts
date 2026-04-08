@@ -99,6 +99,10 @@ async function findIndexFileId(): Promise<string | null> {
 
 /** メディアインデックスを読み込み */
 export async function readMediaIndex(): Promise<MediaIndex | null> {
+  const provider = getActiveProvider();
+  if (provider.readAppData) {
+    return (await provider.readAppData("media-index")) as MediaIndex | null;
+  }
   const fileId = await findIndexFileId();
   if (!fileId) return null;
   const res = await authedFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
@@ -107,6 +111,11 @@ export async function readMediaIndex(): Promise<MediaIndex | null> {
 
 /** メディアインデックスを保存（新規作成 or 上書き） */
 export async function saveMediaIndex(index: MediaIndex): Promise<void> {
+  const provider = getActiveProvider();
+  if (provider.writeAppData) {
+    await provider.writeAppData("media-index", index);
+    return;
+  }
   const fileId = await findIndexFileId();
   const body = JSON.stringify(index);
 
@@ -213,6 +222,11 @@ export function countByType(index: MediaIndex): Record<MediaType, number> {
 
 /** メディアファイルの名前を変更 */
 export async function renameMediaFile(fileId: string, newName: string): Promise<void> {
+  const provider = getActiveProvider();
+  if (provider.renameMedia) {
+    await provider.renameMedia(fileId, newName);
+    return;
+  }
   await authedFetch(`${DRIVE_API}/files/${fileId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -232,8 +246,13 @@ export function renameMediaEntry(
   return { ...index, updatedAt: new Date().toISOString(), media };
 }
 
-/** Drive からメディアファイルを削除 */
+/** メディアファイルを削除 */
 export async function deleteMediaFile(fileId: string): Promise<void> {
+  const provider = getActiveProvider();
+  if (provider.deleteMedia) {
+    await provider.deleteMedia(fileId);
+    return;
+  }
   await authedFetch(`${DRIVE_API}/files/${fileId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -250,10 +269,15 @@ export function extractFileIdFromUrl(url: string): string | null {
 
 // ── 初期構築（既存メディアの自動登録） ──
 
-/** Drive の uploadFiles フォルダ内のファイル一覧を取得 */
+/** アップロード済みメディアファイル一覧を取得 */
 async function listUploadFiles(): Promise<{ id: string; name: string; mimeType: string; createdTime: string }[]> {
+  // プロバイダーが listMediaFiles をサポートしていればそちらを使う
+  const provider = getActiveProvider();
+  if (provider.listMediaFiles) {
+    return provider.listMediaFiles();
+  }
+  // Drive API 経由（Google Drive プロバイダー）
   const parentId = await getFolderId();
-  // uploadFiles サブフォルダを検索
   const folderQuery = `name='uploadFiles' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   const folderRes = await authedFetch(
     `${DRIVE_API}/files?q=${encodeURIComponent(folderQuery)}&fields=files(id)&spaces=drive`

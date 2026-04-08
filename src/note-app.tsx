@@ -687,11 +687,11 @@ function NoteEditorInner({
 
     const processElement = (el: Element) => {
       const src = el.getAttribute("src");
-      if (!src || !src.includes("googleusercontent.com") || src.startsWith("blob:")) return;
-      const driveFileId = getActiveProvider().extractFileId(src);
-      if (!driveFileId) return;
+      if (!src || src.startsWith("blob:")) return;
+      const fileId = getActiveProvider().extractFileId(src);
+      if (!fileId) return;
 
-      getActiveProvider().getMediaBlobUrl(driveFileId).then((blobUrl) => {
+      getActiveProvider().getMediaBlobUrl(fileId).then((blobUrl) => {
         localBlobUrls.push(blobUrl);
         el.setAttribute("src", blobUrl);
         if (el instanceof HTMLVideoElement || el instanceof HTMLAudioElement) {
@@ -866,6 +866,12 @@ function NoteEditorInner({
               onEditorReady={handleEditorReady}
               onChange={handleContentChange}
               uploadFile={uploadFile}
+              resolveFileUrl={async (url: string) => {
+                const p = getActiveProvider();
+                const fid = p.extractFileId(url);
+                if (fid) return p.getMediaBlobUrl(fid);
+                return url;
+              }}
               onHashtagSelect={(blockId, label) => labelStore.setLabel(blockId, label)}
               getMentionSuggestions={() => {
                 mentionContextRef.current = { tableBlockId: null, rowIndex: -1 };
@@ -1032,7 +1038,7 @@ function NoteEditorInner({
 
 // ── メインアプリ ──
 export function NoteApp() {
-  const { authenticated, loading: authLoading, signIn, signOut } = useStorage();
+  const { authenticated, loading: authLoading, signIn, signOut, switchProvider } = useStorage();
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
@@ -1052,7 +1058,7 @@ export function NoteApp() {
 
   // 未認証
   if (!authenticated) {
-    return <LoginScreen onSignIn={signIn} />;
+    return <LoginScreen onSignIn={signIn} onSelectLocal={() => switchProvider("local")} />;
   }
 
   return (

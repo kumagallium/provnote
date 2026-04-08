@@ -13,20 +13,29 @@ export function useAutoSave(onSave: () => void | Promise<void>) {
     handleSaveRef.current = onSave;
   }, [onSave]);
 
+  // 保存実行 + dirty リセット
+  const executeSave = useCallback(async () => {
+    try {
+      await handleSaveRef.current();
+    } finally {
+      setDirty(false);
+    }
+  }, []);
+
   // 変更をマーク → 3秒後に自動保存（ref 経由で常に最新の状態で保存）
   const markDirty = useCallback(() => {
     setDirty(true);
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      handleSaveRef.current();
+      executeSave();
     }, 3000);
-  }, []);
+  }, [executeSave]);
 
   // 即時保存（タイマーをキャンセルして即実行）
   const saveNow = useCallback(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    handleSaveRef.current();
-  }, []);
+    executeSave();
+  }, [executeSave]);
 
   // タイマーのクリーンアップ
   useEffect(() => {
@@ -47,7 +56,7 @@ export function useAutoSave(onSave: () => void | Promise<void>) {
         e.preventDefault();
         e.stopPropagation();
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        handleSaveRef.current();
+        executeSave();
       }
     };
     // document と window 両方でキャプチャフェーズに登録

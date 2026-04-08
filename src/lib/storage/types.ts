@@ -49,8 +49,17 @@ export interface StorageProvider {
   getUserEmail(): Promise<string | null>;
   getRevisionId?(fileId: string): Promise<string | null>;
 
-  // --- 認証付き fetch（インデックス管理等で使用） ---
+  // --- 認証付き fetch（Drive API 互換プロバイダー用） ---
   authedFetch(url: string, options?: RequestInit): Promise<Response>;
+
+  // --- アプリデータ（インデックスファイル等の内部メタデータ） ---
+  readAppData?(key: string): Promise<unknown | null>;
+  writeAppData?(key: string, data: unknown): Promise<void>;
+
+  // --- メディア管理 ---
+  renameMedia?(fileId: string, newName: string): Promise<void>;
+  deleteMedia?(fileId: string): Promise<void>;
+  listMediaFiles?(): Promise<{ id: string; name: string; mimeType: string; createdTime: string }[]>;
 
   // --- キャッシュクリア ---
   clearCache(): void;

@@ -177,7 +177,14 @@ export function useFileManager(authenticated: boolean) {
 
   // ファイル一覧が取得されたらインデックスを構築
   useEffect(() => {
-    if (!authenticated || files.length === 0) return;
+    if (!authenticated) return;
+    if (files.length === 0) {
+      // ノートが無い場合は空のインデックスをセット（NoteListView の loading 解除）
+      const emptyIndex: ProvNoteIndex = { version: 3, updatedAt: new Date().toISOString(), notes: [] };
+      noteIndexRef.current = emptyIndex;
+      setNoteIndex(emptyIndex);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const index = await ensureIndex(files, docCacheRef.current);
