@@ -18,7 +18,9 @@ export function setActiveProvider(id: string): StorageProvider {
   const provider = providers.get(id);
   if (!provider) throw new Error(`未知のストレージプロバイダー: ${id}`);
   activeProvider = provider;
-  localStorage.setItem(STORAGE_KEY, id);
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, id);
+  }
   return provider;
 }
 
@@ -42,14 +44,16 @@ export function initProviders(): void {
   registerProvider(new GoogleDriveProvider());
 
   // 保存された設定を復元、なければ Google Drive をデフォルトに
-  const savedId = localStorage.getItem(STORAGE_KEY) ?? "google-drive";
+  const savedId = (typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null) ?? "google-drive";
   const provider = providers.get(savedId);
   if (provider) {
     activeProvider = provider;
   } else {
     // 不明なプロバイダーが保存されていた場合はフォールバック
     activeProvider = providers.get("google-drive")!;
-    localStorage.setItem(STORAGE_KEY, "google-drive");
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, "google-drive");
+    }
   }
 }
 
