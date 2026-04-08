@@ -39,12 +39,11 @@ export function useStorage() {
   const signIn = () => provider?.signIn();
 
   // サインアウト: プロバイダー設定をリセットしてログイン画面に戻す
+  // last_file / recent-notes は残す（再ログイン時に自動復元するため）
   const signOut = useCallback(() => {
     provider?.signOut();
-    // プロバイダー設定をクリア（次回リロード時にログイン画面を表示）
+    // プロバイダー設定のみクリア（次回リロード時にログイン画面を表示）
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem("provnote_last_file");
-    localStorage.removeItem("provnote-recent-notes");
   }, [provider]);
 
   // プロバイダーを切り替え（ページリロードで全状態をリセット）
