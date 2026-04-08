@@ -9,6 +9,10 @@ storybook-static/
 # 自動生成ファイル（vite dev/build 時に生成）
 public/release_notes.json
 
+# Recording intermediates
+docs/screenshots/.video-tmp/
+docs/screenshots/*.webm
+
 # Claude Code (private config — managed in parent repo)
 CLAUDE.md
 .claude/
