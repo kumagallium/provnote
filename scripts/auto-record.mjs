@@ -73,14 +73,14 @@ async function labelProv() {
     await page.waitForTimeout(2000);
   }
 
-  // エディタ内をスクロールして内容を見せる
-  const editor = page.locator("[class*=editor], [class*=Editor], main").first();
-  if ((await editor.count()) > 0) {
-    await editor.evaluate((el) => el.scrollTo(0, 200));
-    await page.waitForTimeout(1500);
-    await editor.evaluate((el) => el.scrollTo(0, 0));
-    await page.waitForTimeout(1000);
+  // 各ブロックを順番にホバー → ラベルバッジが表示される様子を見せる
+  const blocks = page.locator("[class*=bn-block-outer]");
+  const blockCount = await blocks.count();
+  for (let i = 0; i < Math.min(blockCount, 7); i++) {
+    await blocks.nth(i).hover();
+    await page.waitForTimeout(800);
   }
+  await page.waitForTimeout(500);
 
   // 「生成」ボタンをクリックして PROV グラフを表示
   const provBtn = page.getByRole("button", { name: "生成" });
@@ -89,7 +89,7 @@ async function labelProv() {
     await page.waitForTimeout(4000);
   }
 
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1500);
 }
 
 // --- シナリオ実行 ---
