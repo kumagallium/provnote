@@ -157,16 +157,22 @@ function BlobMediaPlayer({
   return <iframe src={blobUrl} title={entry.name} className="w-full h-full rounded border-0" />;
 }
 
+function ResolvedImage({ entry }: { entry: MediaIndexEntry }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    const provider = getActiveProvider();
+    const fileId = provider.extractFileId(entry.url);
+    if (!fileId) { setSrc(entry.url); return; }
+    provider.getMediaBlobUrl(fileId).then(setSrc).catch(() => {});
+  }, [entry.url]);
+  if (!src) return <div className="flex items-center justify-center text-muted-foreground">読み込み中...</div>;
+  return <img src={src} alt={entry.name} className="max-w-full max-h-full object-contain rounded" />;
+}
+
 function MediaPreview({ entry }: { entry: MediaIndexEntry }) {
   switch (entry.type) {
     case "image":
-      return (
-        <img
-          src={entry.url}
-          alt={entry.name}
-          className="max-w-full max-h-full object-contain rounded"
-        />
-      );
+      return <ResolvedImage entry={entry} />;
     case "video":
       return <BlobMediaPlayer entry={entry} tag="video" />;
     case "audio":
