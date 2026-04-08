@@ -218,15 +218,18 @@ graph LR
 
 ## Language & Internationalization
 
-The Graphium UI currently uses **Japanese** for context labels and some interface elements. This reflects the project's origin in a Japanese research group.
+Graphium supports **English** (default) and **Japanese**. The language can be switched from **⚙ Settings** in the sidebar.
 
-| Element | Current language | Planned |
-|---------|-----------------|---------|
-| Context labels | Japanese (`[手順]`, `[結果]`, …) with English aliases (`[step]`, `[result]`, …) | Full i18n — English default, Japanese secondary |
-| UI chrome | Mixed (English + Japanese) | English default |
-| README / docs | English (README), Japanese (design specs) | English for all public-facing docs |
+All user-facing text — context labels, menus, tooltips, and panel UI — is fully internationalized. Context labels are displayed in the active locale (e.g. `[Procedure]` in English, `[手順]` in Japanese) while the internal data format remains stable for backward compatibility.
 
-Internationalization (i18n) is on the roadmap. Contributions are welcome.
+| Element | Status |
+|---------|--------|
+| Context labels | Fully localized (English / Japanese) |
+| UI chrome | Fully localized |
+| Label input | Both languages accepted as aliases (e.g. `[step]`, `[材料]`) |
+| README / docs | English |
+
+Contributions for additional languages are welcome.
 
 ## Development
 
