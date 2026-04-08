@@ -5,6 +5,9 @@
 <p align="center">
   Block-based note editor with <b>PROV-DM</b> provenance tracking — built on <a href="https://www.blocknotejs.org/">BlockNote.js</a>.
 </p>
+<p align="center">
+  <b>English</b> | <a href="README.ja.md">日本語</a>
+</p>
 
 Graphium is an attempt to rethink how scientific notes work. It combines [Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten)-style atomic note-taking — where linking small ideas leads to unexpected discoveries — with [PROV-DM](https://www.w3.org/TR/prov-dm/), a W3C standard that gives those discoveries formal, traceable provenance. When AI enters the picture, it bridges both: AI-generated knowledge is recorded with the same provenance trail as human notes, so you always know where an idea came from.
 
@@ -227,7 +230,7 @@ All user-facing text — context labels, menus, tooltips, and panel UI — is fu
 | Context labels | Fully localized (English / Japanese) |
 | UI chrome | Fully localized |
 | Label input | Both languages accepted as aliases (e.g. `[step]`, `[材料]`) |
-| README / docs | English |
+| README / docs | English / Japanese |
 
 Contributions for additional languages are welcome.
 
