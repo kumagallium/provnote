@@ -50,7 +50,7 @@ const uploadMediaFileWithMeta = (file: File) => storage().uploadMedia(file);
 
 export function useFileManager(authenticated: boolean) {
   const [files, setFiles] = useState<ProvNoteFile[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesLoading, setFilesLoading] = useState(true); // 初回読み込み待ち
   const [activeFileId, _setActiveFileId] = useState<string | null>(null);
   const activeFileIdRef = useRef<string | null>(null);
   const setActiveFileId = useCallback((id: string | null) => {
@@ -167,6 +167,7 @@ export function useFileManager(authenticated: boolean) {
   useEffect(() => {
     if (!authenticated) {
       setFiles([]);
+      setFilesLoading(true); // 次回認証時にインデックスが空で確定しないようにする
       setNoteIndex(null);
       noteIndexRef.current = null;
       setMediaIndex(null);
