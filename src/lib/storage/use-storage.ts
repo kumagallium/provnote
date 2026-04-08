@@ -59,10 +59,9 @@ export function useStorage() {
     localStorage.removeItem(STORAGE_KEY);
     // React state をリセットして即座にログイン画面に戻す
     setAuthenticated(false);
-    setProvider(null);
     setLoading(false);
-    // 再初期化（新しいプロバイダーでリスナーを再設定）
-    setProviderVersion((v) => v + 1);
+    // 注: providerVersion はインクリメントしない
+    // （再初期化すると local provider が即座に signedIn=true に戻るため）
   }, [provider]);
 
   // プロバイダーを切り替え（リロードなし）
