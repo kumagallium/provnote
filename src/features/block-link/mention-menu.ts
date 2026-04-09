@@ -91,7 +91,7 @@ export function getNoteSuggestions(
     .map((f) => ({
       type: "note" as const,
       id: f.id,
-      label: f.name.replace(/\.graphium\.json$/, ""),
+      label: f.name.replace(/\.(graphium|provnote)\.json$/, ""),
       group: "他のノート",
     }));
 }

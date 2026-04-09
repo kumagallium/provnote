@@ -931,7 +931,7 @@ function NoteEditorInner({
       const found = noteIndex?.notes.find((n) => n.title === noteName);
       if (found) return found.noteId;
       const file = files.find(
-        (f) => f.name.replace(/\.graphium\.json$/, "") === noteName
+        (f) => f.name.replace(/\.(graphium|provnote)\.json$/, "") === noteName
       );
       return file?.id ?? null;
     };

@@ -52,7 +52,7 @@ export async function createNoteFromRow(
 
   // 同名ノートが既にあるか確認
   const existing = files.find(
-    (f) => f.name.replace(/\.graphium\.json$/, "") === title
+    (f) => f.name.replace(/\.(graphium|provnote)\.json$/, "") === title
   );
   if (existing) {
     const ok = confirm(`「${title}」という名前のノートが既に存在します。新しいノートを作成しますか？`);

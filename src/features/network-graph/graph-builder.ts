@@ -134,7 +134,7 @@ export function buildNoteGraph(
   // ファイル名マップ
   const fileNameMap = new Map<string, string>();
   for (const f of files) {
-    fileNameMap.set(f.id, f.name.replace(/\.graphium\.json$/, ""));
+    fileNameMap.set(f.id, f.name.replace(/\.(graphium|provnote)\.json$/, ""));
   }
 
   // ノードを構築
