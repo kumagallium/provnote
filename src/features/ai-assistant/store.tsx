@@ -64,6 +64,11 @@ const INITIAL_STATE: AiAssistantState = {
   chatRequestSeq: 0,
 };
 
+// sourceBlockIds からスコープ種別を判定するヘルパー
+function resolveScopeType(sourceBlockIds: string[]): ScopeChat["scopeType"] {
+  return sourceBlockIds.length > 0 ? "heading" : "page";
+}
+
 // チャット退避時に generatedBy を構築するヘルパー
 function buildGeneratedBy(
   prev: AiAssistantState,
@@ -93,7 +98,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
           const currentChat: ScopeChat = {
             id: existing?.id ?? crypto.randomUUID(),
             scopeBlockId: prev.sourceBlockIds[0] ?? "",
-            scopeType: "heading",
+            scopeType: resolveScopeType(prev.sourceBlockIds),
             messages: prev.messages,
             generatedBy: buildGeneratedBy(prev, existing),
             createdAt: existing?.createdAt ?? now,
@@ -133,6 +138,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({
       ...prev,
       messages: [...prev.messages, message],
+      // 最初のメッセージ追加時に activeChatId を確定（保存時の ID 安定化）
+      activeChatId: prev.activeChatId ?? crypto.randomUUID(),
     }));
   }, []);
 
@@ -148,7 +155,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         ...prev,
         activeChatId: chatId,
         messages: chat.messages,
-        sourceBlockIds: [chat.scopeBlockId],
+        sourceBlockIds: chat.scopeType === "page" ? [] : [chat.scopeBlockId],
         quotedMarkdown: "",
         error: null,
         sessionId: chat.generatedBy?.sessionId ?? null,
@@ -168,7 +175,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     return {
       id: existing?.id ?? crypto.randomUUID(),
       scopeBlockId: s.sourceBlockIds[0] ?? "",
-      scopeType: "heading",
+      scopeType: resolveScopeType(s.sourceBlockIds),
       messages: s.messages,
       generatedBy: buildGeneratedBy(s, existing),
       createdAt: existing?.createdAt ?? now,
@@ -188,7 +195,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         const currentChat: ScopeChat = {
           id: existing?.id ?? crypto.randomUUID(),
           scopeBlockId: prev.sourceBlockIds[0] ?? "",
-          scopeType: "heading",
+          scopeType: resolveScopeType(prev.sourceBlockIds),
           messages: prev.messages,
           generatedBy: buildGeneratedBy(prev, existing),
           createdAt: existing?.createdAt ?? now,
@@ -221,7 +228,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         const currentChat: ScopeChat = {
           id: existing?.id ?? crypto.randomUUID(),
           scopeBlockId: prev.sourceBlockIds[0] ?? "",
-          scopeType: "heading",
+          scopeType: resolveScopeType(prev.sourceBlockIds),
           messages: prev.messages,
           generatedBy: buildGeneratedBy(prev, existing),
           createdAt: existing?.createdAt ?? now,

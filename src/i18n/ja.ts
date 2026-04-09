@@ -218,12 +218,13 @@ export const ja: Record<string, string> = {
   "settings.modelHelp": "使用する AI モデルを選択します。未指定の場合はサーバーのデフォルトモデルが使われます。",
 
   // ── AI チャット追加 ──
-  "aiChat.helpText": "ブロックを選択して AI に質問できます。\nCmd+Enter で送信",
+  "aiChat.helpText": "ページ全体や選択ブロックについて AI に質問できます。\nCmd+Enter で送信",
   "aiChat.thinking": "考え中...",
   "aiChat.sendHint": "Cmd+Enter で送信",
   "aiChat.newChat": "+ 新しいチャット",
   "aiChat.emptyChat": "(空のチャット)",
   "aiChat.messageCount": "{count} メッセージ",
+  "aiChat.pageScope": "ページ全体",
   "aiChat.insertToNote": "ノートに反映",
   "aiChat.deriveAsNote": "別ノートとして派生",
 

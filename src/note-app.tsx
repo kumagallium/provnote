@@ -504,8 +504,11 @@ function NoteEditorInner({
       aiAssistant.setLoading(true);
       try {
         const isFirstMessage = aiAssistant.messages.length === 0;
-        const userMessage = isFirstMessage && aiAssistant.quotedMarkdown
-          ? [
+        let userMessage = question;
+        if (isFirstMessage) {
+          if (aiAssistant.quotedMarkdown) {
+            // ブロック選択チャット: 選択ブロックのコンテキストを付加
+            userMessage = [
               "以下の内容について質問があります。",
               "",
               "---",
@@ -513,8 +516,24 @@ function NoteEditorInner({
               "---",
               "",
               question,
-            ].join("\n")
-          : question;
+            ].join("\n");
+          } else if (aiAssistant.sourceBlockIds.length === 0 && editorRef.current) {
+            // ページ全体チャット: ドキュメント全体をコンテキストとして付加
+            const allBlocks = editorRef.current.document;
+            const pageMarkdown = await editorRef.current.blocksToMarkdownLossy(allBlocks);
+            if (pageMarkdown.trim()) {
+              userMessage = [
+                "以下のドキュメント全体について質問があります。",
+                "",
+                "---",
+                pageMarkdown,
+                "---",
+                "",
+                question,
+              ].join("\n");
+            }
+          }
+        }
         const selectedModel = getSelectedModel();
         const response = await runAgent({
           message: userMessage,
@@ -529,13 +548,14 @@ function NoteEditorInner({
         });
         aiAssistant.setSessionId(response.session_id);
         aiAssistant.setLoading(false);
+        markDirty();
       } catch (err) {
         aiAssistant.setError(
           err instanceof Error ? err.message : "AI 実行に失敗しました",
         );
       }
     },
-    [fileId, aiAssistant],
+    [fileId, aiAssistant, markDirty],
   );
 
   // AI 回答から別ノートとして派生
@@ -586,7 +606,19 @@ function NoteEditorInner({
       if (!editorRef.current) return;
       const editor = editorRef.current;
       const targetBlockId = aiAssistant.sourceBlockIds[0];
-      if (!targetBlockId) return;
+      if (!targetBlockId) {
+        // ページ全体チャット: ドキュメント末尾に挿入
+        const blocks = editor.tryParseMarkdownToBlocks(markdown);
+        if (blocks.length === 0) return;
+        const allBlocks = editor.document;
+        const lastBlock = allBlocks[allBlocks.length - 1];
+        if (lastBlock) {
+          editor.insertBlocks(blocks, lastBlock, "after");
+        }
+        lastAiInsertRef.current = true;
+        markDirty();
+        return;
+      }
       const targetBlock = editor.getBlock(targetBlockId);
       if (!targetBlock) return;
       if (targetBlock.type === "heading") {
