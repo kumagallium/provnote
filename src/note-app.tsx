@@ -506,16 +506,7 @@ function NoteEditorInner({
         const isFirstMessage = aiAssistant.messages.length === 0;
         let userMessage = question;
         if (isFirstMessage) {
-          if (aiAssistant.editMode && aiAssistant.quotedMarkdown) {
-            // AI 編集モード: 指示 + 対象テキストを送信
-            userMessage = [
-              question,
-              "",
-              "---",
-              aiAssistant.quotedMarkdown,
-              "---",
-            ].join("\n");
-          } else if (aiAssistant.quotedMarkdown) {
+          if (aiAssistant.quotedMarkdown) {
             // ブロック選択チャット: 選択ブロックのコンテキストを付加
             userMessage = [
               "以下の内容について質問があります。",
@@ -691,7 +682,6 @@ function NoteEditorInner({
       }
 
       lastAiInsertRef.current = true;
-      aiAssistant.clearEditMode();
       markDirty();
     },
     [markDirty, aiAssistant],

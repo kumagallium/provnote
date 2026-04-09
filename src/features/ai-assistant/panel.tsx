@@ -2,24 +2,12 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, RefreshCw, FileText, Languages, Pencil, MessageSquare } from "lucide-react";
+import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
-import type { AiEditAction } from "./store";
 import { useT } from "../../i18n";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
-
-// モードの定義
-const MODES = [
-  { key: "ask" as const, icon: MessageSquare, colorClass: "" },
-  { key: "rewrite" as const, icon: RefreshCw, colorClass: "text-blue-600 bg-blue-50 border-blue-200" },
-  { key: "summarize" as const, icon: FileText, colorClass: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  { key: "translate" as const, icon: Languages, colorClass: "text-amber-600 bg-amber-50 border-amber-200" },
-  { key: "custom" as const, icon: Pencil, colorClass: "text-violet-600 bg-violet-50 border-violet-200" },
-] as const;
-
-type ModeKey = typeof MODES[number]["key"];
 
 type AiAssistantPanelProps = {
   /** AI にメッセージを送信する */
@@ -41,7 +29,6 @@ export function AiAssistantPanel({
   const {
     messages, loading, error, parkChat,
     chats, selectChat, sourceBlockIds, quotedMarkdown,
-    editMode, setEditMode, clearEditMode,
   } = useAiAssistant();
   const t = useT();
   const [input, setInput] = useState("");
@@ -53,62 +40,17 @@ export function AiAssistantPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 現在のモードを算出
-  const currentMode: ModeKey = editMode ? editMode.action : "ask";
-
   // 新しいメッセージが追加されたら自動スクロール
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // モード切り替え
-  const handleModeChange = useCallback(
-    (mode: ModeKey) => {
-      if (mode === "ask") {
-        clearEditMode();
-      } else if (mode === "custom") {
-        // カスタムモード: テキストエリアにフォーカスして指示入力を促す
-        setEditMode({ action: "custom" });
-        setTimeout(() => textareaRef.current?.focus(), 0);
-      } else {
-        setEditMode({ action: mode });
-      }
-    },
-    [setEditMode, clearEditMode],
-  );
-
-  // 送信ハンドラー
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     setInput("");
     onSubmit(trimmed);
   }, [input, loading, onSubmit]);
-
-  // 編集アクション（プリセット）をワンクリック実行
-  const handlePresetAction = useCallback(
-    (action: AiEditAction) => {
-      if (loading) return;
-      setEditMode({ action });
-      const instruction = t(`aiEdit.${action}Instruction` as any);
-      if (instruction) {
-        onSubmit(instruction);
-      }
-    },
-    [loading, setEditMode, onSubmit, t],
-  );
-
-  // モードクリック: ask/custom はモード切替のみ、プリセットは即実行
-  const handleModeClick = useCallback(
-    (mode: ModeKey) => {
-      if (mode === "ask" || mode === "custom") {
-        handleModeChange(mode);
-      } else {
-        handlePresetAction(mode);
-      }
-    },
-    [handleModeChange, handlePresetAction],
-  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -127,6 +69,9 @@ export function AiAssistantPanel({
     },
     [selectChat],
   );
+
+  // 引用元ブロックがある → 置換ボタンを表示
+  const canReplace = sourceBlockIds.length > 0 && !!onReplaceBlocks;
 
   return (
     <div className="flex flex-col h-full">
@@ -159,9 +104,7 @@ export function AiAssistantPanel({
       {/* 引用表示 */}
       {quotedMarkdown && messages.length === 0 && !showChatList && (
         <div className="px-3 py-2 border-b border-border">
-          <div className="text-[10px] text-muted-foreground mb-1">
-            {editMode ? t("aiEdit.editingLabel") : t("aiChat.quote")}
-          </div>
+          <div className="text-[10px] text-muted-foreground mb-1">{t("aiChat.quote")}</div>
           <div className="bg-muted/50 rounded p-2 text-[11px] text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
             {quotedMarkdown}
           </div>
@@ -188,9 +131,8 @@ export function AiAssistantPanel({
               <ChatBubble
                 key={i}
                 message={msg}
-                isEditMode={!!editMode}
                 onInsert={onInsertToScope}
-                onReplace={editMode ? onReplaceBlocks : undefined}
+                onReplace={canReplace ? onReplaceBlocks : undefined}
                 onDerive={
                   onDeriveNote && i > 0 && msg.role === "assistant"
                     ? () => {
@@ -225,11 +167,7 @@ export function AiAssistantPanel({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={
-                  currentMode === "custom"
-                    ? t("aiEdit.customPlaceholder")
-                    : t("aiChat.placeholder")
-                }
+                placeholder={t("aiChat.placeholder")}
                 disabled={loading}
                 rows={2}
                 className="flex-1 text-xs resize-none"
@@ -243,28 +181,8 @@ export function AiAssistantPanel({
                 <Send size={12} />
               </Button>
             </div>
-            {/* モードセレクタ */}
-            <div className="flex items-center gap-1 mt-1.5">
-              {MODES.map((mode) => {
-                const Icon = mode.icon;
-                const isActive = currentMode === mode.key;
-                return (
-                  <button
-                    key={mode.key}
-                    onClick={() => handleModeClick(mode.key)}
-                    disabled={loading}
-                    title={t(`aiEdit.${mode.key}` as any)}
-                    className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md border transition-colors ${
-                      isActive
-                        ? mode.colorClass || "text-foreground bg-muted border-border font-medium"
-                        : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    <Icon size={10} />
-                    {t(`aiEdit.${mode.key}` as any)}
-                  </button>
-                );
-              })}
+            <div className="text-[10px] text-muted-foreground mt-1">
+              {t("aiChat.sendHint")}
             </div>
           </div>
         </>
@@ -326,13 +244,11 @@ function ChatListView({
 // チャットバブルコンポーネント
 function ChatBubble({
   message,
-  isEditMode,
   onInsert,
   onReplace,
   onDerive,
 }: {
   message: ChatMessage;
-  isEditMode: boolean;
   onInsert?: (markdown: string) => void;
   onReplace?: (markdown: string) => void;
   onDerive?: () => void;

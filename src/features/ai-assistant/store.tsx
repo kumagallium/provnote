@@ -4,17 +4,6 @@
 import { ReactNode, createContext, useCallback, useContext, useState } from "react";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
 
-/** AI 編集アクションの種別 */
-export type AiEditAction = "rewrite" | "summarize" | "translate" | "custom";
-
-/** AI 編集モードの状態 */
-export type AiEditMode = {
-  /** 編集対象のアクション種別 */
-  action: AiEditAction;
-  /** カスタム指示（action === "custom" のとき） */
-  customInstruction?: string;
-} | null;
-
 export type AiAssistantState = {
   /** 引用元ブロックIDリスト */
   sourceBlockIds: string[];
@@ -34,8 +23,6 @@ export type AiAssistantState = {
   sessionId: string | null;
   /** Chat タブを開くリクエスト（カウンター。変化を検知して rightTab を切り替える） */
   chatRequestSeq: number;
-  /** AI 編集モード（null = 通常チャットモード） */
-  editMode: AiEditMode;
 };
 
 export type AiAssistantActions = {
@@ -59,16 +46,6 @@ export type AiAssistantActions = {
   clearMessages: () => void;
   /** 現在のチャットを退避して非アクティブにする（リスト表示用） */
   parkChat: () => void;
-  /** AI 編集モードで Chat を開く */
-  openEditChat: (params: {
-    sourceBlockIds: string[];
-    quotedMarkdown: string;
-    editMode: NonNullable<AiEditMode>;
-  }) => void;
-  /** 編集モードを切り替える（会話リセットなし） */
-  setEditMode: (editMode: AiEditMode) => void;
-  /** 編集モードをクリア */
-  clearEditMode: () => void;
 };
 
 export type AiAssistantStore = AiAssistantState & AiAssistantActions;
@@ -85,7 +62,6 @@ const INITIAL_STATE: AiAssistantState = {
   chats: [],
   sessionId: null,
   chatRequestSeq: 0,
-  editMode: null,
 };
 
 // sourceBlockIds からスコープ種別を判定するヘルパー
@@ -138,7 +114,6 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
           chats: updatedChats,
           sourceBlockIds: params.sourceBlockIds,
           quotedMarkdown: params.quotedMarkdown,
-          editMode: null,
           loading: false,
           error: null,
           messages: [],
@@ -242,60 +217,6 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const openEditChat = useCallback(
-    (params: {
-      sourceBlockIds: string[];
-      quotedMarkdown: string;
-      editMode: NonNullable<AiEditMode>;
-    }) => {
-      setState((prev) => {
-        // 現在進行中のチャットがあれば退避
-        let updatedChats = prev.chats;
-        if (prev.messages.length > 0) {
-          const now = new Date().toISOString();
-          const existing = prev.activeChatId
-            ? prev.chats.find((c) => c.id === prev.activeChatId)
-            : null;
-          const currentChat: ScopeChat = {
-            id: existing?.id ?? crypto.randomUUID(),
-            scopeBlockId: prev.sourceBlockIds[0] ?? "",
-            scopeType: resolveScopeType(prev.sourceBlockIds),
-            messages: prev.messages,
-            generatedBy: buildGeneratedBy(prev, existing),
-            createdAt: existing?.createdAt ?? now,
-            modifiedAt: now,
-          };
-          const idx = updatedChats.findIndex((c) => c.id === currentChat.id);
-          updatedChats = idx >= 0
-            ? updatedChats.map((c, i) => i === idx ? currentChat : c)
-            : [...updatedChats, currentChat];
-        }
-        return {
-          ...prev,
-          chats: updatedChats,
-          sourceBlockIds: params.sourceBlockIds,
-          quotedMarkdown: params.quotedMarkdown,
-          editMode: params.editMode,
-          loading: false,
-          error: null,
-          messages: [],
-          activeChatId: null,
-          sessionId: null,
-          chatRequestSeq: prev.chatRequestSeq + 1,
-        };
-      });
-    },
-    [],
-  );
-
-  const setEditMode = useCallback((editMode: AiEditMode) => {
-    setState((prev) => ({ ...prev, editMode }));
-  }, []);
-
-  const clearEditMode = useCallback(() => {
-    setState((prev) => ({ ...prev, editMode: null }));
-  }, []);
-
   const parkChat = useCallback(() => {
     setState((prev) => {
       let updatedChats = prev.chats;
@@ -326,7 +247,6 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         sessionId: null,
         sourceBlockIds: [],
         quotedMarkdown: "",
-        editMode: null,
         error: null,
       };
     });
@@ -346,9 +266,6 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         getCurrentChat,
         clearMessages,
         parkChat,
-        openEditChat,
-        setEditMode,
-        clearEditMode,
       }}
     >
       {children}
