@@ -6,7 +6,7 @@ export type RecentNote = {
   lastAccessedAt: string; // ISO 8601
 };
 
-const STORAGE_KEY = "provnote-recent-notes";
+const STORAGE_KEY = "graphium-recent-notes";
 const MAX_ENTRIES = 5;
 
 // localStorage から読み込み

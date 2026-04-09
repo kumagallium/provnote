@@ -53,7 +53,7 @@ function getNodeSubtype(node: ProvJsonLdNode): string {
   if (node["@type"] === "prov:Entity") {
     if (node["@id"].startsWith("param_")) return "parameter";
     if (node["@id"].startsWith("result_")) return "result";
-    if (node["provnote:entityType"] === "tool") return "tool";
+    if (node["graphium:entityType"] === "tool") return "tool";
     return "entity"; // material またはサブタイプなし
   }
   return node["@type"];
@@ -67,9 +67,9 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
   const elements: cytoscape.ElementDefinition[] = [];
   const nodeIdSet = new Set(doc["@graph"].map((n) => n["@id"]));
 
-  // 予約済み provnote: キー（ビュー表示対象外）
+  // 予約済み graphium: キー（ビュー表示対象外）
   const RESERVED_KEYS = new Set([
-    "provnote:blockId", "provnote:attributes", "provnote:warnings", "provnote:entityType",
+    "graphium:blockId", "graphium:attributes", "graphium:warnings", "graphium:entityType",
   ]);
 
   let attrNodeIdx = 0;
@@ -88,20 +88,20 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
       },
     });
 
-    // ── provnote: key-value プロパティ → ダイヤモンドノード ──
+    // ── graphium: key-value プロパティ → ダイヤモンドノード ──
     for (const key of Object.keys(node)) {
-      if (key.startsWith("provnote:") &&
+      if (key.startsWith("graphium:") &&
           !RESERVED_KEYS.has(key) &&
-          typeof node[key as `provnote:${string}`] === "string") {
-        const shortKey = key.replace("provnote:", "");
-        const value = node[key as `provnote:${string}`] as string;
+          typeof node[key as `graphium:${string}`] === "string") {
+        const shortKey = key.replace("graphium:", "");
+        const value = node[key as `graphium:${string}`] as string;
         const attrId = `attr_${node["@id"]}_${attrNodeIdx++}`;
 
         elements.push({
           data: {
             id: attrId,
             label: `${shortKey}=${value}`,
-            type: "provnote:Attribute",
+            type: "graphium:Attribute",
             subtype: "parameter",
           },
         });
@@ -117,16 +117,16 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
       }
     }
 
-    // ── provnote:attributes 配列 → ダイヤモンドノード ──
-    if (node["provnote:attributes"]) {
-      for (const attr of node["provnote:attributes"] as ProvAttribute[]) {
+    // ── graphium:attributes 配列 → ダイヤモンドノード ──
+    if (node["graphium:attributes"]) {
+      for (const attr of node["graphium:attributes"] as ProvAttribute[]) {
         const attrId = `attr_${node["@id"]}_${attrNodeIdx++}`;
 
         elements.push({
           data: {
             id: attrId,
             label: attr["rdfs:label"],
-            type: "provnote:Attribute",
+            type: "graphium:Attribute",
             subtype: "parameter",
           },
         });
@@ -150,7 +150,7 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
       continue;
     }
 
-    const relLabel = rel["@type"].replace("prov:", "").replace("provnote:", "");
+    const relLabel = rel["@type"].replace("prov:", "").replace("graphium:", "");
 
     // 全リレーションを反転（PROV来歴方向 → 実験フロー順方向）
     const source = rel.to;
@@ -477,9 +477,9 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
   const relations = extractRelations(doc);
   const attrCount = doc["@graph"].reduce((sum, n) => {
     let count = 0;
-    if (n["provnote:attributes"]) count += (n["provnote:attributes"] as ProvAttribute[]).length;
+    if (n["graphium:attributes"]) count += (n["graphium:attributes"] as ProvAttribute[]).length;
     for (const key of Object.keys(n)) {
-      if (key.startsWith("provnote:") && !["provnote:blockId", "provnote:attributes", "provnote:warnings"].includes(key) && typeof n[key as `provnote:${string}`] === "string") count++;
+      if (key.startsWith("graphium:") && !["graphium:blockId", "graphium:attributes", "graphium:warnings"].includes(key) && typeof n[key as `graphium:${string}`] === "string") count++;
     }
     return sum + count;
   }, 0);

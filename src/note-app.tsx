@@ -58,11 +58,11 @@ import {
 import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
-import type { ProvNoteDocument, NoteLink } from "./lib/document-types";
+import type { GraphiumDocument, NoteLink } from "./lib/document-types";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
-import { NoteListView, type ProvNoteIndex } from "./features/navigation";
+import { NoteListView, type GraphiumIndex } from "./features/navigation";
 import {
   AssetGalleryView,
   LabelGalleryView,
@@ -94,7 +94,7 @@ import { NoteSideMenu, collectHeadingScope, setOpenLinkDropdownFn } from "./comp
 import { NoteFormattingToolbar } from "./components/formatting-toolbar";
 import { SourceDocPanel, extractBlockTitle } from "./components/SourceDocPanel";
 
-import type { ProvNoteFile } from "./lib/document-types";
+import type { GraphiumFile } from "./lib/document-types";
 import type { NoteGraphData } from "./features/network-graph";
 
 // ── ヘッダーメニュー（Notion 風ドロップダウン） ──
@@ -177,22 +177,22 @@ function NoteHeaderMenu({
 // ── エディタ本体 ──
 type NoteEditorProps = {
   fileId: string | null;
-  initialDoc: ProvNoteDocument | null;
-  onSave: (doc: ProvNoteDocument) => void;
+  initialDoc: GraphiumDocument | null;
+  onSave: (doc: GraphiumDocument) => void;
   onDeriveNote: (title: string, sourceBlockId: string) => void;
-  onAiDeriveNote: (doc: ProvNoteDocument) => Promise<void>;
-  onNavigateNote: (noteId: string, cachedDoc?: ProvNoteDocument) => void;
+  onAiDeriveNote: (doc: GraphiumDocument) => Promise<void>;
+  onNavigateNote: (noteId: string, cachedDoc?: GraphiumDocument) => void;
   /** ドキュメントキャッシュ検索（サイドピーク即表示用） */
-  getCachedDoc?: (noteId: string) => ProvNoteDocument | undefined;
+  getCachedDoc?: (noteId: string) => GraphiumDocument | undefined;
   onRefreshFiles: () => void;
   saving: boolean;
-  files: ProvNoteFile[];
+  files: GraphiumFile[];
   noteGraphData: NoteGraphData;
   /** 派生元ノート（Split View 用、NoteApp が管理） */
-  sourceDoc: ProvNoteDocument | null;
-  onSourceDocChange: (doc: ProvNoteDocument | null) => void;
+  sourceDoc: GraphiumDocument | null;
+  onSourceDocChange: (doc: GraphiumDocument | null) => void;
   /** ノートインデックス（@ オートコンプリート用） */
-  noteIndex?: ProvNoteIndex | null;
+  noteIndex?: GraphiumIndex | null;
   /** メディアアップロード関数（メディアインデックス自動登録付き） */
   uploadFile?: (file: File) => Promise<string>;
   /** メディアインデックス（メディアピッカー用） */
@@ -259,7 +259,7 @@ function NoteEditorInner({
   const [sidePeekNoteId, setSidePeekNoteId] = useState<string | null>(null);
   const noteLinksRef = useRef<NoteLink[]>(initialDoc?.noteLinks ?? []);
   // 前回保存時のページ状態（差分計算用）
-  const prevPageRef = useRef<import("./lib/google-drive").ProvNotePage | null>(
+  const prevPageRef = useRef<import("./lib/google-drive").GraphiumPage | null>(
     initialDoc?.pages[0] ?? null,
   );
   // 最新の documentProvenance（保存ごとに更新）
@@ -486,7 +486,7 @@ function NoteEditorInner({
   }, [labelStore]);
 
   // ── 保存ロジック ──
-  const buildDocument = useCallback(async (): Promise<ProvNoteDocument> => {
+  const buildDocument = useCallback(async (): Promise<GraphiumDocument> => {
     const blocks = editorRef.current?.document || [];
     const labelSnapshot = labelStore.getSnapshot();
     const labelsObj: Record<string, string> = {};
@@ -510,7 +510,7 @@ function NoteEditorInner({
     // インデックステーブルの状態を収集
     const indexTablesSnapshot = indexTableStore.getSnapshot();
     const hasIndexTables = Object.keys(indexTablesSnapshot).length > 0;
-    let doc: ProvNoteDocument = {
+    let doc: GraphiumDocument = {
       version: 2,
       title,
       pages: [
@@ -931,7 +931,7 @@ function NoteEditorInner({
       const found = noteIndex?.notes.find((n) => n.title === noteName);
       if (found) return found.noteId;
       const file = files.find(
-        (f) => f.name.replace(/\.provnote\.json$/, "") === noteName
+        (f) => f.name.replace(/\.graphium\.json$/, "") === noteName
       );
       return file?.id ?? null;
     };

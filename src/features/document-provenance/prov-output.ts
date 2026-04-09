@@ -30,7 +30,7 @@ export function buildDocumentProvenanceBundle(
       "@id": agent.id,
       "@type": "prov:Agent",
       "rdfs:label": agent.label,
-      "provnote:agentType": agent.type,
+      "graphium:agentType": agent.type,
     };
     if (agent.email) agentNode["foaf:mbox"] = agent.email;
     graph.push(agentNode);
@@ -41,7 +41,7 @@ export function buildDocumentProvenanceBundle(
     graph.push({
       "@id": activity.id,
       "@type": "prov:Activity",
-      "provnote:editType": activity.type,
+      "graphium:editType": activity.type,
       "prov:startedAtTime": activity.startedAt,
       "prov:endedAtTime": activity.endedAt,
       "prov:wasAssociatedWith": { "@id": activity.wasAssociatedWith },
@@ -55,17 +55,17 @@ export function buildDocumentProvenanceBundle(
       "@type": "prov:Entity",
       "prov:generatedAtTime": revision.savedAt,
       "prov:wasGeneratedBy": { "@id": revision.wasGeneratedBy },
-      "provnote:summary": revision.summary,
+      "graphium:summary": revision.summary,
     };
     if (revision.wasDerivedFrom) {
       node["prov:wasDerivedFrom"] = { "@id": revision.wasDerivedFrom };
     }
     if (revision.driveRevisionId) {
-      node["provnote:driveRevisionId"] = revision.driveRevisionId;
+      node["graphium:driveRevisionId"] = revision.driveRevisionId;
     }
-    node["provnote:contentHash"] = revision.contentHash;
+    node["graphium:contentHash"] = revision.contentHash;
     if (revision.prevContentHash) {
-      node["provnote:prevContentHash"] = revision.prevContentHash;
+      node["graphium:prevContentHash"] = revision.prevContentHash;
     }
     graph.push(node);
   }

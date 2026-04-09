@@ -7,7 +7,7 @@ import { ja } from "./ja";
 
 export type Locale = "en" | "ja";
 
-const STORAGE_KEY = "provnote_locale";
+const STORAGE_KEY = "graphium_locale";
 
 const dictionaries: Record<Locale, Record<string, string>> = { en, ja };
 

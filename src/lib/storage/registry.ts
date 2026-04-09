@@ -4,7 +4,7 @@ import type { StorageProvider } from "./types";
 import { GoogleDriveProvider } from "./providers/google-drive";
 import { LocalStorageProvider } from "./providers/local";
 
-const STORAGE_KEY = "provnote_storage_provider";
+const STORAGE_KEY = "graphium_storage_provider";
 
 const providers = new Map<string, StorageProvider>();
 let activeProvider: StorageProvider | null = null;

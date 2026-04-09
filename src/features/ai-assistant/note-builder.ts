@@ -1,6 +1,6 @@
-// AI 回答から派生ノートの ProvNoteDocument を組み立てる
+// AI 回答から派生ノートの GraphiumDocument を組み立てる
 
-import type { ProvNoteDocument } from "../../lib/google-drive";
+import type { GraphiumDocument } from "../../lib/google-drive";
 import type { AgentRunResponse } from "./api";
 
 type BuildParams = {
@@ -21,9 +21,9 @@ type BuildParams = {
 };
 
 /**
- * AI 回答を含む派生ノートの ProvNoteDocument を生成する
+ * AI 回答を含む派生ノートの GraphiumDocument を生成する
  */
-export function buildAiDerivedDocument(params: BuildParams): ProvNoteDocument {
+export function buildAiDerivedDocument(params: BuildParams): GraphiumDocument {
   const {
     title,
     quotedMarkdown,
@@ -83,5 +83,5 @@ export function buildAiDerivedDocument(params: BuildParams): ProvNoteDocument {
     },
     createdAt: now,
     modifiedAt: now,
-  } as ProvNoteDocument;
+  } as GraphiumDocument;
 }

@@ -4,7 +4,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { LabelGalleryView } from "./LabelGalleryView";
 import { LocaleProvider } from "../../i18n";
-import type { ProvNoteIndex } from "../navigation/index-file";
+import type { GraphiumIndex } from "../navigation/index-file";
 
 const meta: Meta<typeof LabelGalleryView> = {
   title: "Organisms/LabelGalleryView",
@@ -27,7 +27,7 @@ const yesterday = new Date(Date.now() - 86400000).toISOString();
 const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
 const weekAgo = new Date(Date.now() - 604800000).toISOString();
 
-const mockIndex: ProvNoteIndex = {
+const mockIndex: GraphiumIndex = {
   version: 1,
   updatedAt: now,
   notes: [
@@ -85,7 +85,7 @@ const mockIndex: ProvNoteIndex = {
 };
 
 // 1件のみのデータ
-const singleIndex: ProvNoteIndex = {
+const singleIndex: GraphiumIndex = {
   version: 1,
   updatedAt: now,
   notes: [
@@ -104,7 +104,7 @@ const singleIndex: ProvNoteIndex = {
 };
 
 // 空データ
-const emptyIndex: ProvNoteIndex = {
+const emptyIndex: GraphiumIndex = {
   version: 1,
   updatedAt: now,
   notes: [],

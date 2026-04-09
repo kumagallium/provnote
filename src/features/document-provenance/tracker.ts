@@ -8,7 +8,7 @@ import type {
   EditActivityType,
 } from "./types";
 import { computeRevisionSummary, computePageHash, isEmptySummary } from "./diff";
-import type { ProvNoteDocument, ProvNotePage } from "../../lib/google-drive";
+import type { GraphiumDocument, GraphiumPage } from "../../lib/google-drive";
 
 // 既知のエージェント ID
 const HUMAN_AGENT_ID = "agent_human";
@@ -73,11 +73,11 @@ export type RecordRevisionOptions = {
 
 /** 保存時にリビジョンを追記する */
 export async function recordRevision(
-  doc: ProvNoteDocument,
-  prevPage: ProvNotePage | null,
+  doc: GraphiumDocument,
+  prevPage: GraphiumPage | null,
   activityType: EditActivityType,
   options?: RecordRevisionOptions,
-): Promise<ProvNoteDocument> {
+): Promise<GraphiumDocument> {
   const { agentLabel, email, force } = options ?? {};
   const provenance = doc.documentProvenance
     ? structuredClone(doc.documentProvenance)
@@ -154,7 +154,7 @@ export async function recordRevision(
 
 /** AI 操作による保存の場合、generatedBy から EditAgent 情報を抽出 */
 export function detectActivityType(
-  doc: ProvNoteDocument,
+  doc: GraphiumDocument,
 ): { type: EditActivityType; agentLabel?: string } {
   if (doc.generatedBy) {
     const model = doc.generatedBy.model ?? doc.generatedBy.agent;

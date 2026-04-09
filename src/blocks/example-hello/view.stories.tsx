@@ -56,14 +56,14 @@ export const Default: StoryObj = {
 
 // カスタム名前
 export const CustomName: StoryObj = {
-  name: "カスタム名前（provnote）",
+  name: "カスタム名前（Graphium）",
   render: () => (
     <Safe>
       <div style={{ maxWidth: 800, border: "1px solid #e5e7eb", borderRadius: 12 }}>
         <SandboxEditor
           blocks={[helloBlock]}
           initialContent={[
-            { type: "hello", props: { name: "provnote" } },
+            { type: "hello", props: { name: "Graphium" } },
           ]}
         />
       </div>

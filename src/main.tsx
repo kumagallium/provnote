@@ -1,5 +1,6 @@
 import { ReactNode, StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { migrateFromProvnote } from "./lib/migration";
 import { SandboxEditor } from "./base/editor";
 import { MultiPageLayout, useMultiPage } from "./base/multipage";
 import { helloBlock } from "./blocks/example-hello";
@@ -347,6 +348,9 @@ function SandboxApp() {
     </div>
   );
 }
+
+// ── マイグレーション（provnote → graphium） ──
+migrateFromProvnote();
 
 // ── エントリーポイント ──
 createRoot(document.getElementById("root")!).render(

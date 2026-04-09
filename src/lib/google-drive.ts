@@ -1,18 +1,18 @@
 // Google Drive API v3 操作
-// ProvNote 専用フォルダ内にノートファイルを保存・読み込み
+// Graphium 専用フォルダ内にノートファイルを保存・読み込み
 //
 // 注意: このファイルは StorageProvider 抽象化後も残しているが、
 // 新規コードは src/lib/storage/ 経由でアクセスすること。
 // 型定義は src/lib/document-types.ts に移動済み（ここから再エクスポート）。
 
 import { getAccessToken } from "./google-auth";
-import type { ProvNoteDocument, ProvNoteFile } from "./document-types";
+import type { GraphiumDocument, GraphiumFile } from "./document-types";
 
 // ドメイン型を再エクスポート（既存コードの互換性維持）
 export type {
-  ProvNoteFile,
-  ProvNoteDocument,
-  ProvNotePage,
+  GraphiumFile,
+  GraphiumDocument,
+  GraphiumPage,
   NoteLink,
   ChatMessage,
   ScopeChat,
@@ -20,7 +20,7 @@ export type {
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-const FOLDER_NAME = "ProvNote";
+const FOLDER_NAME = "Graphium";
 const UPLOAD_FILES_FOLDER = "uploadFiles";
 const MIME_FOLDER = "application/vnd.google-apps.folder";
 const MIME_JSON = "application/json";
@@ -52,11 +52,11 @@ async function authedFetch(
 let cachedFolderId: string | null = null;
 let cachedUploadFolderId: string | null = null;
 
-// ProvNote 専用フォルダを取得 or 作成
+// Graphium 専用フォルダを取得 or 作成（旧名 ProvNote からの自動リネーム付き）
 export async function getOrCreateFolder(): Promise<string> {
   if (cachedFolderId) return cachedFolderId;
 
-  // 既存フォルダを検索
+  // 新しい名前で検索
   const query = `name='${FOLDER_NAME}' and mimeType='${MIME_FOLDER}' and trashed=false`;
   const res = await authedFetch(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive`
@@ -65,6 +65,25 @@ export async function getOrCreateFolder(): Promise<string> {
 
   if (data.files && data.files.length > 0) {
     cachedFolderId = data.files[0].id;
+    return cachedFolderId!;
+  }
+
+  // 旧名 "ProvNote" フォルダを検索 → 見つかったらリネーム
+  const legacyQuery = `name='ProvNote' and mimeType='${MIME_FOLDER}' and trashed=false`;
+  const legacyRes = await authedFetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(legacyQuery)}&fields=files(id,name)&spaces=drive`
+  );
+  const legacyData = await legacyRes.json();
+
+  if (legacyData.files && legacyData.files.length > 0) {
+    const legacyId = legacyData.files[0].id;
+    // フォルダ名を Graphium にリネーム
+    await authedFetch(`${DRIVE_API}/files/${legacyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": MIME_JSON },
+      body: JSON.stringify({ name: FOLDER_NAME }),
+    });
+    cachedFolderId = legacyId;
     return cachedFolderId!;
   }
 
@@ -82,8 +101,8 @@ export async function getOrCreateFolder(): Promise<string> {
   return cachedFolderId!;
 }
 
-// ProvNote フォルダ内のファイル一覧を取得
-export async function listFiles(): Promise<ProvNoteFile[]> {
+// Graphium フォルダ内のファイル一覧を取得
+export async function listFiles(): Promise<GraphiumFile[]> {
   const folderId = await getOrCreateFolder();
   const query = `'${folderId}' in parents and mimeType!='${MIME_FOLDER}' and trashed=false`;
   const fields = "files(id,name,modifiedTime,createdTime)";
@@ -96,16 +115,16 @@ export async function listFiles(): Promise<ProvNoteFile[]> {
 }
 
 // ファイルの内容を読み込み
-export async function loadFile(fileId: string): Promise<ProvNoteDocument> {
+export async function loadFile(fileId: string): Promise<GraphiumDocument> {
   const res = await authedFetch(
     `${DRIVE_API}/files/${fileId}?alt=media`
   );
-  const doc: ProvNoteDocument = await res.json();
+  const doc: GraphiumDocument = await res.json();
   return migrateDocument(doc);
 }
 
 /** v1 → v2 自動変換: links → provLinks + knowledgeLinks */
-function migrateDocument(doc: ProvNoteDocument): ProvNoteDocument {
+function migrateDocument(doc: GraphiumDocument): GraphiumDocument {
   for (const page of doc.pages) {
     // 旧 links フィールドが存在し、新フィールドがない場合は変換
     if (page.links && !page.provLinks) {
@@ -136,10 +155,10 @@ function migrateDocument(doc: ProvNoteDocument): ProvNoteDocument {
 // 新規ファイルを作成
 export async function createFile(
   title: string,
-  content: ProvNoteDocument
+  content: GraphiumDocument
 ): Promise<string> {
   const folderId = await getOrCreateFolder();
-  const fileName = `${title}.provnote.json`;
+  const fileName = `${title}.graphium.json`;
 
   // multipart upload（メタデータ + ファイル内容を一度に送信）
   const metadata = {
@@ -148,7 +167,7 @@ export async function createFile(
     mimeType: MIME_JSON,
   };
 
-  const boundary = "provnote_boundary";
+  const boundary = "graphium_boundary";
   const body = [
     `--${boundary}`,
     "Content-Type: application/json; charset=UTF-8",
@@ -178,10 +197,10 @@ export async function createFile(
 // 既存ファイルを上書き保存（タイトル変更時はファイル名も更新）
 export async function saveFile(
   fileId: string,
-  content: ProvNoteDocument
+  content: GraphiumDocument
 ): Promise<void> {
   // 1. メタデータ更新（ファイル名）
-  const fileName = `${content.title}.provnote.json`;
+  const fileName = `${content.title}.graphium.json`;
   await authedFetch(
     `${DRIVE_API}/files/${fileId}`,
     {
@@ -232,7 +251,7 @@ export async function deleteFile(fileId: string): Promise<void> {
   });
 }
 
-// ProvNote/uploadFiles サブフォルダを取得 or 作成
+// Graphium/uploadFiles サブフォルダを取得 or 作成
 async function getOrCreateUploadFolder(): Promise<string> {
   if (cachedUploadFolderId) return cachedUploadFolderId;
 

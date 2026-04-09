@@ -16,7 +16,7 @@ import { buildDocumentProvenanceBundle, type DocumentProvenanceBundle } from "..
 /** 埋め込み属性（[属性] ラベルの段落テキスト） */
 export type ProvAttribute = {
   "rdfs:label": string;
-  "provnote:blockId"?: string;
+  "graphium:blockId"?: string;
 };
 
 export type ProvJsonLdNode = {
@@ -25,22 +25,22 @@ export type ProvJsonLdNode = {
   "rdfs:label": string;
   "prov:used"?: { "@id": string }[];
   "prov:wasGeneratedBy"?: { "@id": string };
-  "provnote:attributes"?: ProvAttribute[];
-  "provnote:blockId"?: string;
-  [key: `provnote:${string}`]: any;
+  "graphium:attributes"?: ProvAttribute[];
+  "graphium:blockId"?: string;
+  [key: `graphium:${string}`]: any;
 };
 
 export type ProvJsonLd = {
   "@context": {
     prov: "http://www.w3.org/ns/prov#";
-    provnote: "https://provnote.app/ns#";
+    graphium: "https://graphium.app/ns#";
     rdfs: "http://www.w3.org/2000/01/rdf-schema#";
     xsd: "http://www.w3.org/2001/XMLSchema#";
   };
   "@graph": ProvJsonLdNode[];
-  "provnote:warnings"?: ProvWarning[];
+  "graphium:warnings"?: ProvWarning[];
   /** ドキュメント来歴（Content Provenance とは分離した prov:Bundle） */
-  "provnote:documentProvenance"?: DocumentProvenanceBundle;
+  "graphium:documentProvenance"?: DocumentProvenanceBundle;
 };
 
 // 後方互換: 旧型名をエイリアスとして維持
@@ -286,7 +286,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
-  // ── [属性] → 親ノードの provnote:attributes に埋め込み ──
+  // ── [属性] → 親ノードの graphium:attributes に埋め込み ──
   // 独立ノードは作らず、親の Entity/Activity のプロパティとして格納
   for (const lb of labeledBlocks) {
     if (lb.coreLabel === "[属性]") {
@@ -424,23 +424,23 @@ function buildProvJsonLd(
       "@id": n["@id"],
       "@type": n["@type"],
       "rdfs:label": n.label,
-      "provnote:blockId": n.blockId,
+      "graphium:blockId": n.blockId,
     };
     // Entity サブタイプ（material / tool）
     if (n.entitySubtype) {
-      jsonLdNode["provnote:entityType"] = n.entitySubtype;
+      jsonLdNode["graphium:entityType"] = n.entitySubtype;
     }
     // 構造化属性（テーブルから展開された params）
     if (n.params) {
       for (const [k, v] of Object.entries(n.params)) {
-        jsonLdNode[`provnote:${k}` as `provnote:${string}`] = v;
+        jsonLdNode[`graphium:${k}` as `graphium:${string}`] = v;
       }
     }
     // 埋め込み属性（[属性] ラベルの段落テキスト）
     if (n.attributes && n.attributes.length > 0) {
-      jsonLdNode["provnote:attributes"] = n.attributes.map((a) => ({
+      jsonLdNode["graphium:attributes"] = n.attributes.map((a) => ({
         "rdfs:label": a.label,
-        "provnote:blockId": a.blockId,
+        "graphium:blockId": a.blockId,
       }));
     }
     nodeMap.set(n["@id"], jsonLdNode);
@@ -464,7 +464,7 @@ function buildProvJsonLd(
         sourceNode["prov:wasGeneratedBy"] = { "@id": rel.to };
         break;
       }
-      // provnote:hasAttribute は廃止 — 属性は provnote:attributes に直接埋め込み
+      // graphium:hasAttribute は廃止 — 属性は graphium:attributes に直接埋め込み
     }
   }
 
@@ -476,13 +476,13 @@ function buildProvJsonLd(
   return {
     "@context": {
       prov: "http://www.w3.org/ns/prov#",
-      provnote: "https://provnote.app/ns#",
+      graphium: "https://graphium.app/ns#",
       rdfs: "http://www.w3.org/2000/01/rdf-schema#",
       xsd: "http://www.w3.org/2001/XMLSchema#",
     },
     "@graph": [...nodeMap.values()],
-    "provnote:warnings": warnings.length > 0 ? warnings : undefined,
-    "provnote:documentProvenance": docProvBundle,
+    "graphium:warnings": warnings.length > 0 ? warnings : undefined,
+    "graphium:documentProvenance": docProvBundle,
   };
 }
 
@@ -639,8 +639,8 @@ export function extractRelations(doc: ProvJsonLd): FlatRelation[] {
         to: node["prov:wasGeneratedBy"]["@id"],
       });
     }
-    // provnote:attributes はプロパティ埋め込み — extractRelations には含めない
-    // ビュー層が provnote:attributes を直接読んでダイヤモンドノードを生成する
+    // graphium:attributes はプロパティ埋め込み — extractRelations には含めない
+    // ビュー層が graphium:attributes を直接読んでダイヤモンドノードを生成する
   }
 
   return relations;

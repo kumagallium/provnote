@@ -37,7 +37,7 @@ export default meta;
 // ── @context 共通 ──
 const ctx = {
   prov: "http://www.w3.org/ns/prov#" as const,
-  provnote: "https://provnote.app/ns#" as const,
+  graphium: "https://graphium.app/ns#" as const,
   rdfs: "http://www.w3.org/2000/01/rdf-schema#" as const,
   xsd: "http://www.w3.org/2001/XMLSchema#" as const,
 };
@@ -50,29 +50,29 @@ const simpleProv: ProvJsonLd = {
       "@id": "activity_b1",
       "@type": "prov:Activity",
       "rdfs:label": "封入する",
-      "provnote:blockId": "b1",
+      "graphium:blockId": "b1",
       "prov:used": [{ "@id": "entity_b3" }],
     },
     {
       "@id": "activity_b2",
       "@type": "prov:Activity",
       "rdfs:label": "アニールする",
-      "provnote:blockId": "b2",
-      "provnote:attributes": [
-        { "rdfs:label": "昇温速度 5℃/min", "provnote:blockId": "b5" },
+      "graphium:blockId": "b2",
+      "graphium:attributes": [
+        { "rdfs:label": "昇温速度 5℃/min", "graphium:blockId": "b5" },
       ],
     },
     {
       "@id": "entity_b3",
       "@type": "prov:Entity",
       "rdfs:label": "Cu粉末",
-      "provnote:blockId": "b3",
+      "graphium:blockId": "b3",
     },
     {
       "@id": "result_b4",
       "@type": "prov:Entity",
       "rdfs:label": "封入されたCu粉末",
-      "provnote:blockId": "b4",
+      "graphium:blockId": "b4",
       "prov:wasGeneratedBy": { "@id": "activity_b1" },
     },
   ],
@@ -81,7 +81,7 @@ const simpleProv: ProvJsonLd = {
 const provWithWarnings: ProvJsonLd = {
   "@context": ctx,
   "@graph": simpleProv["@graph"],
-  "provnote:warnings": [
+  "graphium:warnings": [
     { type: "unknown-label", message: "ブロック block-5 のラベル [メモ] は未知のラベルです", blockId: "block-5" },
     { type: "broken-link", message: "前手順リンク先 block-9 が見つかりません", blockId: "block-7" },
   ],
@@ -95,24 +95,24 @@ const provWithStructuredTable: ProvJsonLd = {
       "@id": "activity_step1",
       "@type": "prov:Activity",
       "rdfs:label": "混合する",
-      "provnote:blockId": "step1",
+      "graphium:blockId": "step1",
       "prov:used": [{ "@id": "entity_table1_Cu粉末" }, { "@id": "entity_table1_Zn粉末" }],
     },
     {
       "@id": "entity_table1_Cu粉末",
       "@type": "prov:Entity",
       "rdfs:label": "Cu粉末",
-      "provnote:blockId": "table1",
-      "provnote:量": "1g",
-      "provnote:純度": "99.9%",
+      "graphium:blockId": "table1",
+      "graphium:量": "1g",
+      "graphium:純度": "99.9%",
     },
     {
       "@id": "entity_table1_Zn粉末",
       "@type": "prov:Entity",
       "rdfs:label": "Zn粉末",
-      "provnote:blockId": "table1",
-      "provnote:量": "0.5g",
-      "provnote:純度": "99.5%",
+      "graphium:blockId": "table1",
+      "graphium:量": "0.5g",
+      "graphium:純度": "99.5%",
     },
   ],
 };

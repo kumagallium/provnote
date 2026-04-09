@@ -122,7 +122,7 @@ Google Drive sync works without any configuration. To enable AI features, you ne
 - **Provenance graph** visualization (Cytoscape.js + ELK layout)
 - **Inter-note network graph** (Cytoscape.js + fcose layout)
 - **AI assistant** — derive notes from AI responses with full provenance metadata
-- **Google Drive storage** — notes saved as `.provnote.json` files
+- **Google Drive storage** — notes saved as `.graphium.json` files
 - **Google OAuth 2.0** authentication
 
 ### Screenshots
@@ -188,7 +188,7 @@ The per-page export conforms to the [W3C PROV-JSON-LD specification](https://www
 - Relationships as separate objects (`Usage`, `Generation`, `Derivation`, `Association`)
 - Standard property names (`startTime`, `endTime`, `entity`, `activity`, `agent`)
 
-Graphium-specific extensions use the `provnote:` namespace (`https://provnote.app/ns#`), including `provnote:entityType`, `provnote:attributes`, `provnote:editType`, `provnote:summary`, and `provnote:contentHash`.
+Graphium-specific extensions use the `graphium:` namespace (`https://graphium.app/ns#`), including `graphium:entityType`, `graphium:attributes`, `graphium:editType`, `graphium:summary`, and `graphium:contentHash`.
 
 ## Architecture
 

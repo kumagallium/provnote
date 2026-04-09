@@ -13,8 +13,8 @@ Thank you for your interest in contributing to Graphium! This guide will help yo
 
 ```bash
 # Clone the repository
-git clone https://github.com/kumagallium/provnote.git
-cd provnote
+git clone https://github.com/kumagallium/Graphium.git
+cd Graphium
 
 # Install dependencies
 pnpm install
@@ -23,7 +23,7 @@ pnpm install
 cp .env.example .env
 
 # Start development server
-pnpm dev          # http://localhost:5173/provnote/
+pnpm dev          # http://localhost:5173/Graphium/
 
 # Start Storybook
 pnpm storybook    # http://localhost:6006/
@@ -46,7 +46,7 @@ pnpm build            # TypeScript check + Vite production build
 
 ### Reporting Bugs
 
-1. Search [existing issues](https://github.com/kumagallium/provnote/issues) to avoid duplicates
+1. Search [existing issues](https://github.com/kumagallium/Graphium/issues) to avoid duplicates
 2. Open a new issue with:
    - Steps to reproduce
    - Expected vs actual behavior

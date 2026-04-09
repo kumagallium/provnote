@@ -1,6 +1,6 @@
 // インデックステーブルの行からノートを作成するロジック
 
-import type { ProvNoteDocument, ProvNoteFile } from "../../lib/document-types";
+import type { GraphiumDocument, GraphiumFile } from "../../lib/document-types";
 import { getActiveProvider } from "../../lib/storage/registry";
 
 // テーブル行の1列目テキストを取得する
@@ -40,7 +40,7 @@ export async function createNoteFromRow(
   editor: any,
   tableBlockId: string,
   rowIndex: number,
-  files: ProvNoteFile[],
+  files: GraphiumFile[],
   store: { setLinkedNote: (blockId: string, sampleName: string, noteId: string) => void },
   onAddNoteLink?: (targetNoteId: string, sourceBlockId: string) => void,
 ): Promise<string | null> {
@@ -52,7 +52,7 @@ export async function createNoteFromRow(
 
   // 同名ノートが既にあるか確認
   const existing = files.find(
-    (f) => f.name.replace(/\.provnote\.json$/, "") === title
+    (f) => f.name.replace(/\.graphium\.json$/, "") === title
   );
   if (existing) {
     const ok = confirm(`「${title}」という名前のノートが既に存在します。新しいノートを作成しますか？`);
@@ -61,7 +61,7 @@ export async function createNoteFromRow(
 
   // 新規ノートドキュメントを構築
   const now = new Date().toISOString();
-  const newDoc: ProvNoteDocument = {
+  const newDoc: GraphiumDocument = {
     version: 2,
     title,
     pages: [

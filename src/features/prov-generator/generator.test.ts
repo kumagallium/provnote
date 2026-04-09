@@ -7,7 +7,7 @@ function getRelations(doc: ReturnType<typeof generateProvDocument>) {
 }
 
 function getWarnings(doc: ReturnType<typeof generateProvDocument>) {
-  return doc["provnote:warnings"] ?? [];
+  return doc["graphium:warnings"] ?? [];
 }
 
 // ──────────────────────────────────
@@ -88,16 +88,16 @@ describe("カレー実験シナリオ（基本形）", () => {
     expect(entities.some((e) => e["rdfs:label"] === "にんじん、じゃがいも")).toBe(true);
   });
 
-  it("[属性] が親ノード（Activity）の provnote:attributes に埋め込まれる", () => {
+  it("[属性] が親ノード（Activity）の graphium:attributes に埋め込まれる", () => {
     const doc = generateProvDocument({ blocks: curryBlocks, labels: curryLabels, links: curryLinks });
     // param_ ノードは生成されない
     const params = doc["@graph"].filter((n) => n["@id"].startsWith("param_"));
     expect(params).toHaveLength(0);
     // 「炒める」Activity に属性が埋め込まれている
     const fryAct = doc["@graph"].find((n) => n["@id"] === "activity_h2-fry");
-    expect(fryAct?.["provnote:attributes"]).toBeDefined();
-    expect(fryAct!["provnote:attributes"]).toHaveLength(1);
-    expect(fryAct!["provnote:attributes"]![0]["rdfs:label"]).toBe("中火 5分");
+    expect(fryAct?.["graphium:attributes"]).toBeDefined();
+    expect(fryAct!["graphium:attributes"]).toHaveLength(1);
+    expect(fryAct!["graphium:attributes"]![0]["rdfs:label"]).toBe("中火 5分");
   });
 
   it("[結果] が Entity として生成される", () => {
@@ -125,11 +125,11 @@ describe("カレー実験シナリオ（基本形）", () => {
     expect(doc["@context"].xsd).toBe("http://www.w3.org/2001/XMLSchema#");
   });
 
-  it("ノードに rdfs:label と provnote:blockId が含まれる", () => {
+  it("ノードに rdfs:label と graphium:blockId が含まれる", () => {
     const doc = generateProvDocument({ blocks: curryBlocks, labels: curryLabels, links: curryLinks });
     for (const node of doc["@graph"]) {
       expect(node["rdfs:label"]).toBeDefined();
-      expect(node["provnote:blockId"]).toBeDefined();
+      expect(node["graphium:blockId"]).toBeDefined();
     }
   });
 
@@ -138,9 +138,9 @@ describe("カレー実験シナリオ（基本形）", () => {
     expect((doc as any).relations).toBeUndefined();
     const actCut = doc["@graph"].find((n) => n["@id"] === "activity_h2-cut");
     expect(actCut?.["prov:used"]).toBeDefined();
-    // 属性は provnote:attributes として埋め込み（hasAttribute リレーションなし）
+    // 属性は graphium:attributes として埋め込み（hasAttribute リレーションなし）
     const relations = getRelations(doc);
-    const attrRels = relations.filter((r) => r["@type"] === "provnote:hasAttribute");
+    const attrRels = relations.filter((r) => r["@type"] === "graphium:hasAttribute");
     expect(attrRels).toHaveLength(0);
   });
 });
@@ -220,8 +220,8 @@ describe("スコープ境界テスト", () => {
     const doc = generateProvDocument({ blocks: scopeBlocks, labels: scopeLabels, links: [] });
     // 「炒める」Activity に属性が埋め込まれている
     const fryAct = doc["@graph"].find((n) => n["@id"] === "activity_h2-fry");
-    expect(fryAct?.["provnote:attributes"]).toBeDefined();
-    expect(fryAct!["provnote:attributes"]!.some((a: any) => a["rdfs:label"] === "中火")).toBe(true);
+    expect(fryAct?.["graphium:attributes"]).toBeDefined();
+    expect(fryAct!["graphium:attributes"]!.some((a: any) => a["rdfs:label"] === "中火")).toBe(true);
   });
 
   it("H1がスコープをリセットする", () => {
@@ -440,11 +440,11 @@ describe("見出しレベル階層スコープ", () => {
     expect(resultA2[0].to).toBe("activity_h3-a2");
   });
 
-  it("[属性] は H3 サブActivity の provnote:attributes に埋め込まれる", () => {
+  it("[属性] は H3 サブActivity の graphium:attributes に埋め込まれる", () => {
     const doc = generateProvDocument({ blocks: hierarchyBlocks, labels: hierarchyLabels, links: [] });
     const a2Act = doc["@graph"].find((n) => n["@id"] === "activity_h3-a2");
-    expect(a2Act?.["provnote:attributes"]).toBeDefined();
-    expect(a2Act!["provnote:attributes"]!.some((a: any) => a["rdfs:label"] === "Param A.2")).toBe(true);
+    expect(a2Act?.["graphium:attributes"]).toBeDefined();
+    expect(a2Act!["graphium:attributes"]!.some((a: any) => a["rdfs:label"] === "Param A.2")).toBe(true);
   });
 
   it("次のH2で全スコープがリセットされる", () => {
@@ -557,12 +557,12 @@ describe("Phase 3: テーブル構造化属性", () => {
     const cuEntity = doc["@graph"].find((n) => n["@id"] === "entity_mat-table_Cu粉末");
     expect(cuEntity).toBeDefined();
     expect(cuEntity!["rdfs:label"]).toBe("Cu粉末");
-    expect(cuEntity!["provnote:量"]).toBe("1g");
-    expect(cuEntity!["provnote:純度"]).toBe("99.9%");
+    expect(cuEntity!["graphium:量"]).toBe("1g");
+    expect(cuEntity!["graphium:純度"]).toBe("99.9%");
 
     const znEntity = doc["@graph"].find((n) => n["@id"] === "entity_mat-table_Zn粉末");
     expect(znEntity).toBeDefined();
-    expect(znEntity!["provnote:量"]).toBe("0.5g");
+    expect(znEntity!["graphium:量"]).toBe("0.5g");
 
     // used 関係（Activity → Entity）
     const relations = getRelations(doc);
@@ -604,7 +604,7 @@ describe("Phase 3: テーブル構造化属性", () => {
     const densityEntity = doc["@graph"].find((n) => n["@id"] === "result_res-table_密度");
     expect(densityEntity).toBeDefined();
     expect(densityEntity!["rdfs:label"]).toBe("密度");
-    expect(densityEntity!["provnote:値"]).toBe("8.96 g/cm³");
+    expect(densityEntity!["graphium:値"]).toBe("8.96 g/cm³");
 
     // wasGeneratedBy 関係
     const relations = getRelations(doc);
@@ -700,6 +700,6 @@ describe("extractRelations", () => {
     const types = new Set(relations.map((r) => r["@type"]));
     expect(types.has("prov:used")).toBe(true);
     expect(types.has("prov:wasGeneratedBy")).toBe(true);
-    expect(types.has("provnote:hasAttribute")).toBe(false);
+    expect(types.has("graphium:hasAttribute")).toBe(false);
   });
 });

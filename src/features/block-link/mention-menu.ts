@@ -1,8 +1,8 @@
 // @ をトリガーの参照リンクオートコンプリート
 // 知識層リンク（reference）を作成する
 
-import type { ProvNoteFile } from "../../lib/google-drive";
-import type { ProvNoteIndex } from "../navigation/index-file";
+import type { GraphiumFile } from "../../lib/google-drive";
+import type { GraphiumIndex } from "../navigation/index-file";
 
 // 参照候補の型
 export type ReferenceSuggestion = {
@@ -59,9 +59,9 @@ export function getHeadingSuggestions(currentBlockId?: string): ReferenceSuggest
  * @param noteIndex インデックスファイル（オプション）
  */
 export function getNoteSuggestions(
-  files: ProvNoteFile[],
+  files: GraphiumFile[],
   currentFileId?: string,
-  noteIndex?: ProvNoteIndex | null,
+  noteIndex?: GraphiumIndex | null,
 ): ReferenceSuggestion[] {
   // インデックスがあればノート + 見出しの候補を返す
   if (noteIndex) {
@@ -91,7 +91,7 @@ export function getNoteSuggestions(
     .map((f) => ({
       type: "note" as const,
       id: f.id,
-      label: f.name.replace(/\.provnote\.json$/, ""),
+      label: f.name.replace(/\.graphium\.json$/, ""),
       group: "他のノート",
     }));
 }

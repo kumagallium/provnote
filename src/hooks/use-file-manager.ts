@@ -2,7 +2,7 @@
 // NoteApp のファイル一覧/キャッシュ/開く/新規/保存/削除/派生/グラフ/インデックスを集約
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProvNoteFile, ProvNoteDocument } from "../lib/document-types";
+import type { GraphiumFile, GraphiumDocument } from "../lib/document-types";
 import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
@@ -19,7 +19,7 @@ import {
   removeIndexEntry,
   saveIndexFile,
   type RecentNote,
-  type ProvNoteIndex,
+  type GraphiumIndex,
 } from "../features/navigation";
 import {
   saveMediaIndex,
@@ -43,13 +43,13 @@ import {
 const storage = () => getActiveProvider();
 const listFiles = () => storage().listFiles();
 const loadFile = (id: string) => storage().loadFile(id);
-const createFile = (title: string, content: ProvNoteDocument) => storage().createFile(title, content);
-const saveFile = (id: string, content: ProvNoteDocument) => storage().saveFile(id, content);
+const createFile = (title: string, content: GraphiumDocument) => storage().createFile(title, content);
+const saveFile = (id: string, content: GraphiumDocument) => storage().saveFile(id, content);
 const deleteFile = (id: string) => storage().deleteFile(id);
 const uploadMediaFileWithMeta = (file: File) => storage().uploadMedia(file);
 
 export function useFileManager(authenticated: boolean) {
-  const [files, setFiles] = useState<ProvNoteFile[]>([]);
+  const [files, setFiles] = useState<GraphiumFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(true); // 初回読み込み待ち
   const [activeFileId, _setActiveFileId] = useState<string | null>(null);
   const activeFileIdRef = useRef<string | null>(null);
@@ -58,30 +58,30 @@ export function useFileManager(authenticated: boolean) {
     _setActiveFileId(id);
     // 最後に開いたファイルを記録
     if (id) {
-      localStorage.setItem("provnote_last_file", id);
+      localStorage.setItem("graphium_last_file", id);
     }
   }, []);
-  const [activeDoc, setActiveDoc] = useState<ProvNoteDocument | null>(null);
+  const [activeDoc, setActiveDoc] = useState<GraphiumDocument | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   // エディタを強制的にリマウントするためのキー
   const [editorKey, setEditorKey] = useState(0);
   // ノートキャッシュ（Drive API 呼び出しを削減）
-  const docCacheRef = useRef<Map<string, ProvNoteDocument>>(new Map());
+  const docCacheRef = useRef<Map<string, GraphiumDocument>>(new Map());
   // ネットワークグラフデータ
   const [noteGraphData, setNoteGraphData] = useState<NoteGraphData>({ nodes: [], edges: [] });
   // Split View 用の派生元ノート（NoteApp レベルで管理し、ファイル切り替えでも保持）
-  const [sourceDoc, setSourceDoc] = useState<ProvNoteDocument | null>(null);
+  const [sourceDoc, setSourceDoc] = useState<GraphiumDocument | null>(null);
   // ノート一覧ビューの表示状態
   const [showNoteList, setShowNoteList] = useState(false);
   // 最近のノート履歴
   const [recentNotes, setRecentNotes] = useState<RecentNote[]>(() => getRecentNotes());
-  // ノートインデックス（.provnote-index.json）
-  const [noteIndex, setNoteIndex] = useState<ProvNoteIndex | null>(null);
-  const noteIndexRef = useRef<ProvNoteIndex | null>(null);
+  // ノートインデックス（.graphium-index.json）
+  const [noteIndex, setNoteIndex] = useState<GraphiumIndex | null>(null);
+  const noteIndexRef = useRef<GraphiumIndex | null>(null);
   // 派生ノート作成中フラグ
   const [deriving, setDeriving] = useState(false);
-  // メディアインデックス（.provnote-media-index.json）
+  // メディアインデックス（.graphium-media-index.json）
   const [mediaIndex, setMediaIndex] = useState<MediaIndex | null>(null);
   const mediaIndexRef = useRef<MediaIndex | null>(null);
   // アセットギャラリーの表示状態
@@ -104,7 +104,7 @@ export function useFileManager(authenticated: boolean) {
 
   // ネットワークグラフを構築（全ノートの派生関係を取得）
   const rebuildGraph = useCallback(
-    async (currentId: string | null, fileList: ProvNoteFile[]) => {
+    async (currentId: string | null, fileList: GraphiumFile[]) => {
       if (!currentId || fileList.length === 0) {
         setNoteGraphData({ nodes: [], edges: [] });
         return;
@@ -131,7 +131,7 @@ export function useFileManager(authenticated: boolean) {
   );
 
   // ファイルを開く（キャッシュ優先、cachedDoc が渡された場合はキャッシュを即時更新）
-  const handleOpenFile = useCallback(async (fileId: string, cachedDoc?: ProvNoteDocument) => {
+  const handleOpenFile = useCallback(async (fileId: string, cachedDoc?: GraphiumDocument) => {
     try {
       // ノート一覧・ギャラリービューを閉じる
       setShowNoteList(false);
@@ -188,7 +188,7 @@ export function useFileManager(authenticated: boolean) {
     if (!authenticated) return;
     (async () => {
       await refreshFiles();
-      const lastFileId = localStorage.getItem("provnote_last_file");
+      const lastFileId = localStorage.getItem("graphium_last_file");
       if (lastFileId && !activeFileIdRef.current) {
         handleOpenFile(lastFileId);
       }
@@ -201,7 +201,7 @@ export function useFileManager(authenticated: boolean) {
     if (filesLoading) return; // ファイル一覧取得中はインデックス構築をスキップ
     if (files.length === 0) {
       // ノートが無い場合は空のインデックスをセット（NoteListView の loading 解除）
-      const emptyIndex: ProvNoteIndex = { version: 3, updatedAt: new Date().toISOString(), notes: [] };
+      const emptyIndex: GraphiumIndex = { version: 3, updatedAt: new Date().toISOString(), notes: [] };
       noteIndexRef.current = emptyIndex;
       setNoteIndex(emptyIndex);
       return;
@@ -256,7 +256,7 @@ export function useFileManager(authenticated: boolean) {
     setActiveAssetType(null);
     setActiveLabel(null);
     setShowNoteList(false);
-    let doc: ProvNoteDocument = {
+    let doc: GraphiumDocument = {
       ...PROV_TEMPLATE,
       createdAt: new Date().toISOString(),
       modifiedAt: new Date().toISOString(),
@@ -269,7 +269,7 @@ export function useFileManager(authenticated: boolean) {
 
   // 保存（ref 経由で常に最新の activeFileId を使用）
   const handleSave = useCallback(
-    async (doc: ProvNoteDocument) => {
+    async (doc: GraphiumDocument) => {
       // 保存中なら二重実行しない
       if (savingRef.current) return;
       savingRef.current = true;
@@ -295,7 +295,7 @@ export function useFileManager(authenticated: boolean) {
           setFiles((prev) =>
             prev.map((f) =>
               f.id === currentFileId
-                ? { ...f, name: `${doc.title}.provnote.json`, modifiedTime: new Date().toISOString() }
+                ? { ...f, name: `${doc.title}.graphium.json`, modifiedTime: new Date().toISOString() }
                 : f
             )
           );
@@ -310,9 +310,9 @@ export function useFileManager(authenticated: boolean) {
           // 最近のノートに追加
           setRecentNotes(addToRecent(newId, doc.title));
           // 新規ファイルを一覧に追加
-          const newFile: ProvNoteFile = {
+          const newFile: GraphiumFile = {
             id: newId,
-            name: `${doc.title}.provnote.json`,
+            name: `${doc.title}.graphium.json`,
             modifiedTime: new Date().toISOString(),
             createdTime: new Date().toISOString(),
           };
@@ -359,7 +359,7 @@ export function useFileManager(authenticated: boolean) {
       try {
         // 派生先ノートを作成
         const now = new Date().toISOString();
-        let newDoc: ProvNoteDocument = {
+        let newDoc: GraphiumDocument = {
           version: 2,
           title: `↳ ${derivedTitle}`,
           pages: [{ id: "main", title: `↳ ${derivedTitle}`, blocks: [], labels: {}, provLinks: [], knowledgeLinks: [] }],
@@ -381,7 +381,7 @@ export function useFileManager(authenticated: boolean) {
             sourceBlockId,
             type: "derived_from",
           });
-          let updatedDoc: ProvNoteDocument = { ...latestDoc, noteLinks, modifiedAt: now };
+          let updatedDoc: GraphiumDocument = { ...latestDoc, noteLinks, modifiedAt: now };
           // ドキュメント来歴: 派生元として記録
           updatedDoc = await recordRevision(updatedDoc, latestDoc.pages[0], "derive_source", { force: true });
           await saveFile(activeFileIdRef.current, updatedDoc);
@@ -392,7 +392,7 @@ export function useFileManager(authenticated: boolean) {
 
         // ファイル一覧を更新
         setFiles((prev) => [
-          { id: newFileId, name: `↳ ${derivedTitle}.provnote.json`, modifiedTime: now, createdTime: now },
+          { id: newFileId, name: `↳ ${derivedTitle}.graphium.json`, modifiedTime: now, createdTime: now },
           ...prev,
         ]);
 
@@ -418,9 +418,9 @@ export function useFileManager(authenticated: boolean) {
     [activeDoc, handleOpenFile, setActiveFileId]
   );
 
-  // AI 派生ノートを作成（構築済みの ProvNoteDocument を受け取って保存）
+  // AI 派生ノートを作成（構築済みの GraphiumDocument を受け取って保存）
   const handleAiDeriveNote = useCallback(
-    async (doc: ProvNoteDocument) => {
+    async (doc: GraphiumDocument) => {
       setDeriving(true);
       try {
         // ドキュメント来歴: AI 派生ノート作成を記録
@@ -438,7 +438,7 @@ export function useFileManager(authenticated: boolean) {
             sourceBlockId: doc.derivedFromBlockId,
             type: "derived_from",
           });
-          let updatedDoc: ProvNoteDocument = { ...latestDoc, noteLinks, modifiedAt: now };
+          let updatedDoc: GraphiumDocument = { ...latestDoc, noteLinks, modifiedAt: now };
           // ドキュメント来歴: 派生元として記録
           updatedDoc = await recordRevision(updatedDoc, latestDoc.pages[0], "derive_source", { force: true });
           await saveFile(activeFileIdRef.current, updatedDoc);
@@ -448,7 +448,7 @@ export function useFileManager(authenticated: boolean) {
 
         // ファイル一覧を更新
         setFiles((prev) => [
-          { id: newFileId, name: `${doc.title}.provnote.json`, modifiedTime: now, createdTime: now },
+          { id: newFileId, name: `${doc.title}.graphium.json`, modifiedTime: now, createdTime: now },
           ...prev,
         ]);
 
