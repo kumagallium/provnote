@@ -2,10 +2,11 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, Pencil } from "lucide-react";
+import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, RefreshCw, FileText, Languages, Pencil } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
+import type { AiEditAction } from "./store";
 import { useT } from "../../i18n";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
 
@@ -29,10 +30,12 @@ export function AiAssistantPanel({
   const {
     messages, loading, error, clearMessages, parkChat,
     chats, selectChat, sourceBlockIds, quotedMarkdown,
-    editMode, clearEditMode,
+    editMode, clearEditMode, openEditChat,
   } = useAiAssistant();
   const t = useT();
   const [input, setInput] = useState("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customInstruction, setCustomInstruction] = useState("");
   // sourceBlockIds がある = openChat で起動された → 新規チャット画面
   // sourceBlockIds が空 + chats あり = 一覧表示
   const [showChatList, setShowChatList] = useState(
@@ -91,12 +94,36 @@ export function AiAssistantPanel({
     [selectChat],
   );
 
+  // 編集アクションをクリック → editMode を設定して自動送信
+  const handleEditAction = useCallback(
+    (action: AiEditAction, instruction?: string) => {
+      openEditChat({
+        sourceBlockIds,
+        quotedMarkdown,
+        editMode: { action, ...(instruction ? { customInstruction: instruction } : {}) },
+      });
+      setShowCustomInput(false);
+      setCustomInstruction("");
+    },
+    [openEditChat, sourceBlockIds, quotedMarkdown],
+  );
+
+  const handleCustomSubmit = useCallback(() => {
+    const trimmed = customInstruction.trim();
+    if (!trimmed) return;
+    handleEditAction("custom", trimmed);
+  }, [customInstruction, handleEditAction]);
+
   // 編集モードのラベル
   const editModeLabel = editMode
     ? editMode.action === "custom"
       ? t("aiEdit.custom")
       : t(`aiEdit.${editMode.action}` as any)
     : null;
+
+  // 引用テキストがあり、まだメッセージ送信前 → アクションボタンを表示
+  const showEditActions = !!quotedMarkdown && sourceBlockIds.length > 0
+    && messages.length === 0 && !loading && !editMode && !showChatList;
 
   return (
     <div className="flex flex-col h-full">
@@ -140,6 +167,66 @@ export function AiAssistantPanel({
           </div>
           <div className="bg-muted/50 rounded p-2 text-[11px] text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
             {quotedMarkdown}
+          </div>
+        </div>
+      )}
+
+      {/* AI 編集アクションボタン */}
+      {showEditActions && (
+        <div className="px-3 py-2 border-b border-border">
+          <div className="text-[10px] text-muted-foreground mb-1.5">{t("aiEdit.editingLabel")}</div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => handleEditAction("rewrite")}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
+            >
+              <RefreshCw size={11} />
+              {t("aiEdit.rewrite")}
+            </button>
+            <button
+              onClick={() => handleEditAction("summarize")}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
+            >
+              <FileText size={11} />
+              {t("aiEdit.summarize")}
+            </button>
+            <button
+              onClick={() => handleEditAction("translate")}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 transition-colors"
+            >
+              <Languages size={11} />
+              {t("aiEdit.translate")}
+            </button>
+            {showCustomInput ? (
+              <div className="w-full mt-1">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={customInstruction}
+                    onChange={(e) => setCustomInstruction(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
+                    placeholder={t("aiEdit.customPlaceholder")}
+                    className="flex-1 text-[11px] px-2 py-1 border border-border rounded-md bg-background text-foreground"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleCustomSubmit}
+                    disabled={!customInstruction.trim()}
+                    className="px-2 py-1 text-[11px] bg-violet-500 text-white rounded-md hover:bg-violet-600 disabled:opacity-50 transition-colors"
+                  >
+                    {t("aiEdit.customSubmit")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCustomInput(true)}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-dashed border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Pencil size={11} />
+                {t("aiEdit.custom")}
+              </button>
+            )}
           </div>
         </div>
       )}
