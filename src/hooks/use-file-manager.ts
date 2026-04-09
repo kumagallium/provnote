@@ -605,9 +605,13 @@ export function useFileManager(authenticated: boolean) {
     saveMediaIndex(updated).catch((err) => console.warn("メディアインデックス保存失敗:", err));
   }, []);
 
-  // URL ブックマーク追加
+  // URL ブックマーク追加（重複チェック付き）
   const handleAddUrlBookmark = useCallback((entry: MediaIndexEntry) => {
     const current = mediaIndexRef.current ?? createEmptyIndex();
+    // URL の重複チェック（mediaIndexRef は常に最新）
+    if (entry.type === "url" && current.media.some((m) => m.type === "url" && m.url === entry.url)) {
+      return; // 既に登録済み
+    }
     const updated = addMediaEntry(current, entry);
     mediaIndexRef.current = updated;
     setMediaIndex(updated);

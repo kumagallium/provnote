@@ -387,29 +387,23 @@ function NoteEditorInner({
         }
       }
     }
-    // 裏でアセットブラウザに登録（重複なら既存を再利用 = usedIn が保存時に更新される）
+    // 裏でアセットブラウザに登録（重複チェックは useFileManager 側で行う）
     if (onAddUrlBookmark) {
-      // 既存チェック
-      const existing = mediaIndex?.media.find((m) => m.type === "url" && m.url === url);
-      if (!existing) {
-        // 新規: メタデータ取得して登録
-        fetchUrlMetadata(url).then((meta) => {
-          onAddUrlBookmark!({
-            fileId: generateUrlBookmarkId(),
-            name: meta.title,
-            type: "url",
-            mimeType: "text/x-uri",
-            url,
-            thumbnailUrl: getFaviconUrl(meta.domain),
-            uploadedAt: new Date().toISOString(),
-            usedIn: [],
-            urlMeta: { domain: meta.domain, description: meta.description, ogImage: meta.ogImage },
-          });
+      fetchUrlMetadata(url).then((meta) => {
+        onAddUrlBookmark!({
+          fileId: generateUrlBookmarkId(),
+          name: meta.title,
+          type: "url",
+          mimeType: "text/x-uri",
+          url,
+          thumbnailUrl: getFaviconUrl(meta.domain),
+          uploadedAt: new Date().toISOString(),
+          usedIn: [],
+          urlMeta: { domain: meta.domain, description: meta.description, ogImage: meta.ogImage },
         });
-      }
-      // 既存の場合: usedIn はノート保存時に syncUsedIn で自動更新される
+      });
     }
-  }, [onAddUrlBookmark, mediaIndex]);
+  }, [onAddUrlBookmark]);
 
   // スラッシュメニューのピッカーから選択 → bookmark ブロック挿入
   const handleUrlSlashPickerSelect = useCallback((entry: MediaIndexEntry) => {
