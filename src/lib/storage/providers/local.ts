@@ -2,9 +2,9 @@
 // Google アカウント不要でオフライン利用可能
 
 import type { StorageProvider, AuthState, MediaUploadResult } from "../types";
-import type { ProvNoteDocument, ProvNoteFile } from "../../document-types";
+import type { GraphiumDocument, GraphiumFile } from "../../document-types";
 
-const DB_NAME = "provnote-local";
+const DB_NAME = "graphium-local";
 const DB_VERSION = 1;
 
 // IndexedDB ストア名
@@ -101,8 +101,8 @@ export class LocalStorageProvider implements StorageProvider {
     };
   }
 
-  async listFiles(): Promise<ProvNoteFile[]> {
-    const records = await getAll<{ id: string; name: string; content: ProvNoteDocument; modifiedTime: string; createdTime: string }>(STORE_FILES);
+  async listFiles(): Promise<GraphiumFile[]> {
+    const records = await getAll<{ id: string; name: string; content: GraphiumDocument; modifiedTime: string; createdTime: string }>(STORE_FILES);
     return records
       // アプリ内部データ（インデックス等）を除外
       .filter((r) => !r.id.startsWith("__app__"))
@@ -115,7 +115,7 @@ export class LocalStorageProvider implements StorageProvider {
       .sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime());
   }
 
-  async loadFile(fileId: string): Promise<ProvNoteDocument> {
+  async loadFile(fileId: string): Promise<GraphiumDocument> {
     const record = await withStore<any>(STORE_FILES, "readonly", (store) =>
       store.get(fileId)
     );
@@ -123,22 +123,22 @@ export class LocalStorageProvider implements StorageProvider {
     return record.content;
   }
 
-  async createFile(title: string, content: ProvNoteDocument): Promise<string> {
+  async createFile(title: string, content: GraphiumDocument): Promise<string> {
     const id = generateId();
     const now = new Date().toISOString();
-    const name = `${title}.provnote.json`;
+    const name = `${title}.graphium.json`;
     await withStore(STORE_FILES, "readwrite", (store) =>
       store.put({ id, name, content, modifiedTime: now, createdTime: now })
     );
     return id;
   }
 
-  async saveFile(fileId: string, content: ProvNoteDocument): Promise<void> {
+  async saveFile(fileId: string, content: GraphiumDocument): Promise<void> {
     const existing = await withStore<any>(STORE_FILES, "readonly", (store) =>
       store.get(fileId)
     );
     const now = new Date().toISOString();
-    const name = `${content.title}.provnote.json`;
+    const name = `${content.title}.graphium.json`;
     await withStore(STORE_FILES, "readwrite", (store) =>
       store.put({
         id: fileId,

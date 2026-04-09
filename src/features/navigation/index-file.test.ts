@@ -5,13 +5,13 @@ import {
   buildIndexEntry,
   updateIndexEntry,
   removeIndexEntry,
-  type ProvNoteIndex,
+  type GraphiumIndex,
   type NoteIndexEntry,
 } from "./index-file";
-import type { ProvNoteDocument, ProvNoteFile } from "../../lib/google-drive";
+import type { GraphiumDocument, GraphiumFile } from "../../lib/google-drive";
 
-// テスト用のモック ProvNoteDocument を構築するヘルパー
-function mockDoc(overrides: Partial<ProvNoteDocument> = {}): ProvNoteDocument {
+// テスト用のモック GraphiumDocument を構築するヘルパー
+function mockDoc(overrides: Partial<GraphiumDocument> = {}): GraphiumDocument {
   return {
     version: 2,
     title: "テストノート",
@@ -56,16 +56,16 @@ function mockDoc(overrides: Partial<ProvNoteDocument> = {}): ProvNoteDocument {
   };
 }
 
-function mockFile(id = "file-1"): ProvNoteFile {
+function mockFile(id = "file-1"): GraphiumFile {
   return {
     id,
-    name: "テストノート.provnote.json",
+    name: "テストノート.graphium.json",
     modifiedTime: "2026-03-31T12:00:00Z",
     createdTime: "2026-01-01T00:00:00Z",
   };
 }
 
-function mockIndex(notes: NoteIndexEntry[] = []): ProvNoteIndex {
+function mockIndex(notes: NoteIndexEntry[] = []): GraphiumIndex {
   return {
     version: 1,
     updatedAt: "2026-03-30T00:00:00Z",

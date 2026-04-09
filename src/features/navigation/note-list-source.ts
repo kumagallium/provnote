@@ -1,7 +1,7 @@
 // ノート一覧のデータソース抽象化
 // インデックスファイルから取得する IndexFileNoteListSource を使用
 
-import type { ProvNoteIndex, NoteIndexEntry } from "./index-file";
+import type { GraphiumIndex, NoteIndexEntry } from "./index-file";
 
 export type NoteListEntry = {
   noteId: string;
@@ -19,7 +19,7 @@ export interface NoteListSource {
 
 // インデックスファイルからノート一覧を構築
 export class IndexFileNoteListSource implements NoteListSource {
-  constructor(private index: ProvNoteIndex) {}
+  constructor(private index: GraphiumIndex) {}
 
   async loadNoteList(): Promise<NoteListEntry[]> {
     // 被参照カウント用: noteId → 参照元ノートID の Set

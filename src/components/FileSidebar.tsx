@@ -6,7 +6,7 @@ import { RecentNotes, type RecentNote } from "../features/navigation";
 import { useT, getDisplayLabelName } from "../i18n";
 import type { MediaIndex, MediaType } from "../features/asset-browser";
 import { countByType } from "../features/asset-browser";
-import type { ProvNoteIndex } from "../features/navigation/index-file";
+import type { GraphiumIndex } from "../features/navigation/index-file";
 
 export type FileSidebarProps = {
   activeFileId: string | null;
@@ -21,7 +21,7 @@ export type FileSidebarProps = {
   onShowNoteList: () => void;
   mediaIndex: MediaIndex | null;
   onShowAssetGallery: (type: MediaType) => void;
-  noteIndex: ProvNoteIndex | null;
+  noteIndex: GraphiumIndex | null;
   onShowLabelGallery: (label: string) => void;
   /** 現在アクティブなメディアタイプ（ハイライト用） */
   activeAssetType: MediaType | null;

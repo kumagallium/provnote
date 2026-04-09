@@ -1,7 +1,7 @@
-// .provnote-index.json の型定義と Drive 読み書き
+// .graphium-index.json の型定義と Drive 読み書き
 // 全ノートのメタデータを1ファイルに集約し、一覧・検索・被参照計算を高速化する
 
-import type { ProvNoteDocument, ProvNoteFile } from "../../lib/document-types";
+import type { GraphiumDocument, GraphiumFile } from "../../lib/document-types";
 import { getActiveProvider } from "../../lib/storage/registry";
 
 // ── 型定義 ──
@@ -10,7 +10,7 @@ import { getActiveProvider } from "../../lib/storage/registry";
 // extractBlockText の改善等、インデックス構築ロジックが変わった場合にインクリメントする
 const INDEX_SCHEMA_VERSION = 3;
 
-export type ProvNoteIndex = {
+export type GraphiumIndex = {
   version: number;
   updatedAt: string;
   notes: NoteIndexEntry[];
@@ -42,19 +42,19 @@ export type NoteIndexEntry = {
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-const INDEX_FILE_NAME = ".provnote-index.json";
+const INDEX_FILE_NAME = ".graphium-index.json";
 
 // ストレージプロバイダー経由の認証付き fetch
 function authedFetch(url: string, options: RequestInit = {}): Promise<Response> {
   return getActiveProvider().authedFetch(url, options);
 }
 
-// ProvNote フォルダ ID を取得（google-drive.ts の getOrCreateFolder を再利用したいが、
+// Graphium フォルダ ID を取得（google-drive.ts の getOrCreateFolder を再利用したいが、
 // 循環 import を避けるため、ファイル検索で取得する）
 let cachedFolderId: string | null = null;
 async function getFolderId(): Promise<string> {
   if (cachedFolderId) return cachedFolderId;
-  const query = `name='ProvNote' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const query = `name='Graphium' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await authedFetch(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id)&spaces=drive`
   );
@@ -63,7 +63,7 @@ async function getFolderId(): Promise<string> {
     cachedFolderId = data.files[0].id;
     return cachedFolderId!;
   }
-  throw new Error("ProvNote フォルダが見つかりません");
+  throw new Error("Graphium フォルダが見つかりません");
 }
 
 // インデックスファイル ID のキャッシュ
@@ -85,11 +85,11 @@ async function findIndexFileId(): Promise<string | null> {
 }
 
 // インデックスファイルを読み込み
-export async function readIndexFile(): Promise<ProvNoteIndex | null> {
+export async function readIndexFile(): Promise<GraphiumIndex | null> {
   // プロバイダーが readAppData をサポートしていればそちらを使う
   const provider = getActiveProvider();
   if (provider.readAppData) {
-    return (await provider.readAppData("note-index")) as ProvNoteIndex | null;
+    return (await provider.readAppData("note-index")) as GraphiumIndex | null;
   }
   // Drive API 経由（Google Drive プロバイダー）
   const fileId = await findIndexFileId();
@@ -99,7 +99,7 @@ export async function readIndexFile(): Promise<ProvNoteIndex | null> {
 }
 
 // インデックスファイルを保存（新規作成 or 上書き）
-export async function saveIndexFile(index: ProvNoteIndex): Promise<void> {
+export async function saveIndexFile(index: GraphiumIndex): Promise<void> {
   // プロバイダーが writeAppData をサポートしていればそちらを使う
   const provider = getActiveProvider();
   if (provider.writeAppData) {
@@ -120,7 +120,7 @@ export async function saveIndexFile(index: ProvNoteIndex): Promise<void> {
   } else {
     // 新規作成
     const folderId = await getFolderId();
-    const boundary = "provnote_index_boundary";
+    const boundary = "graphium_index_boundary";
     const metadata = JSON.stringify({ name: INDEX_FILE_NAME, parents: [folderId] });
     const multipart =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
@@ -139,11 +139,11 @@ export async function saveIndexFile(index: ProvNoteIndex): Promise<void> {
 
 // ── インデックスエントリ構築 ──
 
-// ProvNoteDocument からインデックスエントリを構築
+// GraphiumDocument からインデックスエントリを構築
 export function buildIndexEntry(
   noteId: string,
-  doc: ProvNoteDocument,
-  file?: ProvNoteFile,
+  doc: GraphiumDocument,
+  file?: GraphiumFile,
 ): NoteIndexEntry {
   const page = doc.pages[0];
   const headings: NoteIndexEntry["headings"] = [];
@@ -293,9 +293,9 @@ function extractBlockText(block: any): string {
 
 // 起動時: インデックスを読み込み、古ければ再構築
 export async function ensureIndex(
-  files: ProvNoteFile[],
-  docCache: Map<string, ProvNoteDocument>,
-): Promise<ProvNoteIndex> {
+  files: GraphiumFile[],
+  docCache: Map<string, GraphiumDocument>,
+): Promise<GraphiumIndex> {
   const existing = await readIndexFile();
 
   // 既存インデックスが最新かチェック（バージョン一致 + ファイル数一致 + 更新日が全て含まれている）
@@ -324,7 +324,7 @@ export async function ensureIndex(
     }
   }
 
-  const index: ProvNoteIndex = {
+  const index: GraphiumIndex = {
     version: INDEX_SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
     notes: entries,
@@ -337,7 +337,7 @@ export async function ensureIndex(
 }
 
 // インデックスがファイル一覧に対して最新かチェック
-function isIndexFresh(index: ProvNoteIndex, files: ProvNoteFile[]): boolean {
+function isIndexFresh(index: GraphiumIndex, files: GraphiumFile[]): boolean {
   // ファイル数が一致しない → 古い
   if (index.notes.length !== files.length) return false;
 
@@ -355,11 +355,11 @@ function isIndexFresh(index: ProvNoteIndex, files: ProvNoteFile[]): boolean {
 
 // ノート保存時: 該当エントリだけ差分更新
 export function updateIndexEntry(
-  index: ProvNoteIndex,
+  index: GraphiumIndex,
   noteId: string,
-  doc: ProvNoteDocument,
-  file?: ProvNoteFile,
-): ProvNoteIndex {
+  doc: GraphiumDocument,
+  file?: GraphiumFile,
+): GraphiumIndex {
   const entry = buildIndexEntry(noteId, doc, file);
   const notes = index.notes.filter((n) => n.noteId !== noteId);
   notes.push(entry);
@@ -368,9 +368,9 @@ export function updateIndexEntry(
 
 // ノート削除時: エントリを除去
 export function removeIndexEntry(
-  index: ProvNoteIndex,
+  index: GraphiumIndex,
   noteId: string,
-): ProvNoteIndex {
+): GraphiumIndex {
   return {
     ...index,
     updatedAt: new Date().toISOString(),

@@ -78,7 +78,7 @@ export const WithCustomBlock: StoryObj = {
           blocks={[helloBlock]}
           initialContent={[
             { type: "heading", props: { level: 2 }, content: [{ type: "text", text: "サンプル実験", styles: {} }] },
-            { type: "hello", props: { name: "provnote" } },
+            { type: "hello", props: { name: "Graphium" } },
             { type: "paragraph", content: [{ type: "text", text: "↑ カスタムブロック「Hello」を含むエディタ", styles: {} }] },
           ]}
         />

@@ -4,7 +4,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { NoteListView } from "./NoteListView";
 import { RecentNotes } from "./RecentNotes";
-import type { ProvNoteIndex } from "./index-file";
+import type { GraphiumIndex } from "./index-file";
 import "../../app.css";
 
 // ── モックデータ ──
@@ -13,7 +13,7 @@ const now = new Date();
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86400_000).toISOString();
 
-const MOCK_INDEX: ProvNoteIndex = {
+const MOCK_INDEX: GraphiumIndex = {
   version: 1,
   updatedAt: now.toISOString(),
   notes: [

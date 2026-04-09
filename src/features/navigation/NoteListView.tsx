@@ -6,7 +6,7 @@ import {
   IndexFileNoteListSource,
   type NoteListEntry,
 } from "./note-list-source";
-import type { ProvNoteIndex } from "./index-file";
+import type { GraphiumIndex } from "./index-file";
 import { NoteListToolbar, type SortKey, type SortDirection } from "./NoteListToolbar";
 import { formatRelativeTime } from "./recent-notes-store";
 import { useT, getDisplayLabelName } from "../../i18n";
@@ -71,7 +71,7 @@ export function NoteListView({
   onBack,
   onDeleteNotes,
 }: {
-  noteIndex: ProvNoteIndex | null;
+  noteIndex: GraphiumIndex | null;
   onOpenNote: (noteId: string) => void;
   onBack: () => void;
   onDeleteNotes?: (noteIds: string[]) => Promise<void>;

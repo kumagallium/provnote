@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveProvider, setActiveProvider, initProviders } from "./registry";
 import type { StorageProvider } from "./types";
 
-const STORAGE_KEY = "provnote_storage_provider";
+const STORAGE_KEY = "graphium_storage_provider";
 
 /** ストレージプロバイダーの認証状態を管理する Hook */
 export function useStorage() {
@@ -50,8 +50,8 @@ export function useStorage() {
       if (providerId && provider?.id !== providerId) {
         // 別プロバイダーへの切り替えサインイン（例: ログイン画面 → Google）
         // 旧プロバイダーの UI キャッシュをクリア（ファイル ID 体系が異なるため）
-        localStorage.removeItem("provnote_last_file");
-        localStorage.removeItem("provnote-recent-notes");
+        localStorage.removeItem("graphium_last_file");
+        localStorage.removeItem("graphium-recent-notes");
         // init 完了後に signIn を自動実行するようフラグを立てる
         pendingSignInRef.current = true;
         setActiveProvider(providerId);
@@ -81,8 +81,8 @@ export function useStorage() {
     provider?.signOut();
     provider?.clearCache();
     // UI キャッシュをクリア（別プロバイダーのファイルIDは使えない）
-    localStorage.removeItem("provnote_last_file");
-    localStorage.removeItem("provnote-recent-notes");
+    localStorage.removeItem("graphium_last_file");
+    localStorage.removeItem("graphium-recent-notes");
     // 新しいプロバイダーに切り替え
     setActiveProvider(id);
     setProviderVersion((v) => v + 1);

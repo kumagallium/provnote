@@ -2,7 +2,7 @@
 // 既存の google-auth.ts / google-drive.ts をラップして StorageProvider インターフェースを実装
 
 import type { StorageProvider, AuthState, MediaUploadResult } from "../types";
-import type { ProvNoteDocument, ProvNoteFile } from "../../document-types";
+import type { GraphiumDocument, GraphiumFile } from "../../document-types";
 import {
   initGoogleAuth,
   signIn as gisSignIn,
@@ -58,19 +58,19 @@ export class GoogleDriveProvider implements StorageProvider {
     });
   }
 
-  async listFiles(): Promise<ProvNoteFile[]> {
+  async listFiles(): Promise<GraphiumFile[]> {
     return driveListFiles();
   }
 
-  async loadFile(fileId: string): Promise<ProvNoteDocument> {
+  async loadFile(fileId: string): Promise<GraphiumDocument> {
     return driveLoadFile(fileId);
   }
 
-  async createFile(title: string, content: ProvNoteDocument): Promise<string> {
+  async createFile(title: string, content: GraphiumDocument): Promise<string> {
     return driveCreateFile(title, content);
   }
 
-  async saveFile(fileId: string, content: ProvNoteDocument): Promise<void> {
+  async saveFile(fileId: string, content: GraphiumDocument): Promise<void> {
     return driveSaveFile(fileId, content);
   }
 

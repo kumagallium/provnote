@@ -70,7 +70,7 @@ export const en: Record<string, string> = {
   // ── ログイン画面 ──
   "login.subtitle": "Block editor with PROV-DM provenance tracking",
   "login.selectStorage": "Select where to save your notes",
-  "login.driveNote": "Notes are saved in the ProvNote folder on Google Drive",
+  "login.driveNote": "Notes are saved in the Graphium folder on Google Drive",
   "login.localNote": "Notes are saved in this browser (offline)",
   "login.localStart": "Start offline",
 

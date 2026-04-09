@@ -1,11 +1,11 @@
-// .provnote-media-index.json の型定義と Drive 読み書き
+// .graphium-media-index.json の型定義と Drive 読み書き
 // 全メディアファイルのメタデータを1ファイルに集約し、ギャラリー表示を高速化する
 
 import { getActiveProvider } from "../../lib/storage/registry";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-const INDEX_FILE_NAME = ".provnote-media-index.json";
+const INDEX_FILE_NAME = ".graphium-media-index.json";
 
 // ── 型定義 ──
 
@@ -63,11 +63,11 @@ function authedFetch(url: string, options: RequestInit = {}): Promise<Response> 
   return getActiveProvider().authedFetch(url, options);
 }
 
-// ProvNote フォルダ ID を取得
+// Graphium フォルダ ID を取得
 let cachedFolderId: string | null = null;
 async function getFolderId(): Promise<string> {
   if (cachedFolderId) return cachedFolderId;
-  const query = `name='ProvNote' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const query = `name='Graphium' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await authedFetch(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id)&spaces=drive`
   );
@@ -76,7 +76,7 @@ async function getFolderId(): Promise<string> {
     cachedFolderId = data.files[0].id;
     return cachedFolderId!;
   }
-  throw new Error("ProvNote フォルダが見つかりません");
+  throw new Error("Graphium フォルダが見つかりません");
 }
 
 // インデックスファイル ID のキャッシュ
@@ -127,7 +127,7 @@ export async function saveMediaIndex(index: MediaIndex): Promise<void> {
     });
   } else {
     const folderId = await getFolderId();
-    const boundary = "provnote_media_index_boundary";
+    const boundary = "graphium_media_index_boundary";
     const metadata = JSON.stringify({ name: INDEX_FILE_NAME, parents: [folderId] });
     const multipart =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +

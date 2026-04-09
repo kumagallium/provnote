@@ -1,10 +1,10 @@
-// ProvNote ドキュメントのドメイン型定義
+// Graphium ドキュメントのドメイン型定義
 // ストレージプロバイダーに依存しない、アプリケーション固有の型
 
 import type { DocumentProvenance } from "../features/document-provenance/types";
 
-// ProvNote ファイルのメタデータ
-export type ProvNoteFile = {
+// Graphium ファイルのメタデータ
+export type GraphiumFile = {
   id: string;
   name: string;
   modifiedTime: string;
@@ -44,11 +44,11 @@ export type ScopeChat = {
   modifiedAt: string;
 };
 
-// ProvNote ファイルの内容（エディタの完全な状態）
-export type ProvNoteDocument = {
+// Graphium ファイルの内容（エディタの完全な状態）
+export type GraphiumDocument = {
   version: 1 | 2;
   title: string;
-  pages: ProvNotePage[];
+  pages: GraphiumPage[];
   /** ノート間リンク（派生先ノートへの参照） */
   noteLinks?: NoteLink[];
   /** このノートの派生元ノート ID */
@@ -70,7 +70,7 @@ export type ProvNoteDocument = {
   modifiedAt: string;
 };
 
-export type ProvNotePage = {
+export type GraphiumPage = {
   id: string;
   title: string;
   blocks: any[];

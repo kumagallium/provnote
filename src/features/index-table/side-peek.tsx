@@ -12,7 +12,7 @@ import {
   BlockColorsItem,
   SideMenu,
 } from "@blocknote/react";
-import type { ProvNoteDocument } from "../../lib/document-types";
+import type { GraphiumDocument } from "../../lib/document-types";
 import { getActiveProvider } from "../../lib/storage/registry";
 import { SandboxEditor } from "../../base/editor";
 import { LabelStoreProvider, useLabelStore } from "@features/context-label/store";
@@ -26,9 +26,9 @@ import { useT, t as tStatic } from "../../i18n";
 type SidePeekProps = {
   noteId: string;
   /** キャッシュ済みドキュメント（あれば API 取得をスキップして即表示） */
-  cachedDoc?: ProvNoteDocument;
+  cachedDoc?: GraphiumDocument;
   onClose: () => void;
-  onNavigate: (noteId: string, savedDoc?: ProvNoteDocument) => void;
+  onNavigate: (noteId: string, savedDoc?: GraphiumDocument) => void;
 };
 
 export function SidePeek(props: SidePeekProps) {
@@ -81,11 +81,11 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate }: SidePeekProps
   labelStoreRef.current = labelStore;
   const editorRef = useRef<any>(null);
   const [wrapperEl, setWrapperEl] = useState<HTMLDivElement | null>(null);
-  const [doc, setDoc] = useState<ProvNoteDocument | null>(null);
+  const [doc, setDoc] = useState<GraphiumDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "dirty">("saved");
-  const docRef = useRef<ProvNoteDocument | null>(null);
+  const docRef = useRef<GraphiumDocument | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sidePeekRef = useRef<HTMLDivElement>(null);
   const labelAutoRef = useRef<(() => void) | null>(null);
@@ -190,7 +190,7 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate }: SidePeekProps
       labelsObj[k] = v;
     }
 
-    const updatedDoc: ProvNoteDocument = {
+    const updatedDoc: GraphiumDocument = {
       ...docRef.current,
       pages: [
         {

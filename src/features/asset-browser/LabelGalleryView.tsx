@@ -6,7 +6,7 @@ import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import { useT, getDisplayLabelName } from "../../i18n";
 import { Modal, ModalHeader, ModalBody } from "../../ui/modal";
-import type { ProvNoteIndex } from "../navigation/index-file";
+import type { GraphiumIndex } from "../navigation/index-file";
 
 // fcose レイアウト登録（重複防止）
 ensureCytoscapePlugins();
@@ -46,7 +46,7 @@ type GroupedRow = {
 type SortKey = "noteCount" | "modifiedAt" | "preview";
 
 export type LabelGalleryViewProps = {
-  noteIndex: ProvNoteIndex | null;
+  noteIndex: GraphiumIndex | null;
   label: string;
   onBack: () => void;
   onNavigateNote: (noteId: string) => void;

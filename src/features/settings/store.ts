@@ -1,7 +1,7 @@
 // 設定の永続化・取得
 // localStorage を使ってユーザー設定を保存する
 
-const STORAGE_KEY = "provnote-settings";
+const STORAGE_KEY = "graphium-settings";
 
 export type Settings = {
   /** AI エージェントの接続先 URL（例: http://localhost:8090） */

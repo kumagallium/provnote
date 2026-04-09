@@ -2,7 +2,7 @@
 // 前回保存と現在の状態を比較して RevisionSummary を生成する
 
 import type { RevisionSummary, BlockContentDiff } from "./types";
-import type { ProvNotePage } from "../../lib/google-drive";
+import type { GraphiumPage } from "../../lib/google-drive";
 
 /** ブロックのテキスト内容を抽出 */
 function blockTextContent(block: any): string {
@@ -34,8 +34,8 @@ function collectBlockIds(blocks: any[]): Map<string, any> {
 
 /** 2つのページ状態を比較して RevisionSummary を生成 */
 export function computeRevisionSummary(
-  prevPage: ProvNotePage | null,
-  currentPage: ProvNotePage,
+  prevPage: GraphiumPage | null,
+  currentPage: GraphiumPage,
 ): RevisionSummary {
   if (!prevPage) {
     // 初回保存: 全ブロックが新規
@@ -151,7 +151,7 @@ export function computeRevisionSummary(
 }
 
 /** ページ全体の SHA-256 ハッシュを計算（改ざん検知用） */
-export async function computePageHash(page: ProvNotePage): Promise<string> {
+export async function computePageHash(page: GraphiumPage): Promise<string> {
   const text = JSON.stringify({
     blocks: page.blocks,
     labels: page.labels,

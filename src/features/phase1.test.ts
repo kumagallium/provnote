@@ -45,7 +45,7 @@ describe("リンクの二層分離", () => {
 // 1.4 [属性] の PROV 名変更
 // ──────────────────────────────────
 describe("[属性] の PROV 名変更", () => {
-  it("[属性] ブロックが独立ノードではなく親の provnote:attributes に埋め込まれる", () => {
+  it("[属性] ブロックが独立ノードではなく親の graphium:attributes に埋め込まれる", () => {
     const blocks = [
       { id: "h2-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "焼結" }], children: [] },
       { id: "attr-1", type: "paragraph", content: [{ type: "text", text: "温度 800℃" }], children: [] },
@@ -58,11 +58,11 @@ describe("[属性] の PROV 名変更", () => {
     expect(paramNode).toBeUndefined();
     // Activity に埋め込み
     const act = doc["@graph"].find((n) => n["@id"] === "activity_h2-step");
-    expect(act?.["provnote:attributes"]).toHaveLength(1);
-    expect(act!["provnote:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
+    expect(act?.["graphium:attributes"]).toHaveLength(1);
+    expect(act!["graphium:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
   });
 
-  it("[属性] が親 Activity の provnote:attributes に埋め込まれる", () => {
+  it("[属性] が親 Activity の graphium:attributes に埋め込まれる", () => {
     const blocks = [
       { id: "h2-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "焼結" }], children: [] },
       { id: "attr-1", type: "paragraph", content: [{ type: "text", text: "温度 800℃" }], children: [] },
@@ -74,17 +74,17 @@ describe("[属性] の PROV 名変更", () => {
     expect(doc["@graph"].filter((n) => n["@id"].startsWith("param_"))).toHaveLength(0);
     // Activity に属性が埋め込まれている
     const act = doc["@graph"].find((n) => n["@id"] === "activity_h2-step");
-    expect(act?.["provnote:attributes"]).toBeDefined();
-    expect(act!["provnote:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
+    expect(act?.["graphium:attributes"]).toBeDefined();
+    expect(act!["graphium:attributes"]![0]["rdfs:label"]).toBe("温度 800℃");
   });
 
-  it("@context に provnote, rdfs, xsd が含まれる", () => {
+  it("@context に graphium, rdfs, xsd が含まれる", () => {
     const blocks = [
       { id: "h2-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "手順" }], children: [] },
     ];
     const labels = new Map([["h2-step", "[手順]"]]);
     const doc = generateProvDocument({ blocks, labels, links: [] });
-    expect(doc["@context"].provnote).toBe("https://provnote.app/ns#");
+    expect(doc["@context"].graphium).toBe("https://graphium.app/ns#");
     expect(doc["@context"].rdfs).toBe("http://www.w3.org/2000/01/rdf-schema#");
     expect(doc["@context"].xsd).toBe("http://www.w3.org/2001/XMLSchema#");
     expect((doc["@context"] as any).matprov).toBeUndefined();

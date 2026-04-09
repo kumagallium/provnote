@@ -1,7 +1,7 @@
 // ストレージプロバイダーのインターフェース定義
 // 各プロバイダー（Google Drive, OneDrive, Dropbox, S3 等）がこれを実装する
 
-import type { ProvNoteDocument, ProvNoteFile } from "../document-types";
+import type { GraphiumDocument, GraphiumFile } from "../document-types";
 
 /** メディアアップロード結果 */
 export type MediaUploadResult = {
@@ -32,10 +32,10 @@ export interface StorageProvider {
   onAuthChange(fn: (state: AuthState) => void): () => void;
 
   // --- ファイル CRUD ---
-  listFiles(): Promise<ProvNoteFile[]>;
-  loadFile(fileId: string): Promise<ProvNoteDocument>;
-  createFile(title: string, content: ProvNoteDocument): Promise<string>;
-  saveFile(fileId: string, content: ProvNoteDocument): Promise<void>;
+  listFiles(): Promise<GraphiumFile[]>;
+  loadFile(fileId: string): Promise<GraphiumDocument>;
+  createFile(title: string, content: GraphiumDocument): Promise<string>;
+  saveFile(fileId: string, content: GraphiumDocument): Promise<void>;
   deleteFile(fileId: string): Promise<void>;
 
   // --- メディア ---

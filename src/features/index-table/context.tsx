@@ -2,11 +2,11 @@
 // ノート作成・遷移に必要な情報をカスタムブロック render に提供する
 
 import { createContext, useContext, type ReactNode } from "react";
-import type { ProvNoteFile } from "../../lib/google-drive";
+import type { GraphiumFile } from "../../lib/google-drive";
 
 type IndexTableContextValue = {
   // Google Drive 上のファイル一覧
-  files: ProvNoteFile[];
+  files: GraphiumFile[];
   // 現在開いているファイル ID
   currentFileId: string | null;
   // ノートに遷移するコールバック

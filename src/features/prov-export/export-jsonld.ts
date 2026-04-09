@@ -34,12 +34,12 @@ function toW3CLabel(text: string): { "@value": string; "@language": string }[] {
   return [{ "@value": text, "@language": "en" }];
 }
 
-/** provnote: プレフィックス付きの拡張プロパティを抽出 */
+/** graphium: プレフィックス付きの拡張プロパティを抽出 */
 function extractExtensionProps(node: ProvJsonLdNode): Record<string, any> {
-  const SKIP_KEYS = new Set(["provnote:blockId", "provnote:sampleId", "provnote:entityType", "provnote:attributes"]);
+  const SKIP_KEYS = new Set(["graphium:blockId", "graphium:sampleId", "graphium:entityType", "graphium:attributes"]);
   const ext: Record<string, any> = {};
   for (const [key, value] of Object.entries(node)) {
-    if (key.startsWith("provnote:") && !SKIP_KEYS.has(key)) {
+    if (key.startsWith("graphium:") && !SKIP_KEYS.has(key)) {
       ext[key] = value;
     }
   }
@@ -61,27 +61,27 @@ function convertContentProvenance(provDoc: ProvJsonLd): W3CProvNode[] {
     };
 
     // Entity サブタイプ（MatPROV 互換: material / tool）
-    if (node["provnote:entityType"]) {
-      w3cNode["type"] = [{ "@value": node["provnote:entityType"] }];
+    if (node["graphium:entityType"]) {
+      w3cNode["type"] = [{ "@value": node["graphium:entityType"] }];
     }
 
-    // provnote:blockId → 拡張プロパティとして保持
-    if (node["provnote:blockId"]) {
-      w3cNode["provnote:blockId"] = node["provnote:blockId"];
+    // graphium:blockId → 拡張プロパティとして保持
+    if (node["graphium:blockId"]) {
+      w3cNode["graphium:blockId"] = node["graphium:blockId"];
     }
-    if (node["provnote:sampleId"]) {
-      w3cNode["provnote:sampleId"] = node["provnote:sampleId"];
+    if (node["graphium:sampleId"]) {
+      w3cNode["graphium:sampleId"] = node["graphium:sampleId"];
     }
 
-    // provnote:attributes → 拡張プロパティとして保持
-    if (node["provnote:attributes"] && node["provnote:attributes"].length > 0) {
-      w3cNode["provnote:attributes"] = node["provnote:attributes"].map((attr) => ({
+    // graphium:attributes → 拡張プロパティとして保持
+    if (node["graphium:attributes"] && node["graphium:attributes"].length > 0) {
+      w3cNode["graphium:attributes"] = node["graphium:attributes"].map((attr) => ({
         label: toW3CLabel(attr["rdfs:label"]),
-        ...(attr["provnote:blockId"] ? { "provnote:blockId": attr["provnote:blockId"] } : {}),
+        ...(attr["graphium:blockId"] ? { "graphium:blockId": attr["graphium:blockId"] } : {}),
       }));
     }
 
-    // その他の provnote: 拡張プロパティ
+    // その他の graphium: 拡張プロパティ
     Object.assign(w3cNode, extractExtensionProps(node));
 
     w3cNodes.push(w3cNode);
@@ -124,8 +124,8 @@ function convertDocumentProvenance(bundle: DocumentProvenanceBundle): W3CProvNod
         "@id": node["@id"],
         label: toW3CLabel(node["rdfs:label"]),
       };
-      if (node["provnote:agentType"]) {
-        w3cNode["provnote:agentType"] = node["provnote:agentType"];
+      if (node["graphium:agentType"]) {
+        w3cNode["graphium:agentType"] = node["graphium:agentType"];
       }
       if (node["foaf:mbox"]) {
         w3cNode["foaf:mbox"] = node["foaf:mbox"];
@@ -136,8 +136,8 @@ function convertDocumentProvenance(bundle: DocumentProvenanceBundle): W3CProvNod
         "@type": "Activity",
         "@id": node["@id"],
       };
-      if (node["provnote:editType"]) {
-        w3cNode["provnote:editType"] = node["provnote:editType"];
+      if (node["graphium:editType"]) {
+        w3cNode["graphium:editType"] = node["graphium:editType"];
       }
       if (node["prov:startedAtTime"]) {
         w3cNode["startTime"] = node["prov:startedAtTime"];
@@ -164,17 +164,17 @@ function convertDocumentProvenance(bundle: DocumentProvenanceBundle): W3CProvNod
       if (node["prov:generatedAtTime"]) {
         w3cNode["prov:generatedAtTime"] = node["prov:generatedAtTime"];
       }
-      if (node["provnote:summary"]) {
-        w3cNode["provnote:summary"] = node["provnote:summary"];
+      if (node["graphium:summary"]) {
+        w3cNode["graphium:summary"] = node["graphium:summary"];
       }
-      if (node["provnote:driveRevisionId"]) {
-        w3cNode["provnote:driveRevisionId"] = node["provnote:driveRevisionId"];
+      if (node["graphium:driveRevisionId"]) {
+        w3cNode["graphium:driveRevisionId"] = node["graphium:driveRevisionId"];
       }
-      if (node["provnote:contentHash"]) {
-        w3cNode["provnote:contentHash"] = node["provnote:contentHash"];
+      if (node["graphium:contentHash"]) {
+        w3cNode["graphium:contentHash"] = node["graphium:contentHash"];
       }
-      if (node["provnote:prevContentHash"]) {
-        w3cNode["provnote:prevContentHash"] = node["provnote:prevContentHash"];
+      if (node["graphium:prevContentHash"]) {
+        w3cNode["graphium:prevContentHash"] = node["graphium:prevContentHash"];
       }
       w3cNodes.push(w3cNode);
 
@@ -213,11 +213,11 @@ function buildW3CProvJsonLd(provDoc: ProvJsonLd, title: string): W3CProvDocument
   graph.push(...convertContentProvenance(provDoc));
 
   // Document Provenance（編集来歴）を Bundle として追加
-  if (provDoc["provnote:documentProvenance"]) {
-    const docProvNodes = convertDocumentProvenance(provDoc["provnote:documentProvenance"]);
+  if (provDoc["graphium:documentProvenance"]) {
+    const docProvNodes = convertDocumentProvenance(provDoc["graphium:documentProvenance"]);
     graph.push({
       "@type": "Bundle",
-      "@id": `provnote:documentProvenance/${encodeURIComponent(title)}`,
+      "@id": `graphium:documentProvenance/${encodeURIComponent(title)}`,
       "@graph": docProvNodes,
     } as any);
   }
@@ -227,7 +227,7 @@ function buildW3CProvJsonLd(provDoc: ProvJsonLd, title: string): W3CProvDocument
       {
         prov: "http://www.w3.org/ns/prov#",
         xsd: "http://www.w3.org/2001/XMLSchema#",
-        provnote: "https://provnote.app/ns#",
+        graphium: "https://graphium.app/ns#",
         foaf: "http://xmlns.com/foaf/0.1/",
         dcterms: "http://purl.org/dc/terms/",
       },

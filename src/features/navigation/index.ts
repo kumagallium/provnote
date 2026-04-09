@@ -18,6 +18,6 @@ export {
   removeIndexEntry,
   buildIndexEntry,
   saveIndexFile,
-  type ProvNoteIndex,
+  type GraphiumIndex,
   type NoteIndexEntry,
 } from "./index-file";

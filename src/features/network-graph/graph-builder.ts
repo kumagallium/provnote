@@ -1,7 +1,7 @@
 // ノート間の派生関係からネットワークグラフデータを構築
 // 2ホップ以内の関係ノードを抽出
 
-import type { ProvNoteDocument, ProvNoteFile } from "../../lib/google-drive";
+import type { GraphiumDocument, GraphiumFile } from "../../lib/google-drive";
 
 export type NoteNode = {
   id: string;
@@ -27,7 +27,7 @@ export type NoteGraphData = {
  * ドキュメント内のブロックからテキストを抽出する
  */
 function extractBlockText(
-  doc: ProvNoteDocument | undefined,
+  doc: GraphiumDocument | undefined,
   blockId: string | undefined,
 ): string | undefined {
   if (!doc || !blockId) return undefined;
@@ -69,8 +69,8 @@ function findBlockText(blocks: any[], targetId: string): string | undefined {
  */
 export function buildNoteGraph(
   currentNoteId: string | null,
-  files: ProvNoteFile[],
-  docs: Map<string, ProvNoteDocument>
+  files: GraphiumFile[],
+  docs: Map<string, GraphiumDocument>
 ): NoteGraphData {
   if (!currentNoteId) return { nodes: [], edges: [] };
 
@@ -134,7 +134,7 @@ export function buildNoteGraph(
   // ファイル名マップ
   const fileNameMap = new Map<string, string>();
   for (const f of files) {
-    fileNameMap.set(f.id, f.name.replace(/\.provnote\.json$/, ""));
+    fileNameMap.set(f.id, f.name.replace(/\.graphium\.json$/, ""));
   }
 
   // ノードを構築

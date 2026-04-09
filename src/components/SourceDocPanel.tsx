@@ -1,6 +1,6 @@
 // 派生元ノート読み取り専用パネル + ユーティリティ関数
 
-import type { ProvNoteDocument } from "../lib/google-drive";
+import type { GraphiumDocument } from "../lib/google-drive";
 import { useT } from "../i18n";
 import { t as tStatic } from "../i18n";
 
@@ -73,7 +73,7 @@ function renderBlockText(block: any): string {
   return "";
 }
 
-export function SourceDocPanel({ doc }: { doc: ProvNoteDocument }) {
+export function SourceDocPanel({ doc }: { doc: GraphiumDocument }) {
   const t = useT();
   return (
     <div className="p-4 space-y-3">
