@@ -316,6 +316,7 @@ export const en: Record<string, string> = {
   "asset.urlAdd": "Add URL",
   "asset.urlOpen": "Open in new tab",
   "asset.urlDomain": "Domain",
+  "asset.urlExistingMatch": "This URL is already registered. Click to reuse:",
   "asset.urlStyleBookmark": "Bookmark",
   "asset.urlStyleBookmarkSub": "Display as a card with preview",
   "asset.urlStyleLink": "Link",

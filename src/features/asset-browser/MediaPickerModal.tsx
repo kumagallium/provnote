@@ -169,29 +169,13 @@ export function MediaPickerModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // initialUrl が設定されていて既存エントリに一致する場合、自動選択
-  useEffect(() => {
-    if (!initialUrl || !mediaIndex) return;
-    const existing = mediaIndex.media.find(
+  // initialUrl が既存に一致するかチェック（ハイライト表示用）
+  const existingMatch = useMemo(() => {
+    if (!initialUrl || !mediaIndex) return null;
+    return mediaIndex.media.find(
       (m) => m.type === "url" && m.url === initialUrl,
-    );
-    if (existing) {
-      onSelect(existing);
-      onClose();
-    }
-  }, [initialUrl, mediaIndex, onSelect, onClose]);
-
-  // initialUrl が設定されていて新規の場合、自動取得開始
-  useEffect(() => {
-    if (!initialUrl || mediaType !== "url") return;
-    // 既存にあれば上の effect で自動選択されるのでスキップ
-    const existing = mediaIndex?.media.find(
-      (m) => m.type === "url" && m.url === initialUrl,
-    );
-    if (existing) return;
-    // 自動取得 → 自動登録 → 自動選択
-    handleUrlRegister(initialUrl);
-  }, []); // 初回のみ
+    ) ?? null;
+  }, [initialUrl, mediaIndex]);
 
   const filtered = useMemo(() => {
     if (!mediaIndex) return [];
@@ -313,6 +297,27 @@ export function MediaPickerModal({
 
         {/* グリッド */}
         <div className="flex-1 overflow-auto p-4">
+          {/* 既存一致バナー */}
+          {existingMatch && (
+            <div className="mb-3 p-3 border border-primary/30 bg-primary/5 rounded-md">
+              <p className="text-xs text-foreground mb-2">{t("asset.urlExistingMatch")}</p>
+              <button
+                onClick={() => handleSelect(existingMatch)}
+                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded border border-border bg-background hover:border-primary transition-colors"
+              >
+                <img
+                  src={getFaviconUrl(existingMatch.urlMeta?.domain ?? "", 32)}
+                  alt=""
+                  className="w-5 h-5 rounded shrink-0"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">{existingMatch.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{existingMatch.urlMeta?.domain}</p>
+                </div>
+              </button>
+            </div>
+          )}
           {/* URL タイプ: 新規 URL 登録フォーム */}
           {isUrlType && onAddUrlBookmark && (
             <div className="mb-3">

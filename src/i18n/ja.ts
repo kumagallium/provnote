@@ -316,6 +316,7 @@ export const ja: Record<string, string> = {
   "asset.urlAdd": "URL を追加",
   "asset.urlOpen": "新しいタブで開く",
   "asset.urlDomain": "ドメイン",
+  "asset.urlExistingMatch": "この URL は登録済みです。クリックで再利用:",
   "asset.urlStyleBookmark": "ブックマーク",
   "asset.urlStyleBookmarkSub": "プレビューカードとして表示",
   "asset.urlStyleLink": "リンク",
