@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText } from "lucide-react";
 import { SandboxEditor } from "./base/editor";
 import { pdfViewerBlock } from "./blocks/pdf-viewer";
-import { bookmarkBlock, bookmarkSlashItem } from "./blocks/bookmark";
+import { bookmarkBlock, bookmarkSlashItem, setBookmarkPickerCallback } from "./blocks/bookmark";
 import {
   LabelStoreProvider,
   useLabelStore,
@@ -317,6 +317,12 @@ function NoteEditorInner({
     return () => { setMediaPickerCallback(null); };
   }, []);
 
+  // スラッシュメニューから URL ブックマークピッカーを開くコールバック登録
+  useEffect(() => {
+    setBookmarkPickerCallback(() => setUrlSlashPickerOpen(true));
+    return () => { setBookmarkPickerCallback(null); };
+  }, []);
+
   // ピッカーで選択されたメディアをエディタに挿入
   const handlePickerSelect = useCallback((entry: MediaIndexEntry) => {
     const editor = editorRef.current;
@@ -353,31 +359,21 @@ function NoteEditorInner({
   const [pastedUrl, setPastedUrl] = useState<{ url: string; position: { x: number; y: number }; blockId: string } | null>(null);
   const pasteListenerRef = useRef<((e: ClipboardEvent) => void) | null>(null);
 
-  // URL ピッカーモーダル用の状態
-  const [urlPickerOpen, setUrlPickerOpen] = useState<{ url: string; blockId: string } | null>(null);
+  // スラッシュメニューからの URL ピッカーモーダル用状態
+  const [urlSlashPickerOpen, setUrlSlashPickerOpen] = useState(false);
 
-  // ブックマークスタイルを選択 → URL ピッカーモーダルを開く
-  const handleOpenUrlPicker = useCallback((url: string, blockId: string) => {
-    setUrlPickerOpen({ url, blockId });
+  // ペースト → ブックマーク選択: モーダルなしで直接挿入 + 裏でアセット登録
+  const handleInsertBookmarkDirect = useCallback((url: string, blockId: string) => {
     setPastedUrl(null);
-  }, []);
-
-  // ピッカーから URL エントリが選択された → bookmark ブロックを挿入
-  const handleUrlPickerSelect = useCallback((entry: MediaIndexEntry) => {
     const editor = editorRef.current;
-    if (!editor || !urlPickerOpen) return;
-    const block = editor.getBlock(urlPickerOpen.blockId);
+    if (!editor) return;
+    const block = editor.getBlock(blockId);
     if (block) {
+      // bookmark ブロックを即座に挿入（メタデータはブロック側で非同期取得）
       editor.insertBlocks(
         [{
           type: "bookmark",
-          props: {
-            url: entry.url,
-            title: entry.name,
-            description: entry.urlMeta?.description ?? "",
-            ogImage: entry.urlMeta?.ogImage ?? "",
-            domain: entry.urlMeta?.domain ?? extractDomain(entry.url),
-          },
+          props: { url, title: "", description: "", ogImage: "", domain: extractDomain(url) },
         }],
         block,
         "after",
@@ -386,13 +382,66 @@ function NoteEditorInner({
       const content = block.content;
       if (Array.isArray(content) && content.length <= 1) {
         const text = content[0]?.text?.trim() ?? "";
-        if (text === urlPickerOpen.url || text === "") {
+        if (text === url || text === "") {
           editor.removeBlocks([block]);
         }
       }
     }
-    setUrlPickerOpen(null);
-  }, [urlPickerOpen]);
+    // 裏でアセットブラウザに登録（重複なら既存を再利用 = usedIn が保存時に更新される）
+    if (onAddUrlBookmark) {
+      // 既存チェック
+      const existing = mediaIndex?.media.find((m) => m.type === "url" && m.url === url);
+      if (!existing) {
+        // 新規: メタデータ取得して登録
+        fetchUrlMetadata(url).then((meta) => {
+          onAddUrlBookmark!({
+            fileId: generateUrlBookmarkId(),
+            name: meta.title,
+            type: "url",
+            mimeType: "text/x-uri",
+            url,
+            thumbnailUrl: getFaviconUrl(meta.domain),
+            uploadedAt: new Date().toISOString(),
+            usedIn: [],
+            urlMeta: { domain: meta.domain, description: meta.description, ogImage: meta.ogImage },
+          });
+        });
+      }
+      // 既存の場合: usedIn はノート保存時に syncUsedIn で自動更新される
+    }
+  }, [onAddUrlBookmark, mediaIndex]);
+
+  // スラッシュメニューのピッカーから選択 → bookmark ブロック挿入
+  const handleUrlSlashPickerSelect = useCallback((entry: MediaIndexEntry) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const currentBlock = editor.getTextCursorPosition()?.block;
+    if (!currentBlock) return;
+    editor.insertBlocks(
+      [{
+        type: "bookmark",
+        props: {
+          url: entry.url,
+          title: entry.name,
+          description: entry.urlMeta?.description ?? "",
+          ogImage: entry.urlMeta?.ogImage ?? "",
+          domain: entry.urlMeta?.domain ?? extractDomain(entry.url),
+        },
+      }],
+      currentBlock,
+      "after",
+    );
+    // 空のスラッシュブロックを削除
+    const content = currentBlock.content;
+    if (
+      Array.isArray(content) &&
+      content.length <= 1 &&
+      (!content[0] || (content[0].type === "text" && content[0].text.replace("/", "").trim() === ""))
+    ) {
+      editor.removeBlocks([currentBlock]);
+    }
+    setUrlSlashPickerOpen(false);
+  }, []);
 
   // ラベル自動設定のコールバック
   const labelAutoRef = useRef<(() => void) | null>(null);
@@ -999,7 +1048,7 @@ function NoteEditorInner({
         <UrlPasteMenu
           url={pastedUrl.url}
           position={pastedUrl.position}
-          onSelectBookmark={() => handleOpenUrlPicker(pastedUrl.url, pastedUrl.blockId)}
+          onSelectBookmark={() => handleInsertBookmarkDirect(pastedUrl.url, pastedUrl.blockId)}
           onSelectLink={() => setPastedUrl(null)}
           onDismiss={() => setPastedUrl(null)}
         />
@@ -1014,15 +1063,14 @@ function NoteEditorInner({
           onUpload={uploadFile}
         />
       )}
-      {/* URL ピッカーモーダル（ペースト → ブックマーク選択時） */}
-      {urlPickerOpen && (
+      {/* URL ピッカーモーダル（スラッシュメニュー /bookmark から） */}
+      {urlSlashPickerOpen && (
         <MediaPickerModal
           mediaIndex={mediaIndex ?? null}
           mediaType="url"
-          onSelect={handleUrlPickerSelect}
-          onClose={() => setUrlPickerOpen(null)}
+          onSelect={handleUrlSlashPickerSelect}
+          onClose={() => setUrlSlashPickerOpen(false)}
           onAddUrlBookmark={onAddUrlBookmark}
-          initialUrl={urlPickerOpen.url}
         />
       )}
       {/* ヘッダー */}

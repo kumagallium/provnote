@@ -7,17 +7,20 @@ export const bookmarkBlock: CustomBlockEntry = {
   spec: BookmarkBlock,
 };
 
-// スラッシュメニュー用の挿入アイテム
+// スラッシュメニューからピッカーを開くグローバルコールバック
+let bookmarkPickerCallback: (() => void) | null = null;
+
+export function setBookmarkPickerCallback(cb: (() => void) | null) {
+  bookmarkPickerCallback = cb;
+}
+
+// スラッシュメニュー用アイテム（ピッカーモーダルを開く）
 export const bookmarkSlashItem = {
   title: "Bookmark",
   subtext: "URL をカード形式で表示",
   group: "メディア",
-  onItemClick: (editor: any) => {
-    editor.insertBlocks(
-      [{ type: "bookmark", props: { url: "", title: "", description: "", ogImage: "", domain: "" } }],
-      editor.getTextCursorPosition().block,
-      "after",
-    );
+  onItemClick: () => {
+    bookmarkPickerCallback?.();
   },
   aliases: ["bookmark", "link", "url", "ブックマーク", "リンク"],
 };
