@@ -230,6 +230,7 @@ export const ja: Record<string, string> = {
   "aiChat.deriveAsNote": "別ノートとして派生",
 
   // ── AI 編集 ──
+  "aiEdit.ask": "質問",
   "aiEdit.askAi": "AI に質問",
   "aiEdit.rewrite": "書き換え",
   "aiEdit.summarize": "要約",

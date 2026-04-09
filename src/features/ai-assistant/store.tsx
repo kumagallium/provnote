@@ -65,6 +65,8 @@ export type AiAssistantActions = {
     quotedMarkdown: string;
     editMode: NonNullable<AiEditMode>;
   }) => void;
+  /** 編集モードを切り替える（会話リセットなし） */
+  setEditMode: (editMode: AiEditMode) => void;
   /** 編集モードをクリア */
   clearEditMode: () => void;
 };
@@ -286,6 +288,10 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const setEditMode = useCallback((editMode: AiEditMode) => {
+    setState((prev) => ({ ...prev, editMode }));
+  }, []);
+
   const clearEditMode = useCallback(() => {
     setState((prev) => ({ ...prev, editMode: null }));
   }, []);
@@ -341,6 +347,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         clearMessages,
         parkChat,
         openEditChat,
+        setEditMode,
         clearEditMode,
       }}
     >

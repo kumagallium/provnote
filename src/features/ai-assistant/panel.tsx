@@ -2,13 +2,24 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, RefreshCw, FileText, Languages, Pencil } from "lucide-react";
+import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, RefreshCw, FileText, Languages, Pencil, MessageSquare } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
 import type { AiEditAction } from "./store";
 import { useT } from "../../i18n";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
+
+// モードの定義
+const MODES = [
+  { key: "ask" as const, icon: MessageSquare, colorClass: "" },
+  { key: "rewrite" as const, icon: RefreshCw, colorClass: "text-blue-600 bg-blue-50 border-blue-200" },
+  { key: "summarize" as const, icon: FileText, colorClass: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { key: "translate" as const, icon: Languages, colorClass: "text-amber-600 bg-amber-50 border-amber-200" },
+  { key: "custom" as const, icon: Pencil, colorClass: "text-violet-600 bg-violet-50 border-violet-200" },
+] as const;
+
+type ModeKey = typeof MODES[number]["key"];
 
 type AiAssistantPanelProps = {
   /** AI にメッセージを送信する */
@@ -28,14 +39,12 @@ export function AiAssistantPanel({
   onDeriveNote,
 }: AiAssistantPanelProps) {
   const {
-    messages, loading, error, clearMessages, parkChat,
+    messages, loading, error, parkChat,
     chats, selectChat, sourceBlockIds, quotedMarkdown,
-    editMode, clearEditMode, openEditChat,
+    editMode, setEditMode, clearEditMode,
   } = useAiAssistant();
   const t = useT();
   const [input, setInput] = useState("");
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customInstruction, setCustomInstruction] = useState("");
   // sourceBlockIds がある = openChat で起動された → 新規チャット画面
   // sourceBlockIds が空 + chats あり = 一覧表示
   const [showChatList, setShowChatList] = useState(
@@ -43,38 +52,63 @@ export function AiAssistantPanel({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const editAutoSentRef = useRef(false);
+
+  // 現在のモードを算出
+  const currentMode: ModeKey = editMode ? editMode.action : "ask";
 
   // 新しいメッセージが追加されたら自動スクロール
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 編集モードで開かれたら自動的にプロンプトを送信
-  useEffect(() => {
-    if (!editMode || editAutoSentRef.current || messages.length > 0 || loading) return;
-    editAutoSentRef.current = true;
+  // モード切り替え
+  const handleModeChange = useCallback(
+    (mode: ModeKey) => {
+      if (mode === "ask") {
+        clearEditMode();
+      } else if (mode === "custom") {
+        // カスタムモード: テキストエリアにフォーカスして指示入力を促す
+        setEditMode({ action: "custom" });
+        setTimeout(() => textareaRef.current?.focus(), 0);
+      } else {
+        setEditMode({ action: mode });
+      }
+    },
+    [setEditMode, clearEditMode],
+  );
 
-    const actionKey = editMode.action === "custom"
-      ? editMode.customInstruction ?? ""
-      : t(`aiEdit.${editMode.action}Instruction` as any);
-
-    if (actionKey) {
-      onSubmit(actionKey);
-    }
-  }, [editMode, messages.length, loading, onSubmit, t]);
-
-  // editMode が変わったらフラグをリセット
-  useEffect(() => {
-    editAutoSentRef.current = false;
-  }, [editMode]);
-
+  // 送信ハンドラー
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     setInput("");
     onSubmit(trimmed);
   }, [input, loading, onSubmit]);
+
+  // 編集アクション（プリセット）をワンクリック実行
+  const handlePresetAction = useCallback(
+    (action: AiEditAction) => {
+      if (loading) return;
+      setEditMode({ action });
+      const instruction = t(`aiEdit.${action}Instruction` as any);
+      if (instruction) {
+        onSubmit(instruction);
+      }
+    },
+    [loading, setEditMode, onSubmit, t],
+  );
+
+  // モードクリック: ask/custom はモード切替のみ、プリセットは即実行
+  const handleModeClick = useCallback(
+    (mode: ModeKey) => {
+      if (mode === "ask" || mode === "custom") {
+        handleModeChange(mode);
+      } else {
+        handlePresetAction(mode);
+      }
+    },
+    [handleModeChange, handlePresetAction],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -94,49 +128,12 @@ export function AiAssistantPanel({
     [selectChat],
   );
 
-  // 編集アクションをクリック → editMode を設定して自動送信
-  const handleEditAction = useCallback(
-    (action: AiEditAction, instruction?: string) => {
-      openEditChat({
-        sourceBlockIds,
-        quotedMarkdown,
-        editMode: { action, ...(instruction ? { customInstruction: instruction } : {}) },
-      });
-      setShowCustomInput(false);
-      setCustomInstruction("");
-    },
-    [openEditChat, sourceBlockIds, quotedMarkdown],
-  );
-
-  const handleCustomSubmit = useCallback(() => {
-    const trimmed = customInstruction.trim();
-    if (!trimmed) return;
-    handleEditAction("custom", trimmed);
-  }, [customInstruction, handleEditAction]);
-
-  // 編集モードのラベル
-  const editModeLabel = editMode
-    ? editMode.action === "custom"
-      ? t("aiEdit.custom")
-      : t(`aiEdit.${editMode.action}` as any)
-    : null;
-
-  // 引用テキストがあり、まだメッセージ送信前 → アクションボタンを表示
-  const showEditActions = !!quotedMarkdown && sourceBlockIds.length > 0
-    && messages.length === 0 && !loading && !editMode && !showChatList;
-
   return (
     <div className="flex flex-col h-full">
       {/* ヘッダー */}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <Bot size={14} className="text-violet-500" />
         <span className="text-xs font-semibold text-foreground">{t("aiChat.title")}</span>
-        {editModeLabel && (
-          <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-            <Pencil size={10} />
-            {editModeLabel}
-          </span>
-        )}
         <div className="ml-auto flex items-center gap-1">
           {chats.length > 0 && !showChatList && (
             <button
@@ -167,66 +164,6 @@ export function AiAssistantPanel({
           </div>
           <div className="bg-muted/50 rounded p-2 text-[11px] text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
             {quotedMarkdown}
-          </div>
-        </div>
-      )}
-
-      {/* AI 編集アクションボタン */}
-      {showEditActions && (
-        <div className="px-3 py-2 border-b border-border">
-          <div className="text-[10px] text-muted-foreground mb-1.5">{t("aiEdit.editingLabel")}</div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => handleEditAction("rewrite")}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
-            >
-              <RefreshCw size={11} />
-              {t("aiEdit.rewrite")}
-            </button>
-            <button
-              onClick={() => handleEditAction("summarize")}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
-            >
-              <FileText size={11} />
-              {t("aiEdit.summarize")}
-            </button>
-            <button
-              onClick={() => handleEditAction("translate")}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 transition-colors"
-            >
-              <Languages size={11} />
-              {t("aiEdit.translate")}
-            </button>
-            {showCustomInput ? (
-              <div className="w-full mt-1">
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={customInstruction}
-                    onChange={(e) => setCustomInstruction(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
-                    placeholder={t("aiEdit.customPlaceholder")}
-                    className="flex-1 text-[11px] px-2 py-1 border border-border rounded-md bg-background text-foreground"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleCustomSubmit}
-                    disabled={!customInstruction.trim()}
-                    className="px-2 py-1 text-[11px] bg-violet-500 text-white rounded-md hover:bg-violet-600 disabled:opacity-50 transition-colors"
-                  >
-                    {t("aiEdit.customSubmit")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowCustomInput(true)}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-dashed border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <Pencil size={11} />
-                {t("aiEdit.custom")}
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -288,7 +225,11 @@ export function AiAssistantPanel({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={t("aiChat.placeholder")}
+                placeholder={
+                  currentMode === "custom"
+                    ? t("aiEdit.customPlaceholder")
+                    : t("aiChat.placeholder")
+                }
                 disabled={loading}
                 rows={2}
                 className="flex-1 text-xs resize-none"
@@ -302,8 +243,28 @@ export function AiAssistantPanel({
                 <Send size={12} />
               </Button>
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1">
-              {t("aiChat.sendHint")}
+            {/* モードセレクタ */}
+            <div className="flex items-center gap-1 mt-1.5">
+              {MODES.map((mode) => {
+                const Icon = mode.icon;
+                const isActive = currentMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    onClick={() => handleModeClick(mode.key)}
+                    disabled={loading}
+                    title={t(`aiEdit.${mode.key}` as any)}
+                    className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md border transition-colors ${
+                      isActive
+                        ? mode.colorClass || "text-foreground bg-muted border-border font-medium"
+                        : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <Icon size={10} />
+                    {t(`aiEdit.${mode.key}` as any)}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </>
