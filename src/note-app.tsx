@@ -447,13 +447,14 @@ function NoteEditorInner({
         });
         aiAssistant.setSessionId(response.session_id);
         aiAssistant.setLoading(false);
+        markDirty();
       } catch (err) {
         aiAssistant.setError(
           err instanceof Error ? err.message : "AI 実行に失敗しました",
         );
       }
     },
-    [fileId, aiAssistant],
+    [fileId, aiAssistant, markDirty],
   );
 
   // AI 回答から別ノートとして派生
