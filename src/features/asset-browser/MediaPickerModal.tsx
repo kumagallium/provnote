@@ -1,10 +1,18 @@
 // メディアピッカーモーダル
 // スラッシュコマンドから呼び出し、既存メディアを選択してエディタに挿入する
+// URL タイプの場合は新規 URL 登録フォームを表示する
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useT } from "../../i18n";
 import { getActiveProvider } from "../../lib/storage/registry";
 import type { MediaIndex, MediaIndexEntry, MediaType } from "./media-index";
+import {
+  fetchUrlMetadata,
+  generateUrlBookmarkId,
+  getFaviconUrl,
+  extractDomain,
+} from "./media-index";
 
 // 動画サムネイル（AssetGalleryView と同じパターン）
 function VideoThumb({ entry }: { entry: MediaIndexEntry }) {
@@ -78,6 +86,20 @@ function PickerItem({
             <span className="text-xl">📄</span>
           </div>
         );
+      case "url":
+        return (
+          <div className="w-full h-20 flex flex-col items-center justify-center gap-1 rounded bg-muted px-2">
+            <img
+              src={getFaviconUrl(entry.urlMeta?.domain ?? "", 32)}
+              alt=""
+              className="w-6 h-6 rounded"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            <span className="text-[9px] text-muted-foreground truncate max-w-full">
+              {entry.urlMeta?.domain ?? ""}
+            </span>
+          </div>
+        );
       default:
         return (
           <div className="w-full h-20 flex items-center justify-center rounded bg-muted">
@@ -107,6 +129,10 @@ export type MediaPickerModalProps = {
   onClose: () => void;
   /** 新規アップロード（File → URL を返す） */
   onUpload?: (file: File) => Promise<string>;
+  /** URL ブックマーク登録コールバック（mediaType === "url" のとき使用） */
+  onAddUrlBookmark?: (entry: MediaIndexEntry) => void;
+  /** 初期 URL（ペースト時に自動入力する） */
+  initialUrl?: string;
 };
 
 export function MediaPickerModal({
@@ -115,11 +141,19 @@ export function MediaPickerModal({
   onSelect,
   onClose,
   onUpload,
+  onAddUrlBookmark,
+  initialUrl,
 }: MediaPickerModalProps) {
   const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // URL 登録フォーム用の状態
+  const [newUrl, setNewUrl] = useState(initialUrl ?? "");
+  const [urlFetching, setUrlFetching] = useState(false);
+  const [urlRegistering, setUrlRegistering] = useState(false);
+  const lastFetchedUrl = useRef("");
 
   // 自動フォーカス
   useEffect(() => {
@@ -135,12 +169,41 @@ export function MediaPickerModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // initialUrl が設定されていて既存エントリに一致する場合、自動選択
+  useEffect(() => {
+    if (!initialUrl || !mediaIndex) return;
+    const existing = mediaIndex.media.find(
+      (m) => m.type === "url" && m.url === initialUrl,
+    );
+    if (existing) {
+      onSelect(existing);
+      onClose();
+    }
+  }, [initialUrl, mediaIndex, onSelect, onClose]);
+
+  // initialUrl が設定されていて新規の場合、自動取得開始
+  useEffect(() => {
+    if (!initialUrl || mediaType !== "url") return;
+    // 既存にあれば上の effect で自動選択されるのでスキップ
+    const existing = mediaIndex?.media.find(
+      (m) => m.type === "url" && m.url === initialUrl,
+    );
+    if (existing) return;
+    // 自動取得 → 自動登録 → 自動選択
+    handleUrlRegister(initialUrl);
+  }, []); // 初回のみ
+
   const filtered = useMemo(() => {
     if (!mediaIndex) return [];
     let result = mediaIndex.media.filter((m) => m.type === mediaType);
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter((m) => m.name.toLowerCase().includes(q));
+      result = result.filter((m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.urlMeta?.domain?.toLowerCase().includes(q) ||
+        m.urlMeta?.description?.toLowerCase().includes(q) ||
+        (m.type === "url" && m.url.toLowerCase().includes(q))
+      );
     }
     // 新しいものが先
     return result.sort(
@@ -157,6 +220,62 @@ export function MediaPickerModal({
     },
     [onSelect, onClose],
   );
+
+  // URL 新規登録
+  const handleUrlRegister = useCallback(async (urlToRegister?: string) => {
+    const targetUrl = (urlToRegister ?? newUrl).trim();
+    if (!targetUrl || !onAddUrlBookmark) return;
+    try {
+      new URL(targetUrl);
+    } catch {
+      return;
+    }
+    // 重複チェック
+    const existing = mediaIndex?.media.find(
+      (m) => m.type === "url" && m.url === targetUrl,
+    );
+    if (existing) {
+      handleSelect(existing);
+      return;
+    }
+    setUrlRegistering(true);
+    setUrlFetching(true);
+    try {
+      const meta = await fetchUrlMetadata(targetUrl);
+      const entry: MediaIndexEntry = {
+        fileId: generateUrlBookmarkId(),
+        name: meta.title,
+        type: "url",
+        mimeType: "text/x-uri",
+        url: targetUrl,
+        thumbnailUrl: getFaviconUrl(meta.domain),
+        uploadedAt: new Date().toISOString(),
+        usedIn: [],
+        urlMeta: {
+          domain: meta.domain,
+          description: meta.description,
+          ogImage: meta.ogImage,
+        },
+      };
+      onAddUrlBookmark(entry);
+      onSelect(entry);
+      onClose();
+    } finally {
+      setUrlFetching(false);
+      setUrlRegistering(false);
+    }
+  }, [newUrl, onAddUrlBookmark, mediaIndex, handleSelect, onClose]);
+
+  const isValidNewUrl = useMemo(() => {
+    try {
+      new URL(newUrl.trim());
+      return true;
+    } catch {
+      return false;
+    }
+  }, [newUrl]);
+
+  const isUrlType = mediaType === "url";
 
   return (
     <div
@@ -194,8 +313,39 @@ export function MediaPickerModal({
 
         {/* グリッド */}
         <div className="flex-1 overflow-auto p-4">
-          {/* 新規アップロードボタン */}
-          {onUpload && (
+          {/* URL タイプ: 新規 URL 登録フォーム */}
+          {isUrlType && onAddUrlBookmark && (
+            <div className="mb-3">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && isValidNewUrl && !urlRegistering) {
+                      e.preventDefault();
+                      handleUrlRegister();
+                    }
+                  }}
+                  placeholder="https://example.com/article"
+                  className="flex-1 text-xs px-3 py-1.5 rounded border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                />
+                <button
+                  onClick={() => handleUrlRegister()}
+                  disabled={!isValidNewUrl || urlRegistering}
+                  className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                >
+                  {urlFetching ? (
+                    <><Loader2 size={12} className="animate-spin" /> {t("asset.urlRegistering")}</>
+                  ) : (
+                    <>{t("asset.urlAdd")}</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+          {/* メディアタイプ: 新規アップロードボタン */}
+          {!isUrlType && onUpload && (
             <div className="mb-3">
               <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border text-foreground transition-colors ${uploading ? "opacity-50 pointer-events-none" : "hover:bg-muted cursor-pointer"}`}>
                 {uploading ? (
@@ -217,7 +367,6 @@ export function MediaPickerModal({
                     setUploading(true);
                     try {
                       const url = await onUpload(file);
-                      // アップロード後、そのメディアを挿入用に通知
                       onSelect({
                         fileId: "",
                         name: file.name,

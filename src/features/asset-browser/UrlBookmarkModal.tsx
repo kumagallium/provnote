@@ -1,7 +1,7 @@
 // URL ブックマーク登録モーダル
 // 外部 URL を入力し、メタデータを取得してアセットとして登録する
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Loader2, ExternalLink } from "lucide-react";
 import { useT } from "../../i18n";
 import {
@@ -27,17 +27,25 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
   const [ogImage, setOgImage] = useState<string | undefined>();
   const [domain, setDomain] = useState("");
   const [registering, setRegistering] = useState(false);
+  // 自動取得済み URL を追跡（同じ URL で再取得しないため）
+  const lastFetchedUrl = useRef("");
 
-  // URL を入力してメタデータを取得
-  const handleFetch = useCallback(async () => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
-    // URL バリデーション
+  /** URL が有効かどうか */
+  const isValidUrl = useCallback((value: string) => {
     try {
-      new URL(trimmed);
+      new URL(value.trim());
+      return true;
     } catch {
-      return;
+      return false;
     }
+  }, []);
+
+  // メタデータを取得
+  const doFetch = useCallback(async (targetUrl: string) => {
+    const trimmed = targetUrl.trim();
+    if (!trimmed || !isValidUrl(trimmed)) return;
+    if (lastFetchedUrl.current === trimmed) return;
+    lastFetchedUrl.current = trimmed;
     setFetching(true);
     try {
       const meta = await fetchUrlMetadata(trimmed);
@@ -49,18 +57,31 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
     } finally {
       setFetching(false);
     }
-  }, [url]);
+  }, [isValidUrl]);
 
-  // Enter キーで取得開始
+  // URL が有効な値に変わったら自動取得（ペースト・入力完了時）
+  useEffect(() => {
+    const trimmed = url.trim();
+    if (!isValidUrl(trimmed) || lastFetchedUrl.current === trimmed) return;
+    // 短いデバウンス（ペーストは即座に、手入力は少し待つ）
+    const timer = setTimeout(() => doFetch(trimmed), 300);
+    return () => clearTimeout(timer);
+  }, [url, isValidUrl, doFetch]);
+
+  // URL 変更時にリセット
+  const handleUrlChange = useCallback((value: string) => {
+    setUrl(value);
+    if (lastFetchedUrl.current && lastFetchedUrl.current !== value.trim()) {
+      setFetched(false);
+    }
+  }, []);
+
+  // ESC / Enter
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !fetching) {
-        e.preventDefault();
-        handleFetch();
-      }
       if (e.key === "Escape") onClose();
     },
-    [handleFetch, fetching, onClose],
+    [onClose],
   );
 
   // 登録
@@ -91,14 +112,7 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
     }
   }, [url, title, description, domain, ogImage, onRegister]);
 
-  const isValidUrl = (() => {
-    try {
-      new URL(url.trim());
-      return true;
-    } catch {
-      return false;
-    }
-  })();
+  const urlValid = isValidUrl(url);
 
   return (
     <div
@@ -127,23 +141,21 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
           {/* URL 入力 */}
           <div>
             <label className="text-xs font-medium text-foreground mb-1 block">URL</label>
-            <div className="flex gap-2">
+            <div className="relative">
               <input
                 type="url"
                 value={url}
-                onChange={(e) => { setUrl(e.target.value); setFetched(false); }}
+                onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="https://example.com/article"
                 autoFocus
-                className="flex-1 text-xs px-3 py-2 rounded border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                className="w-full text-xs px-3 py-2 pr-8 rounded border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
               />
-              <button
-                onClick={handleFetch}
-                disabled={!isValidUrl || fetching}
-                className="px-3 py-2 text-xs rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
-              >
-                {fetching ? <Loader2 size={14} className="animate-spin" /> : t("asset.urlFetch")}
-              </button>
+              {fetching && (
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                  <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -172,7 +184,8 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
-                  className="w-full text-xs px-3 py-2 rounded border border-border bg-background text-foreground outline-none focus:border-primary transition-colors resize-none"
+                  placeholder={t("asset.urlDescriptionPlaceholder")}
+                  className="w-full text-xs px-3 py-2 rounded border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none"
                 />
               </div>
 
@@ -222,7 +235,7 @@ export function UrlBookmarkModal({ onRegister, onClose }: UrlBookmarkModalProps)
           </button>
           <button
             onClick={handleRegister}
-            disabled={!isValidUrl || registering}
+            disabled={!urlValid || fetching || registering}
             className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {registering ? t("asset.urlRegistering") : t("asset.urlRegister")}

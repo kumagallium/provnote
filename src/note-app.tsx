@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText } from "lucide-react";
 import { SandboxEditor } from "./base/editor";
 import { pdfViewerBlock } from "./blocks/pdf-viewer";
+import { bookmarkBlock, bookmarkSlashItem } from "./blocks/bookmark";
 import {
   LabelStoreProvider,
   useLabelStore,
@@ -69,6 +70,11 @@ import {
   getMediaSlashMenuItems,
   setMediaPickerCallback,
   DEFAULT_MEDIA_SLASH_TITLES,
+  UrlPasteMenu,
+  generateUrlBookmarkId,
+  getFaviconUrl,
+  extractDomain,
+  fetchUrlMetadata,
   type MediaType,
   type MediaIndexEntry,
 } from "./features/asset-browser";
@@ -191,6 +197,8 @@ type NoteEditorProps = {
   uploadFile?: (file: File) => Promise<string>;
   /** メディアインデックス（メディアピッカー用） */
   mediaIndex?: import("./features/asset-browser").MediaIndex | null;
+  /** URL ブックマーク登録コールバック */
+  onAddUrlBookmark?: (entry: MediaIndexEntry) => void;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -212,7 +220,7 @@ function NoteEditor(props: NoteEditorProps) {
 const KNOWN_BLOCK_TYPES = new Set([
   "paragraph", "heading", "bulletListItem", "numberedListItem",
   "checkListItem", "table", "image", "video", "audio", "file",
-  "codeBlock", "pdf",
+  "codeBlock", "pdf", "bookmark",
 ]);
 
 function sanitizeBlocks(blocks: any[]): any[] {
@@ -241,6 +249,7 @@ function NoteEditorInner({
   noteIndex,
   uploadFile,
   mediaIndex,
+  onAddUrlBookmark,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -340,6 +349,51 @@ function NoteEditorInner({
   // スラッシュメニューアイテム（既存メディアから挿入）
   const mediaSlashItems = useMemo(() => getMediaSlashMenuItems(), []);
 
+  // ── URL ペースト検知 ──
+  const [pastedUrl, setPastedUrl] = useState<{ url: string; position: { x: number; y: number }; blockId: string } | null>(null);
+  const pasteListenerRef = useRef<((e: ClipboardEvent) => void) | null>(null);
+
+  // URL ピッカーモーダル用の状態
+  const [urlPickerOpen, setUrlPickerOpen] = useState<{ url: string; blockId: string } | null>(null);
+
+  // ブックマークスタイルを選択 → URL ピッカーモーダルを開く
+  const handleOpenUrlPicker = useCallback((url: string, blockId: string) => {
+    setUrlPickerOpen({ url, blockId });
+    setPastedUrl(null);
+  }, []);
+
+  // ピッカーから URL エントリが選択された → bookmark ブロックを挿入
+  const handleUrlPickerSelect = useCallback((entry: MediaIndexEntry) => {
+    const editor = editorRef.current;
+    if (!editor || !urlPickerOpen) return;
+    const block = editor.getBlock(urlPickerOpen.blockId);
+    if (block) {
+      editor.insertBlocks(
+        [{
+          type: "bookmark",
+          props: {
+            url: entry.url,
+            title: entry.name,
+            description: entry.urlMeta?.description ?? "",
+            ogImage: entry.urlMeta?.ogImage ?? "",
+            domain: entry.urlMeta?.domain ?? extractDomain(entry.url),
+          },
+        }],
+        block,
+        "after",
+      );
+      // 元のテキストブロックに URL テキストだけが残っていたら削除
+      const content = block.content;
+      if (Array.isArray(content) && content.length <= 1) {
+        const text = content[0]?.text?.trim() ?? "";
+        if (text === urlPickerOpen.url || text === "") {
+          editor.removeBlocks([block]);
+        }
+      }
+    }
+    setUrlPickerOpen(null);
+  }, [urlPickerOpen]);
+
   // ラベル自動設定のコールバック
   const labelAutoRef = useRef<(() => void) | null>(null);
 
@@ -348,6 +402,44 @@ function NoteEditorInner({
     editorRef.current = editor;
     // ラベル自動設定をセットアップ
     labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
+
+    // URL ペースト検知リスナー
+    // 前回のリスナーがあればクリーンアップ
+    if (pasteListenerRef.current) {
+      editor.domElement?.removeEventListener("paste", pasteListenerRef.current);
+    }
+    const listener = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text/plain")?.trim();
+      if (!text) return;
+      // URL のみのペーストかチェック
+      try {
+        const parsed = new URL(text);
+        if (!parsed.protocol.startsWith("http")) return;
+      } catch {
+        return;
+      }
+      // ペースト位置のブロック ID を取得
+      const currentBlock = editor.getTextCursorPosition()?.block;
+      if (!currentBlock) return;
+      // ペースト位置の座標を取得
+      const sel = window.getSelection();
+      let x = 0, y = 0;
+      if (sel && sel.rangeCount > 0) {
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        x = rect.left;
+        y = rect.bottom;
+      }
+      // 少し遅延してメニュー表示（ペーストテキスト挿入後）
+      setTimeout(() => {
+        setPastedUrl({ url: text, position: { x, y }, blockId: currentBlock.id });
+      }, 100);
+    };
+    pasteListenerRef.current = listener;
+    // BlockNote の DOM 要素にリスナーを追加
+    const domEl = editor.domElement;
+    if (domEl) {
+      domEl.addEventListener("paste", listener);
+    }
   }, [labelStore]);
 
   // ── 保存ロジック ──
@@ -902,6 +994,16 @@ function NoteEditorInner({
       <BlockHoverHighlight />
       <ScopeHighlight blockIds={chatScopeBlockIds} />
       <LabelDropdownPortal />
+      {/* URL ペーストスタイル選択メニュー */}
+      {pastedUrl && (
+        <UrlPasteMenu
+          url={pastedUrl.url}
+          position={pastedUrl.position}
+          onSelectBookmark={() => handleOpenUrlPicker(pastedUrl.url, pastedUrl.blockId)}
+          onSelectLink={() => setPastedUrl(null)}
+          onDismiss={() => setPastedUrl(null)}
+        />
+      )}
       {/* メディアピッカーモーダル */}
       {pickerMediaType && (
         <MediaPickerModal
@@ -910,6 +1012,17 @@ function NoteEditorInner({
           onSelect={handlePickerSelect}
           onClose={() => setPickerMediaType(null)}
           onUpload={uploadFile}
+        />
+      )}
+      {/* URL ピッカーモーダル（ペースト → ブックマーク選択時） */}
+      {urlPickerOpen && (
+        <MediaPickerModal
+          mediaIndex={mediaIndex ?? null}
+          mediaType="url"
+          onSelect={handleUrlPickerSelect}
+          onClose={() => setUrlPickerOpen(null)}
+          onAddUrlBookmark={onAddUrlBookmark}
+          initialUrl={urlPickerOpen.url}
         />
       )}
       {/* ヘッダー */}
@@ -942,10 +1055,10 @@ function NoteEditorInner({
           <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
             <SandboxEditor
               key={fileId || "new"}
-              blocks={[pdfViewerBlock]}
+              blocks={[pdfViewerBlock, bookmarkBlock]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
-              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, ...mediaSlashItems]}
+              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, ...mediaSlashItems, bookmarkSlashItem]}
               excludeDefaultSlashTitles={DEFAULT_MEDIA_SLASH_TITLES}
               formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
@@ -1228,6 +1341,7 @@ export function NoteApp() {
             noteIndex={fm.noteIndex}
             uploadFile={fm.handleUploadMedia}
             mediaIndex={fm.mediaIndex}
+            onAddUrlBookmark={fm.handleAddUrlBookmark}
           />
         )}
         {/* 派生ノート作成中のオーバーレイ */}

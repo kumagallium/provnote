@@ -476,7 +476,7 @@ export function extractMediaFromBlocks(blocks: any[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const block of blocks) {
     if (
-      (block.type === "image" || block.type === "video" || block.type === "audio" || block.type === "file" || block.type === "pdf") &&
+      (block.type === "image" || block.type === "video" || block.type === "audio" || block.type === "file" || block.type === "pdf" || block.type === "bookmark") &&
       block.props?.url
     ) {
       map.set(block.props.url, block.id);

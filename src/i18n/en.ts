@@ -310,11 +310,16 @@ export const en: Record<string, string> = {
   "asset.urlFetch": "Fetch",
   "asset.urlTitle": "Title",
   "asset.urlDescription": "Description",
+  "asset.urlDescriptionPlaceholder": "Add a description (optional)",
   "asset.urlRegister": "Register",
   "asset.urlRegistering": "Registering…",
   "asset.urlAdd": "Add URL",
   "asset.urlOpen": "Open in new tab",
   "asset.urlDomain": "Domain",
+  "asset.urlStyleBookmark": "Bookmark",
+  "asset.urlStyleBookmarkSub": "Display as a card with preview",
+  "asset.urlStyleLink": "Link",
+  "asset.urlStyleLinkSub": "Paste as inline text",
 
   // ── ラベルギャラリー ──
   "label.section": "Labels",

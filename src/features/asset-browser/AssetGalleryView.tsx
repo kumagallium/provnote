@@ -15,6 +15,7 @@ import type { MediaIndex, MediaIndexEntry, MediaType } from "./media-index";
 import { getFaviconUrl } from "./media-index";
 import { MediaDetailModal } from "./MediaDetailModal";
 import { UrlBookmarkModal } from "./UrlBookmarkModal";
+import { MediaPickerModal } from "./MediaPickerModal";
 
 type SortKey = "uploadedAt" | "name";
 
@@ -459,14 +460,14 @@ export function AssetGalleryView({
         />
       )}
 
-      {/* URL ブックマーク登録モーダル */}
+      {/* URL ピッカーモーダル（新規登録 + 既存選択） */}
       {showUrlModal && onAddUrlBookmark && (
-        <UrlBookmarkModal
-          onRegister={(entry) => {
-            onAddUrlBookmark(entry);
-            setShowUrlModal(false);
-          }}
+        <MediaPickerModal
+          mediaIndex={mediaIndex}
+          mediaType="url"
+          onSelect={() => setShowUrlModal(false)}
           onClose={() => setShowUrlModal(false)}
+          onAddUrlBookmark={onAddUrlBookmark}
         />
       )}
     </div>

@@ -310,11 +310,16 @@ export const ja: Record<string, string> = {
   "asset.urlFetch": "取得",
   "asset.urlTitle": "タイトル",
   "asset.urlDescription": "説明",
+  "asset.urlDescriptionPlaceholder": "説明を入力（任意）",
   "asset.urlRegister": "登録",
   "asset.urlRegistering": "登録中…",
   "asset.urlAdd": "URL を追加",
   "asset.urlOpen": "新しいタブで開く",
   "asset.urlDomain": "ドメイン",
+  "asset.urlStyleBookmark": "ブックマーク",
+  "asset.urlStyleBookmarkSub": "プレビューカードとして表示",
+  "asset.urlStyleLink": "リンク",
+  "asset.urlStyleLinkSub": "インラインテキストとして貼り付け",
 
   // ── ラベルギャラリー ──
   "label.section": "ラベル",
