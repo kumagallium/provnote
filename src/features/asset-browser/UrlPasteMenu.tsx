@@ -1,7 +1,8 @@
 // URL ペースト時のスタイル選択メニュー
 // ペーストされた URL を「ブックマーク」か「リンク（そのまま）」か選択する
+// 矢印キー + Enter でキーボード操作可能
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, ExternalLink } from "lucide-react";
 import { useT } from "../../i18n";
 
@@ -14,6 +15,8 @@ export type UrlPasteMenuProps = {
   onDismiss: () => void;
 };
 
+const ITEMS = ["bookmark", "link"] as const;
+
 export function UrlPasteMenu({
   url,
   position,
@@ -23,8 +26,14 @@ export function UrlPasteMenu({
 }: UrlPasteMenuProps) {
   const t = useT();
   const menuRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  // 外側クリックで閉じる
+  const handleSelect = useCallback((index: number) => {
+    if (ITEMS[index] === "bookmark") onSelectBookmark();
+    else onSelectLink();
+  }, [onSelectBookmark, onSelectLink]);
+
+  // キーボード操作 + 外側クリック
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -32,7 +41,24 @@ export function UrlPasteMenu({
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onDismiss();
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setActiveIndex((prev) => (prev + 1) % ITEMS.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setActiveIndex((prev) => (prev - 1 + ITEMS.length) % ITEMS.length);
+          break;
+        case "Enter":
+          e.preventDefault();
+          handleSelect(activeIndex);
+          break;
+        case "Escape":
+          e.preventDefault();
+          onDismiss();
+          break;
+      }
     };
     // 少し遅延して登録（ペーストイベントと競合しないため）
     const timer = setTimeout(() => {
@@ -44,7 +70,7 @@ export function UrlPasteMenu({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onDismiss]);
+  }, [onDismiss, activeIndex, handleSelect]);
 
   // 画面外にはみ出さないよう調整
   const style: React.CSSProperties = {
@@ -54,6 +80,11 @@ export function UrlPasteMenu({
     zIndex: 100,
   };
 
+  const itemClass = (index: number) =>
+    `w-full flex items-center gap-2.5 px-3 py-2 text-xs text-foreground transition-colors ${
+      activeIndex === index ? "bg-muted" : "hover:bg-muted"
+    }`;
+
   return (
     <div ref={menuRef} style={style}>
       <div className="bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px]">
@@ -62,8 +93,9 @@ export function UrlPasteMenu({
         </div>
         <div className="border-t border-border my-0.5" />
         <button
-          onClick={onSelectBookmark}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+          onClick={() => handleSelect(0)}
+          onMouseEnter={() => setActiveIndex(0)}
+          className={itemClass(0)}
         >
           <ExternalLink size={14} className="text-muted-foreground shrink-0" />
           <div className="text-left">
@@ -72,8 +104,9 @@ export function UrlPasteMenu({
           </div>
         </button>
         <button
-          onClick={onSelectLink}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+          onClick={() => handleSelect(1)}
+          onMouseEnter={() => setActiveIndex(1)}
+          className={itemClass(1)}
         >
           <Link size={14} className="text-muted-foreground shrink-0" />
           <div className="text-left">
