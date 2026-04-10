@@ -55,9 +55,9 @@ docker compose -f docker-compose.standalone.yml up -d
 
 Open **http://localhost:5174/Graphium/** and start writing.
 
-### Option 3: Run with Docker — full Crucible stack (AI + MCP tools)
+### Option 3: Run with Docker — full stack (AI + MCP tools)
 
-Run Graphium with the full [Crucible](https://github.com/kumagallium/Crucible) stack: AI chat, note derivation, provenance-tracked AI responses, and MCP tool management.
+Run Graphium with the built-in AI backend and [Crucible Registry](https://github.com/kumagallium/Crucible) for MCP tool management.
 
 ```bash
 git clone https://github.com/kumagallium/Graphium.git
@@ -67,21 +67,21 @@ docker compose up -d
 
 | URL | What it is |
 |-----|------------|
-| http://localhost:5174/Graphium/ | Graphium editor |
-| http://localhost:8090 | Crucible Agent — AI Chat UI |
-| http://localhost:8081 | Crucible Registry — MCP server management |
+| http://localhost:5174/Graphium/ | Graphium editor (includes AI setup) |
+
+> **Advanced:** [Crucible Registry UI](http://localhost:8081) is available for MCP server management.
 
 #### Set up your AI model
 
-1. Open **http://localhost:8090** (Crucible Agent Chat UI)
-2. Add your LLM model (e.g., Claude, GPT-4o) with your API key from the UI
-3. Go to **http://localhost:5174/Graphium/** and start using the AI assistant
+1. Open **http://localhost:5174/Graphium/**
+2. Go to **⚙ Settings → AI Setup**, add your LLM model and API key
+3. Start using the AI assistant
 
 #### Add MCP tools (optional)
 
 1. Open **http://localhost:8081** (Crucible Registry UI)
 2. Register an MCP server from a GitHub repository
-3. The agent automatically discovers and uses registered tools
+3. Tools appear in **⚙ Settings → AI Setup** and can be toggled on/off
 
 No `.env` editing required — everything is configured from the browser. Google Drive sync and Google OAuth work out of the box.
 
@@ -110,7 +110,7 @@ pnpm install
 pnpm dev --port 5174   # → http://localhost:5174/Graphium/
 ```
 
-Google Drive sync works without any configuration. To enable AI features, you need a separate [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) server. Click the **⚙ Settings** icon in the sidebar to configure the agent URL.
+Google Drive sync works without any configuration. AI features require the backend server — run `pnpm dev` which starts both the frontend and backend together. Go to **⚙ Settings → AI Setup** to add your LLM model.
 
 ## Features
 
@@ -192,32 +192,31 @@ Graphium-specific extensions use the `graphium:` namespace (`https://graphium.ap
 
 ## Architecture
 
-Graphium is a **standalone note editor**. It does not require any backend server to function — notes are stored in Google Drive or the browser's local storage.
-
-AI features are provided by an **optional external agent server**. Any server that implements the `POST /agent/run` endpoint can be used:
-
-| Server | Description |
-|--------|-------------|
-| [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) | Full-featured agent runtime with MCP tool support and LiteLLM multi-model proxy |
-| Any compatible server | Must implement `POST /agent/run` with the same request/response format |
-
-### Crucible ecosystem (optional)
-
-Graphium can integrate with the [Crucible](https://github.com/kumagallium/Crucible-Agent) ecosystem for AI capabilities, but this is entirely optional. The diagram below shows how the components connect when AI features are enabled:
+Graphium is a **note editor with a built-in AI backend**. Notes are stored in Google Drive or the browser's local storage. AI features are powered by [Vercel AI SDK](https://ai-sdk.dev/) running on a Node.js backend (Hono) — no external AI server required.
 
 ```mermaid
 graph LR
-    Graphium["📝 <b>Graphium</b><br/><i>Provenance<br/>tracking editor</i>"]
-    Agent["🤖 Crucible<br/><b>Agent</b><br/><i>AI agent<br/>runtime</i>"]
-    Registry["🔧 Crucible<br/><b>Registry</b><br/><i>Build & deploy<br/>MCP servers</i>"]
+    Graphium["📝 <b>Graphium</b><br/><i>Provenance tracking editor<br/>+ AI agent runtime</i>"]
+    Registry["🔧 <b>Crucible</b><br/><i>AI tool management<br/>& deployment</i>"]
 
-    Graphium -- "POST /agent/run<br/>(optional)" --> Agent
-    Registry -- "tool discovery" --> Agent
+    Registry -- "tool discovery<br/>(GET /servers → SSE)" --> Graphium
 
     style Graphium fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
-    style Agent fill:#ede8f5,stroke:#8b7ab5,stroke-width:2px,color:#4a3d6e
     style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
 ```
+
+| Component | Technology |
+|-----------|------------|
+| Editor | TypeScript / React / BlockNote.js |
+| AI Runtime | Vercel AI SDK / @ai-sdk/mcp |
+| Backend | Node.js / Hono |
+| Storage | Google Drive / Local Storage / JSON files |
+| Graph Visualization | Cytoscape.js |
+| Build | Vite / pnpm |
+
+### Crucible Registry (optional)
+
+[Crucible Registry](https://github.com/kumagallium/Crucible) provides MCP server management with auto-discovery. When connected, registered MCP tools appear in **⚙ Settings → AI Setup** and can be used by the AI assistant.
 
 ## Language & Internationalization
 
@@ -238,10 +237,12 @@ Contributions for additional languages are welcome.
 
 ```bash
 pnpm install        # Install dependencies
-pnpm dev            # Start dev server
+pnpm dev            # Start frontend + backend dev server
+pnpm dev:client     # Start frontend only
+pnpm dev:server     # Start backend only
 pnpm test           # Run tests (vitest)
 pnpm storybook      # Component catalog (http://localhost:6006)
-pnpm build          # Production build
+pnpm build          # Production build (frontend)
 ```
 
 ## Project structure
@@ -256,10 +257,14 @@ src/
 │   ├── prov-export/   # W3C PROV-JSON-LD file export
 │   ├── index-table/   # Index table for related notes
 │   ├── network-graph/ # Inter-note derivation network (Cytoscape + fcose)
-│   ├── ai-assistant/  # AI derivation via agent server
-│   ├── settings/      # AI agent URL configuration
+│   ├── ai-assistant/  # AI chat & note derivation
+│   ├── settings/      # Settings modal (General + AI Setup)
 │   ├── template/      # Template save/load/diff
 │   └── release-notes/ # Release notes display
+├── server/            # Built-in AI backend (Hono + Vercel AI SDK)
+│   ├── routes/        # API endpoints (/api/agent, /api/models, etc.)
+│   ├── services/      # LLM, MCP, Registry, agent loop
+│   └── config/        # Model & profile persistence (JSON files)
 ├── lib/               # Utilities (Google Auth, Drive API, Cytoscape setup)
 └── blocks/            # Custom BlockNote blocks
 ```

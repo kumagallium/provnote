@@ -55,7 +55,7 @@ import {
   generateTitle,
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -670,10 +670,12 @@ function NoteEditorInner({
           }
         }
         const selectedModel = getSelectedModel();
+        const disabledTools = getDisabledTools();
         const response = await runAgent({
           message: userMessage,
           session_id: aiAssistant.sessionId ?? undefined,
           profile: getSelectedProfile(),
+          ...(disabledTools.length > 0 ? { disabled_tools: disabledTools } : {}),
           options: { max_turns: 5, ...(selectedModel && { model: selectedModel }) },
         });
         aiAssistant.addMessage({

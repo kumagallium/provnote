@@ -52,4 +52,13 @@ export default defineConfig({
       "@ui": path.resolve(__dirname, "src/ui"),
     },
   },
+  server: {
+    proxy: {
+      // /api/* をバックエンドサーバーに転送
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
+  },
 });

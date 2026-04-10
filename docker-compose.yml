@@ -1,61 +1,40 @@
 # Graphium + Crucible — full setup (editor + AI + MCP tools)
 #
-# This runs Graphium with the full Crucible stack:
-#   - Crucible Agent: AI chat, note derivation, provenance-tracked AI responses
-#   - Crucible Registry: MCP server management with auto-discovery
+# Graphium runs with built-in AI backend (Vercel AI SDK).
+# Crucible Registry provides MCP server management with auto-discovery.
 #
 # For the editor-only setup without AI, use:
 #   docker compose -f docker-compose.standalone.yml up -d
 #
 # Usage:
 #   docker compose up -d
-#   http://localhost:5174/Graphium/   — Graphium editor
-#   http://localhost:8090             — Crucible Agent Chat UI
-#   http://localhost:8090/docs        — Agent API docs (Swagger)
+#   http://localhost:5174/Graphium/   — Graphium editor (includes AI setup)
+#
+# Advanced:
 #   http://localhost:8080             — Crucible Registry API
 #   http://localhost:8081             — Crucible Registry UI
 
 services:
   # ============================================================================
-  # provnote — PROV-DM provenance-tracking editor
+  # Graphium — PROV-DM editor + AI backend (frontend + Node.js API)
   # ============================================================================
-  provnote:
+  graphium:
     build:
       context: .
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
     ports:
-      - "5174:80"
-    depends_on:
-      - agent
-    restart: unless-stopped
-
-  # ============================================================================
-  # Crucible Agent — AI backend for provnote
-  # ============================================================================
-  agent:
-    image: ghcr.io/kumagallium/crucible-agent:latest
-    ports:
-      - "8090:8090"
+      - "5174:3001"
     volumes:
-      - ./docker/litellm_config.yaml:/app/litellm_config.yaml
+      - graphium_data:/app/data
     environment:
-      - DATABASE_URL=postgresql+asyncpg://agent:agent@postgres:5432/crucible_agent
-      - LLM_MODEL=
-      - LITELLM_API_BASE=http://litellm:4000
-      - LITELLM_API_KEY=sk-crucible-dev
-      - CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
-      - CHAT_UI_ENABLED=true
-      # Crucible Registry 連携（MCP サーバー自動検出）
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - SERVE_STATIC=dist
       - CRUCIBLE_API_URL=http://crucible-api:8000
       - CRUCIBLE_API_KEY=${CRUCIBLE_API_KEY:-}
     depends_on:
-      postgres:
-        condition: service_healthy
-      litellm:
-        condition: service_started
-      crucible-api:
-        condition: service_started
+      - crucible-api
     restart: unless-stopped
 
   # ============================================================================
@@ -68,7 +47,7 @@ services:
     environment:
       - REGISTRY_FILE=/var/lib/crucible-registry/servers.json
       - DOCKER_HOST=tcp://socket-proxy:2375
-      - MCP_NETWORK=${COMPOSE_PROJECT_NAME:-provnote}_default
+      - MCP_NETWORK=${COMPOSE_PROJECT_NAME:-graphium}_default
       - REGISTRY_API_KEY=${CRUCIBLE_API_KEY:-}
       - CRUCIBLE_HOST=127.0.0.1
       - CRUCIBLE_HEALTH_HOST=host.docker.internal
@@ -117,51 +96,12 @@ services:
       - socket_proxy_net
     restart: unless-stopped
 
-  # ============================================================================
-  # LiteLLM — LLM proxy
-  # ============================================================================
-  litellm:
-    image: ghcr.io/berriai/litellm:main-stable
-    ports:
-      - "4000:4000"
-    volumes:
-      - ./docker/litellm_config.yaml:/app/config.yaml:ro
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
-    environment:
-      - DATABASE_URL=postgresql://agent:agent@postgres:5432/litellm
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ============================================================================
-  # PostgreSQL — shared database
-  # ============================================================================
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: agent
-      POSTGRES_PASSWORD: agent
-      POSTGRES_DB: crucible_agent
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agent -d crucible_agent"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
 volumes:
-  pgdata:
+  graphium_data:
   crucible_data:
 
 networks:
   default:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/24
   socket_proxy_net:
     internal: true

@@ -137,10 +137,7 @@ export const en: Record<string, string> = {
   // ── 設定モーダル ──
   "settings.title": "Settings",
   "settings.language": "Language",
-  "settings.agentUrl": "AI Agent URL",
-  "settings.envNote": "Set via environment variable. Enter a new URL to override.",
-  "settings.placeholder": "https://your-agent-url.example.com",
-  "settings.aiNotConfigured": "AI agent URL is not configured. Enter the URL in the sidebar Settings to enable AI features.",
+  "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 
   // ── AI チャット ──
   "aiChat.title": "AI Chat",
@@ -200,11 +197,8 @@ export const en: Record<string, string> = {
   "linkBadge.linkCount": "{count} links",
 
   // ── 設定モーダル追加 ──
-  "settings.agentHelp": "To use the AI assistant, start crucible-agent and enter its address.",
-  "settings.apiKey": "API Key",
-  "settings.apiKeyPlaceholder": "Not set (no authentication)",
-  "settings.apiKeyEnvNote": "Set via environment variable. Enter a new key to override.",
-  "settings.apiKeyHelp": "Set the same value as AGENT_API_KEY in crucible-agent. If not set, connects without authentication.",
+  "settings.tab.general": "General",
+  "settings.tab.aiSetup": "AI Setup",
   "settings.profile": "System Prompt",
   "settings.profileDefault": "Default (science)",
   "settings.profileLoading": "Loading profiles...",
@@ -214,8 +208,43 @@ export const en: Record<string, string> = {
   "settings.modelDefault": "Server default ({name})",
   "settings.modelDefaultLabel": "default",
   "settings.modelLoading": "Loading models...",
-  "settings.modelNone": "No models available",
+  "settings.modelNone": "No models registered",
   "settings.modelHelp": "Select the AI model to use. If not specified, the server default is used.",
+  // ── 接続状態 ──
+  "settings.health.title": "Connection Status",
+  "settings.health.checking": "Checking...",
+  "settings.health.unavailable": "Backend is not running",
+  // ── モデル管理 ──
+  "settings.models.title": "Registered Models",
+  "settings.models.add": "Add model",
+  "settings.models.loading": "Loading...",
+  "settings.models.empty": "No models registered yet. Add a model to start using AI features.",
+  "settings.models.addFirst": "Add your first model",
+  "settings.models.edit": "Edit",
+  "settings.models.editApiKey": "API Key (leave blank to keep current)",
+  "settings.models.editApiKeyPlaceholder": "Enter new key to update",
+  "settings.models.delete": "Delete",
+  "settings.models.confirmDelete": "Delete?",
+  // ── モデル追加フォーム ──
+  "settings.addModel.title": "Add Model",
+  "settings.addModel.provider": "Provider",
+  "settings.addModel.apiKey": "API Key",
+  "settings.addModel.apiKeyRequired": "Enter an API key first",
+  "settings.addModel.fetchModels": "Fetch available models",
+  "settings.addModel.fetching": "Fetching...",
+  "settings.addModel.selectModel": "Select a model",
+  "settings.addModel.customId": "Or enter model ID manually",
+  "settings.addModel.customIdPlaceholder": "e.g. gpt-4o-mini",
+  "settings.addModel.displayName": "Display name",
+  "settings.addModel.addButton": "Add",
+  "settings.addModel.adding": "Adding...",
+  // ── ツール ──
+  "settings.tools.title": "Tools",
+  "settings.tools.empty": "No tools registered",
+  "settings.tools.loading": "Loading...",
+  "settings.tools.enable": "Enable tool",
+  "settings.tools.disable": "Disable tool",
+  "settings.tools.help": "Toggle tools on/off for AI chat. Tools are managed via Crucible Registry.",
 
   // ── AI チャット追加 ──
   "aiChat.helpText": "Ask AI about this page, or select a block for focused questions.\nCmd+Enter to send",
