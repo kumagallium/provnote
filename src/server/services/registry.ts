@@ -30,7 +30,7 @@ export async function fetchRegistryServers(
     if (!res.ok) return [];
 
     // Registry は配列を直接返す
-    const data = await res.json();
+    const data = await res.json() as RegistryServer[] | { servers?: RegistryServer[] };
     const servers: RegistryServer[] = Array.isArray(data) ? data : (data.servers ?? []);
     return servers;
   } catch {

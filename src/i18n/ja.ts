@@ -213,7 +213,7 @@ export const ja: Record<string, string> = {
   // ── 接続状態 ──
   "settings.health.title": "接続状態",
   "settings.health.checking": "確認中...",
-  "settings.health.unavailable": "バックエンドが起動していません",
+  "settings.health.unavailable": "バックエンドに接続できません。AI 機能は Docker またはローカル開発環境が必要です。",
   // ── モデル管理 ──
   "settings.models.title": "登録済みモデル",
   "settings.models.add": "モデルを追加",
@@ -251,6 +251,7 @@ export const ja: Record<string, string> = {
   "aiChat.thinking": "考え中...",
   "aiChat.sendHint": "Cmd+Enter で送信",
   "aiChat.newChat": "+ 新しいチャット",
+  "aiChat.noBackend": "AI 機能を使うには Docker またはローカル開発環境で Graphium を起動してください。GitHub Pages では利用できません。",
   "aiChat.emptyChat": "(空のチャット)",
   "aiChat.messageCount": "{count} メッセージ",
   "aiChat.pageScope": "ページ全体",

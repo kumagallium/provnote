@@ -213,7 +213,7 @@ export const en: Record<string, string> = {
   // ── 接続状態 ──
   "settings.health.title": "Connection Status",
   "settings.health.checking": "Checking...",
-  "settings.health.unavailable": "Backend is not running",
+  "settings.health.unavailable": "Backend is not available. AI features require Docker or local development setup.",
   // ── モデル管理 ──
   "settings.models.title": "Registered Models",
   "settings.models.add": "Add model",
@@ -251,6 +251,7 @@ export const en: Record<string, string> = {
   "aiChat.thinking": "Thinking...",
   "aiChat.sendHint": "Cmd+Enter to send",
   "aiChat.newChat": "+ New chat",
+  "aiChat.noBackend": "AI features require running Graphium with Docker or local development setup. They are not available on GitHub Pages.",
   "aiChat.emptyChat": "(empty chat)",
   "aiChat.messageCount": "{count} messages",
   "aiChat.pageScope": "Page",

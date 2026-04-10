@@ -33,7 +33,11 @@ export function AiAssistantPanel({
   } = useAiAssistant();
   const t = useT();
   const [input, setInput] = useState("");
-  const [hasModels, setHasModels] = useState<boolean | null>(null);
+  // "connected" = バックエンド接続済み＆モデルあり
+  // "no-models" = バックエンド接続済みだがモデル未登録
+  // "no-backend" = バックエンドに接続できない（GitHub Pages 等）
+  // null = チェック中
+  const [aiStatus, setAiStatus] = useState<"connected" | "no-models" | "no-backend" | null>(null);
   // sourceBlockIds がある = openChat で起動された → 新規チャット画面
   // sourceBlockIds が空 + chats あり = 一覧表示
   const [showChatList, setShowChatList] = useState(
@@ -42,11 +46,11 @@ export function AiAssistantPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // モデル登録状態をチェック
+  // バックエンド接続 + モデル登録状態をチェック
   useEffect(() => {
     fetchModels()
-      .then((res) => setHasModels(res.models.length > 0))
-      .catch(() => setHasModels(false));
+      .then((res) => setAiStatus(res.models.length > 0 ? "connected" : "no-models"))
+      .catch(() => setAiStatus("no-backend"));
   }, []);
 
   // 新しいメッセージが追加されたら自動スクロール
@@ -110,8 +114,16 @@ export function AiAssistantPanel({
         </div>
       </div>
 
-      {/* モデル未登録バナー */}
-      {hasModels === false && (
+      {/* AI 利用不可バナー */}
+      {aiStatus === "no-backend" && (
+        <div className="px-3 py-2.5 border-b border-border bg-muted/50">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>{t("aiChat.noBackend")}</span>
+          </div>
+        </div>
+      )}
+      {aiStatus === "no-models" && (
         <div className="px-3 py-2.5 border-b border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
           <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
