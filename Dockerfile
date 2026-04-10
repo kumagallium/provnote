@@ -1,5 +1,9 @@
-# provnote — multi-stage build
-# Stage 1: Build with Node.js
+# Graphium — multi-stage build (frontend + backend)
+#
+# Stage 1: Build frontend with Vite
+# Stage 2: Run Node.js backend (serves frontend static files + API)
+
+# ── Stage 1: Build ──
 FROM node:20-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -16,12 +20,34 @@ ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 
 RUN pnpm build
 
-# Stage 2: Serve with nginx
-FROM nginx:alpine
+# ── Stage 2: Runtime ──
+FROM node:20-alpine
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html/provnote
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-EXPOSE 80
+WORKDIR /app
 
-CMD ["nginx", "-g", "daemon off;"]
+# 本番依存のみインストール
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+# バックエンドソース（tsx で実行）
+COPY src/server/ src/server/
+
+# フロントエンドビルド成果物
+COPY --from=builder /app/dist dist/
+
+# データディレクトリ
+RUN mkdir -p /app/data
+VOLUME /app/data
+
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DATA_DIR=/app/data
+# フロントエンド配信はバックエンドではなく nginx で行う場合はこの行を削除
+ENV SERVE_STATIC=dist
+
+EXPOSE 3001
+
+# tsx でバックエンドを起動
+CMD ["npx", "tsx", "src/server/index.ts"]

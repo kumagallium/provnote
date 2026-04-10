@@ -1,21 +1,13 @@
-// crucible-agent API クライアント
-// POST /agent/run を呼び出して AI 回答を取得する
-
-import { getAgentUrl, getAgentApiKey } from "../settings";
-
-// API キー認証ヘッダーを含む共通ヘッダーを生成
-function agentHeaders(): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = getAgentApiKey();
-  if (apiKey) h["X-API-Key"] = apiKey;
-  return h;
-}
+// Graphium ビルトインバックエンド API クライアント
+// /api/* エンドポイントを呼び出して AI 機能を提供する
 
 export type AgentRunRequest = {
   message: string;
   session_id?: string;
   profile?: string;
   custom_instructions?: string;
+  server_names?: string[];
+  disabled_tools?: string[];
   options?: {
     max_turns?: number;
     model?: string;
@@ -51,6 +43,7 @@ export type ModelInfo = {
   model_id: string;
   api_base: string;
   supports_function_calling: boolean;
+  id: string;
 };
 
 export type ModelsResponse = {
@@ -59,12 +52,10 @@ export type ModelsResponse = {
 };
 
 /**
- * crucible-agent に登録されたモデル一覧を取得する
+ * 登録済みモデル一覧を取得する
  */
 export async function fetchModels(): Promise<ModelsResponse> {
-  const res = await fetch(`${getAgentUrl()}/models`, {
-    headers: agentHeaders(),
-  });
+  const res = await fetch("/api/models");
   if (!res.ok) {
     throw new Error(`Failed to fetch models: ${res.status}`);
   }
@@ -82,12 +73,10 @@ export type ProfilesResponse = {
 };
 
 /**
- * crucible-agent に登録されたプロファイル一覧を取得する
+ * プロファイル一覧を取得する
  */
 export async function fetchProfiles(): Promise<ProfilesResponse> {
-  const res = await fetch(`${getAgentUrl()}/profiles`, {
-    headers: agentHeaders(),
-  });
+  const res = await fetch("/api/profiles");
   if (!res.ok) {
     throw new Error(`Failed to fetch profiles: ${res.status}`);
   }
@@ -100,9 +89,9 @@ export async function fetchProfiles(): Promise<ProfilesResponse> {
 export async function generateTitle(
   firstMessage: string,
 ): Promise<string> {
-  const res = await fetch(`${getAgentUrl()}/sessions/title`, {
+  const res = await fetch("/api/agent/sessions/title", {
     method: "POST",
-    headers: agentHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ first_message: firstMessage }),
   });
 
@@ -123,15 +112,15 @@ export async function generateTitle(
 }
 
 /**
- * crucible-agent にメッセージを送信し、AI 回答を取得する
+ * AI エージェントにメッセージを送信し、回答を取得する
  */
 export async function runAgent(
   req: AgentRunRequest,
   signal?: AbortSignal,
 ): Promise<AgentRunResponse> {
-  const res = await fetch(`${getAgentUrl()}/agent/run`, {
+  const res = await fetch("/api/agent/run", {
     method: "POST",
-    headers: agentHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
     signal,
   });

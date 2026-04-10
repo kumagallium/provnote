@@ -55,9 +55,9 @@ docker compose -f docker-compose.standalone.yml up -d
 
 **http://localhost:5174/Graphium/** を開いて書き始められます。
 
-### 方法 3: Docker で起動 — Crucible フルスタック（AI + MCP ツール）
+### 方法 3: Docker で起動 — フルスタック（AI + MCP ツール）
 
-[Crucible](https://github.com/kumagallium/Crucible) フルスタックで Graphium を起動します。AI チャット、ノート派生、プロヴェナンス付き AI 応答、MCP ツール管理が利用可能です。
+ビルトイン AI バックエンド付きで Graphium を起動し、[Crucible Registry](https://github.com/kumagallium/Crucible) で MCP ツール管理も利用できます。
 
 ```bash
 git clone https://github.com/kumagallium/Graphium.git
@@ -67,21 +67,21 @@ docker compose up -d
 
 | URL | 内容 |
 |-----|------|
-| http://localhost:5174/Graphium/ | Graphium エディタ |
-| http://localhost:8090 | Crucible Agent — AI チャット UI |
-| http://localhost:8081 | Crucible Registry — MCP サーバー管理 |
+| http://localhost:5174/Graphium/ | Graphium エディタ（AI セットアップ含む） |
+
+> **上級者向け:** [Crucible Registry UI](http://localhost:8081) で MCP サーバーを管理できます。
 
 #### AI モデルの設定
 
-1. **http://localhost:8090**（Crucible Agent チャット UI）を開く
-2. UI から LLM モデル（Claude、GPT-4o 等）と API キーを追加
-3. **http://localhost:5174/Graphium/** で AI アシスタント機能を利用開始
+1. **http://localhost:5174/Graphium/** を開く
+2. **⚙ 設定 → AI セットアップ** から LLM モデルと API キーを追加
+3. AI アシスタント機能を利用開始
 
 #### MCP ツールの追加（オプション）
 
 1. **http://localhost:8081**（Crucible Registry UI）を開く
 2. GitHub リポジトリから MCP サーバーを登録
-3. エージェントが登録済みツールを自動的に検出して使用
+3. **⚙ 設定 → AI セットアップ** にツールが表示され、有効/無効を切り替え可能
 
 `.env` の編集は不要 — すべてブラウザから設定できます。Google Drive 同期と Google OAuth はそのまま動作します。
 
@@ -110,7 +110,7 @@ pnpm install
 pnpm dev --port 5174   # → http://localhost:5174/Graphium/
 ```
 
-Google Drive 同期は設定なしで動作します。AI 機能を有効にするには、別途 [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) サーバーが必要です。サイドバーの **⚙ 設定** アイコンからエージェント URL を設定してください。
+Google Drive 同期は設定なしで動作します。AI 機能を使うにはバックエンドサーバーが必要です。`pnpm dev` でフロントエンドとバックエンドが同時に起動します。**⚙ 設定 → AI セットアップ** から LLM モデルを追加してください。
 
 ## 機能一覧
 
@@ -192,32 +192,31 @@ Graphium 固有の拡張は `graphium:` 名前空間（`https://graphium.app/ns#
 
 ## アーキテクチャ
 
-Graphium は**スタンドアロンのノートエディタ**です。動作にバックエンドサーバーは不要で、ノートは Google Drive またはブラウザのローカルストレージに保存されます。
-
-AI 機能は**オプションの外部エージェントサーバー**によって提供されます。`POST /agent/run` エンドポイントを実装していれば、任意のサーバーを使用できます：
-
-| サーバー | 説明 |
-|---------|------|
-| [Crucible Agent](https://github.com/kumagallium/Crucible-Agent) | MCP ツールサポートと LiteLLM マルチモデルプロキシ付きのフル機能エージェントランタイム |
-| 任意の互換サーバー | 同じリクエスト/レスポンス形式の `POST /agent/run` を実装する必要あり |
-
-### Crucible エコシステム（オプション）
-
-Graphium は AI 機能のために [Crucible](https://github.com/kumagallium/Crucible-Agent) エコシステムと統合できますが、これは完全にオプションです。以下の図は、AI 機能を有効にした場合のコンポーネント接続を示しています：
+Graphium は **AI バックエンド内蔵のノートエディタ** です。ノートは Google Drive またはブラウザのローカルストレージに保存されます。AI 機能は Node.js バックエンド（Hono）上で動作する [Vercel AI SDK](https://ai-sdk.dev/) によって提供されます — 外部 AI サーバーは不要です。
 
 ```mermaid
 graph LR
-    Graphium["📝 <b>Graphium</b><br/><i>プロヴェナンス<br/>追跡エディタ</i>"]
-    Agent["🤖 Crucible<br/><b>Agent</b><br/><i>AI エージェント<br/>ランタイム</i>"]
-    Registry["🔧 Crucible<br/><b>Registry</b><br/><i>MCP サーバーの<br/>ビルド＆デプロイ</i>"]
+    Graphium["📝 <b>Graphium</b><br/><i>プロヴェナンス追跡エディタ<br/>+ AI エージェントランタイム</i>"]
+    Registry["🔧 <b>Crucible</b><br/><i>AI ツール管理<br/>＆デプロイ</i>"]
 
-    Graphium -- "POST /agent/run<br/>(オプション)" --> Agent
-    Registry -- "ツール検出" --> Agent
+    Registry -- "ツール検出<br/>(GET /servers → SSE)" --> Graphium
 
     style Graphium fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
-    style Agent fill:#ede8f5,stroke:#8b7ab5,stroke-width:2px,color:#4a3d6e
     style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
 ```
+
+| コンポーネント | 技術 |
+|--------------|------|
+| エディタ | TypeScript / React / BlockNote.js |
+| AI ランタイム | Vercel AI SDK / @ai-sdk/mcp |
+| バックエンド | Node.js / Hono |
+| ストレージ | Google Drive / Local Storage / JSON ファイル |
+| グラフ可視化 | Cytoscape.js |
+| ビルド | Vite / pnpm |
+
+### Crucible Registry（オプション）
+
+[Crucible Registry](https://github.com/kumagallium/Crucible) は MCP サーバーの管理と自動検出を提供します。接続すると、登録済み MCP ツールが **⚙ 設定 → AI セットアップ** に表示され、AI アシスタントが利用できるようになります。
 
 ## 言語と国際化
 

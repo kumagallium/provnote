@@ -13,6 +13,9 @@ public/release_notes.json
 docs/screenshots/.video-tmp/
 docs/screenshots/*.webm
 
+# AI backend data (models, profiles — user-specific)
+data/
+
 # Claude Code (private config — managed in parent repo)
 CLAUDE.md
 .claude/

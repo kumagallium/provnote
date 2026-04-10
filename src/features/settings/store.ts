@@ -4,21 +4,18 @@
 const STORAGE_KEY = "graphium-settings";
 
 export type Settings = {
-  /** AI エージェントの接続先 URL（例: http://localhost:8090） */
-  agentUrl: string;
-  /** AI エージェントの API キー（X-API-Key ヘッダーで送信） */
-  agentApiKey: string;
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
   model: string;
   /** AI プロファイル名（空文字 = "science"） */
   profile: string;
+  /** 無効にしたツール名のリスト（ここに含まれるツールは AI チャットで使わない） */
+  disabledTools: string[];
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  agentUrl: "",
-  agentApiKey: "",
   model: "",
   profile: "",
+  disabledTools: [],
 };
 
 /** localStorage から設定を読み込む */
@@ -38,20 +35,6 @@ export function saveSettings(settings: Settings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-/** AI エージェント URL を取得する（localStorage → 環境変数 → 空文字） */
-export function getAgentUrl(): string {
-  const settings = loadSettings();
-  if (settings.agentUrl) return settings.agentUrl;
-  return import.meta.env.VITE_CRUCIBLE_AGENT_URL ?? "";
-}
-
-/** AI エージェント API キーを取得する（localStorage → 環境変数 → 空文字） */
-export function getAgentApiKey(): string {
-  const settings = loadSettings();
-  if (settings.agentApiKey) return settings.agentApiKey;
-  return import.meta.env.VITE_CRUCIBLE_AGENT_API_KEY ?? "";
-}
-
 /** 選択中のモデル名を取得する（空文字 = サーバーデフォルト） */
 export function getSelectedModel(): string {
   return loadSettings().model;
@@ -62,7 +45,12 @@ export function getSelectedProfile(): string {
   return loadSettings().profile || "science";
 }
 
-/** AI エージェントが設定済みかどうか */
+/** 無効にしたツール名リストを取得する */
+export function getDisabledTools(): string[] {
+  return loadSettings().disabledTools;
+}
+
+/** AI バックエンドが利用可能かどうか（ビルトインバックエンドは常に available） */
 export function isAgentConfigured(): boolean {
-  return getAgentUrl() !== "";
+  return true;
 }

@@ -2,10 +2,11 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace } from "lucide-react";
+import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
+import { fetchModels } from "./api";
 import { useT } from "../../i18n";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
 
@@ -32,6 +33,7 @@ export function AiAssistantPanel({
   } = useAiAssistant();
   const t = useT();
   const [input, setInput] = useState("");
+  const [hasModels, setHasModels] = useState<boolean | null>(null);
   // sourceBlockIds がある = openChat で起動された → 新規チャット画面
   // sourceBlockIds が空 + chats あり = 一覧表示
   const [showChatList, setShowChatList] = useState(
@@ -39,6 +41,13 @@ export function AiAssistantPanel({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // モデル登録状態をチェック
+  useEffect(() => {
+    fetchModels()
+      .then((res) => setHasModels(res.models.length > 0))
+      .catch(() => setHasModels(false));
+  }, []);
 
   // 新しいメッセージが追加されたら自動スクロール
   useEffect(() => {
@@ -100,6 +109,16 @@ export function AiAssistantPanel({
           )}
         </div>
       </div>
+
+      {/* モデル未登録バナー */}
+      {hasModels === false && (
+        <div className="px-3 py-2.5 border-b border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+          <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>{t("settings.aiNotConfigured")}</span>
+          </div>
+        </div>
+      )}
 
       {/* 引用表示 */}
       {quotedMarkdown && messages.length === 0 && !showChatList && (

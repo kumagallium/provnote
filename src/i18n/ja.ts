@@ -137,10 +137,7 @@ export const ja: Record<string, string> = {
   // ── 設定モーダル ──
   "settings.title": "設定",
   "settings.language": "言語",
-  "settings.agentUrl": "AI エージェント URL",
-  "settings.envNote": "環境変数から設定されています。上書きする場合は新しい URL を入力してください。",
-  "settings.placeholder": "https://your-agent-url.example.com",
-  "settings.aiNotConfigured": "AI エージェントの接続先が設定されていません。サイドバーの「設定」から URL を入力してください。",
+  "settings.aiNotConfigured": "AI モデルが登録されていません。設定 → AI Setup からモデルを追加してください。",
 
   // ── AI チャット ──
   "aiChat.title": "AI チャット",
@@ -200,11 +197,8 @@ export const ja: Record<string, string> = {
   "linkBadge.linkCount": "{count} リンク",
 
   // ── 設定モーダル追加 ──
-  "settings.agentHelp": "AI アシスタント機能を使うには crucible-agent を起動し、そのアドレスを入力してください。",
-  "settings.apiKey": "API キー",
-  "settings.apiKeyPlaceholder": "未設定（認証なし）",
-  "settings.apiKeyEnvNote": "環境変数から設定されています。上書きする場合は新しいキーを入力してください。",
-  "settings.apiKeyHelp": "crucible-agent の AGENT_API_KEY と同じ値を設定してください。未設定の場合は認証なしで接続します。",
+  "settings.tab.general": "一般",
+  "settings.tab.aiSetup": "AI セットアップ",
   "settings.profile": "システムプロンプト",
   "settings.profileDefault": "デフォルト (science)",
   "settings.profileLoading": "プロファイルを読み込み中...",
@@ -214,8 +208,43 @@ export const ja: Record<string, string> = {
   "settings.modelDefault": "サーバーデフォルト ({name})",
   "settings.modelDefaultLabel": "デフォルト",
   "settings.modelLoading": "モデルを読み込み中...",
-  "settings.modelNone": "利用可能なモデルがありません",
+  "settings.modelNone": "モデルが未登録です",
   "settings.modelHelp": "使用する AI モデルを選択します。未指定の場合はサーバーのデフォルトモデルが使われます。",
+  // ── 接続状態 ──
+  "settings.health.title": "接続状態",
+  "settings.health.checking": "確認中...",
+  "settings.health.unavailable": "バックエンドが起動していません",
+  // ── モデル管理 ──
+  "settings.models.title": "登録済みモデル",
+  "settings.models.add": "モデルを追加",
+  "settings.models.loading": "読み込み中...",
+  "settings.models.empty": "モデルが登録されていません。AI 機能を使うにはモデルを追加してください。",
+  "settings.models.addFirst": "最初のモデルを追加",
+  "settings.models.edit": "編集",
+  "settings.models.editApiKey": "API キー（変更しない場合は空のまま）",
+  "settings.models.editApiKeyPlaceholder": "変更する場合は新しいキーを入力",
+  "settings.models.delete": "削除",
+  "settings.models.confirmDelete": "削除しますか？",
+  // ── モデル追加フォーム ──
+  "settings.addModel.title": "モデルを追加",
+  "settings.addModel.provider": "プロバイダー",
+  "settings.addModel.apiKey": "API キー",
+  "settings.addModel.apiKeyRequired": "API キーを入力してください",
+  "settings.addModel.fetchModels": "利用可能なモデルを取得",
+  "settings.addModel.fetching": "取得中...",
+  "settings.addModel.selectModel": "モデルを選択",
+  "settings.addModel.customId": "または手動でモデル ID を入力",
+  "settings.addModel.customIdPlaceholder": "例: gpt-4o-mini",
+  "settings.addModel.displayName": "表示名",
+  "settings.addModel.addButton": "追加",
+  "settings.addModel.adding": "追加中...",
+  // ── ツール ──
+  "settings.tools.title": "ツール",
+  "settings.tools.empty": "ツールが登録されていません",
+  "settings.tools.loading": "読み込み中...",
+  "settings.tools.enable": "ツールを有効化",
+  "settings.tools.disable": "ツールを無効化",
+  "settings.tools.help": "AI チャットで使うツールの有効/無効を切り替えられます。ツールは Crucible Registry で管理されます。",
 
   // ── AI チャット追加 ──
   "aiChat.helpText": "ページ全体や選択ブロックについて AI に質問できます。\nCmd+Enter で送信",

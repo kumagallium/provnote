@@ -1,9 +1,9 @@
 // 設定モーダルのストーリー
-// 初期状態・URL 入力済み・保存完了の見た目を確認する
+// 初期状態・設定済み・保存完了の見た目を確認する
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, ChevronDown } from "lucide-react";
 
 // ── Crucible デザイントークン ──
 const tokens = {
@@ -15,18 +15,36 @@ const tokens = {
   font: "'Inter', system-ui, sans-serif",
 };
 
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  appearance: "none" as const,
+  background: tokens.bg,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: 4,
+  padding: "8px 12px",
+  paddingRight: 28,
+  fontSize: 13,
+  color: tokens.fg,
+  outline: "none",
+  boxSizing: "border-box" as const,
+};
+
 // ── モーダル静的モック ──
 function MockSettingsModal({
-  initialUrl = "",
-  initialApiKey = "",
+  initialModel = "",
+  initialProfile = "",
+  models = ["Claude Sonnet", "GPT-4o"],
+  profiles = ["science", "general"],
   saved = false,
 }: {
-  initialUrl?: string;
-  initialApiKey?: string;
+  initialModel?: string;
+  initialProfile?: string;
+  models?: string[];
+  profiles?: string[];
   saved?: boolean;
 }) {
-  const [agentUrl, setAgentUrl] = useState(initialUrl);
-  const [agentApiKey, setAgentApiKey] = useState(initialApiKey);
+  const [model, setModel] = useState(initialModel);
+  const [profile, setProfile] = useState(initialProfile);
 
   return (
     <div
@@ -66,7 +84,7 @@ function MockSettingsModal({
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <SettingsIcon size={16} color={tokens.mutedFg} />
             <span style={{ fontSize: 14, fontWeight: 500, color: tokens.fg }}>
-              設定
+              Settings
             </span>
           </div>
           <button
@@ -84,64 +102,51 @@ function MockSettingsModal({
 
         {/* コンテンツ */}
         <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* プロファイル */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 500, color: tokens.fg, marginBottom: 6 }}>
-              AI エージェント URL
+              Profile
             </div>
-            <input
-              type="url"
-              value={agentUrl}
-              onChange={(e) => setAgentUrl(e.target.value)}
-              placeholder="http://localhost:8090"
-              style={{
-                width: "100%",
-                background: tokens.bg,
-                border: `1px solid ${tokens.border}`,
-                borderRadius: 4,
-                padding: "8px 12px",
-                fontSize: 13,
-                color: tokens.fg,
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-            <div style={{ fontSize: 11, color: tokens.mutedFg, marginTop: 6, lineHeight: 1.5 }}>
-              AI アシスタント機能を使うには{" "}
-              <a
-                href="https://github.com/kumagallium/crucible-agent"
-                style={{ textDecoration: "underline", color: tokens.mutedFg }}
+            <div style={{ position: "relative" }}>
+              <select
+                value={profile}
+                onChange={(e) => setProfile(e.target.value)}
+                style={selectStyle}
               >
-                crucible-agent
-              </a>{" "}
-              を起動し、そのアドレスを入力してください。
+                <option value="">Default (science)</option>
+                {profiles.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                color={tokens.mutedFg}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+              />
             </div>
           </div>
 
-          {/* API キー */}
+          {/* モデル */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 500, color: tokens.fg, marginBottom: 6 }}>
-              API キー
+              Model
             </div>
-            <input
-              type="password"
-              value={agentApiKey}
-              onChange={(e) => setAgentApiKey(e.target.value)}
-              placeholder="未設定（認証なし）"
-              style={{
-                width: "100%",
-                background: tokens.bg,
-                border: `1px solid ${tokens.border}`,
-                borderRadius: 4,
-                padding: "8px 12px",
-                fontSize: 13,
-                color: tokens.fg,
-                outline: "none",
-                boxSizing: "border-box",
-                fontFamily: "monospace",
-              }}
-            />
-            <div style={{ fontSize: 11, color: tokens.mutedFg, marginTop: 6, lineHeight: 1.5 }}>
-              crucible-agent の AGENT_API_KEY と同じ値を設定してください。未設定の場合は認証なしで接続します。
+            <div style={{ position: "relative" }}>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">Server default</option>
+                {models.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                color={tokens.mutedFg}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+              />
             </div>
           </div>
         </div>
@@ -167,7 +172,7 @@ function MockSettingsModal({
               cursor: "pointer",
             }}
           >
-            キャンセル
+            Cancel
           </button>
           <button
             style={{
@@ -181,7 +186,7 @@ function MockSettingsModal({
               cursor: "pointer",
             }}
           >
-            {saved ? "保存しました" : "保存"}
+            {saved ? "Saved" : "Save"}
           </button>
         </div>
       </div>
@@ -201,30 +206,22 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  name: "初期状態（未設定）",
+  name: "Initial (empty)",
   args: {},
 };
 
-export const WithUrl: Story = {
-  name: "URL 入力済み",
+export const WithModel: Story = {
+  name: "Model selected",
   args: {
-    initialUrl: "http://localhost:8090",
-  },
-};
-
-export const WithApiKey: Story = {
-  name: "URL + API キー入力済み",
-  args: {
-    initialUrl: "http://localhost:8090",
-    initialApiKey: "my-secret-key",
+    initialModel: "Claude Sonnet",
   },
 };
 
 export const Saved: Story = {
-  name: "保存完了",
+  name: "Saved",
   args: {
-    initialUrl: "http://localhost:8090",
-    initialApiKey: "my-secret-key",
+    initialModel: "Claude Sonnet",
+    initialProfile: "science",
     saved: true,
   },
 };
