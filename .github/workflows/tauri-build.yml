@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -15,7 +18,7 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             label: macOS (Apple Silicon)
-          - platform: macos-13
+          - platform: macos-14
             target: x86_64-apple-darwin
             label: macOS (Intel)
           - platform: ubuntu-22.04
@@ -61,9 +64,12 @@ jobs:
       - name: Create sidecar wrapper (Unix)
         if: matrix.platform != 'windows-latest'
         run: |
-          cp src-tauri/binaries/graphium-server-aarch64-apple-darwin \
-             src-tauri/binaries/graphium-server-${{ matrix.target }}
-          chmod +x src-tauri/binaries/graphium-server-${{ matrix.target }}
+          SRC="src-tauri/binaries/graphium-server-aarch64-apple-darwin"
+          DST="src-tauri/binaries/graphium-server-${{ matrix.target }}"
+          if [ "$SRC" != "$DST" ]; then
+            cp "$SRC" "$DST"
+          fi
+          chmod +x "$DST"
 
       - name: Create sidecar wrapper (Windows)
         if: matrix.platform == 'windows-latest'
