@@ -20,20 +20,33 @@ export async function connectMCPServers(
   const clients: MCPClient[] = [];
   let tools: Record<string, unknown> = {};
 
-  for (const server of servers) {
-    try {
-      const client = await createMCPClient({
-        transport: {
-          type: "sse",
-          url: server.url,
-        },
-      });
-      clients.push(client);
+  // 各サーバーに並列接続し、タイムアウトでハングを防止
+  const CONNECTION_TIMEOUT_MS = 10_000;
 
+  const results = await Promise.allSettled(
+    servers.map(async (server) => {
+      const client = await Promise.race([
+        createMCPClient({
+          transport: {
+            type: "sse",
+            url: server.url,
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("接続タイムアウト")), CONNECTION_TIMEOUT_MS),
+        ),
+      ]);
       const serverTools = await client.tools();
-      tools = { ...tools, ...serverTools };
-    } catch (err) {
-      console.warn(`MCP サーバー ${server.name} への接続に失敗:`, err);
+      return { client, tools: serverTools, name: server.name };
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      clients.push(result.value.client);
+      tools = { ...tools, ...result.value.tools };
+    } else {
+      console.warn(`MCP サーバーへの接続に失敗:`, result.reason);
     }
   }
 
