@@ -1,0 +1,14 @@
+#!/bin/bash
+# Graphium バックエンドサーバー sidecar ラッパー
+# Tauri から spawn され、Node.js でバンドル済みサーバーを起動する
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVER_FILE="$SCRIPT_DIR/../sidecar/server.mjs"
+
+# sidecar ディレクトリからの相対パスで server.mjs を探す
+if [ ! -f "$SERVER_FILE" ]; then
+  # 開発時: プロジェクトルートから探す
+  SERVER_FILE="$SCRIPT_DIR/../sidecar/server.mjs"
+fi
+
+exec node "$SERVER_FILE" "$@"
