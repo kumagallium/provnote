@@ -36,7 +36,17 @@ import {
   useExtensionState,
 } from "@blocknote/react";
 import { SideMenuExtension } from "@blocknote/core/extensions";
+import { startSidecar, stopSidecar } from "./lib/sidecar";
+import { isTauri } from "./lib/platform";
 import "./app.css";
+
+// ── Tauri 環境: sidecar サーバー起動 ──
+if (isTauri()) {
+  startSidecar();
+  window.addEventListener("beforeunload", () => {
+    stopSidecar();
+  });
+}
 
 // ── モード判定 ──
 // ?sandbox パラメータがある場合はサンドボックスモード
