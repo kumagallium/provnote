@@ -10,7 +10,42 @@ permissions:
   contents: write
 
 jobs:
+  # まずリリースを1つだけ作成（レースコンディション防止）
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            // 既存のドラフトリリースがあれば再利用
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const existing = releases.find(r => r.tag_name === tag && r.draft);
+            if (existing) {
+              console.log(`Reusing existing draft release: ${existing.id}`);
+              return existing.id;
+            }
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Graphium ${tag}`,
+              body: 'See the [changelog](https://github.com/kumagallium/Graphium/blob/main/CHANGELOG.md) for details.',
+              draft: true,
+              prerelease: false,
+            });
+            console.log(`Created draft release: ${release.id}`);
+            return release.id;
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -90,9 +125,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Graphium ${{ github.ref_name }}"
-          releaseBody: "See the [changelog](https://github.com/kumagallium/Graphium/blob/main/CHANGELOG.md) for details."
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target ${{ matrix.target }}
