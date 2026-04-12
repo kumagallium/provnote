@@ -10,3 +10,5 @@ releaseBranch = main
 vPrefix = true
 # CHANGELOG を自動生成する
 changelog = true
+# バージョン更新時に package.json も同期する
+command = jq --arg v "$(jq -r .version src-tauri/tauri.conf.json)" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json && git add package.json
