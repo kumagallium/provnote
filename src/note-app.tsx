@@ -95,6 +95,9 @@ import { NoteSideMenu, collectHeadingScope, setOpenLinkDropdownFn } from "./comp
 import { NoteFormattingToolbar } from "./components/formatting-toolbar";
 import { SourceDocPanel, extractBlockTitle } from "./components/SourceDocPanel";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { MobileHeader } from "./components/MobileHeader";
+import { Sheet } from "./ui/sheet";
+import { useIsDesktop } from "./hooks/use-media-query";
 
 import type { GraphiumFile } from "./lib/document-types";
 import type { NoteGraphData } from "./features/network-graph";
@@ -257,6 +260,7 @@ function NoteEditorInner({
   const linkStore = useLinkStore();
   const indexTableStore = useIndexTableStore();
   const aiAssistant = useAiAssistant();
+  const isDesktop = useIsDesktop();
   const editorRef = useRef<any>(null);
   const [sidePeekNoteId, setSidePeekNoteId] = useState<string | null>(null);
   const noteLinksRef = useRef<NoteLink[]>(initialDoc?.noteLinks ?? []);
@@ -1118,7 +1122,7 @@ function NoteEditorInner({
         />
       )}
       {/* ヘッダー */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-3 shrink-0">
+      <div className="px-3 md:px-4 py-2.5 md:py-2 border-b border-border flex items-center gap-2 md:gap-3 shrink-0">
         <input
           type="text"
           value={title}
@@ -1144,7 +1148,7 @@ function NoteEditorInner({
       <div className="flex h-full w-full overflow-hidden">
         {/* 左: エディタ */}
         <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
-          <div style={{ padding: "16px 0", paddingLeft: 100, paddingRight: 100 }}>
+          <div style={{ padding: "16px 0", paddingLeft: isDesktop ? 100 : 16, paddingRight: isDesktop ? 100 : 16, paddingBottom: isDesktop ? 16 : 72 }}>
             <SandboxEditor
               key={fileId || "new"}
               blocks={[pdfViewerBlock, bookmarkBlock]}
@@ -1271,8 +1275,21 @@ function NoteEditorInner({
 
         {/* 右: アイコンレール + オンデマンド展開パネル */}
         {rightTab && (
-          <div className="w-[480px] shrink-0 border-l border-border bg-muted flex flex-col overflow-hidden">
+          <div className={cn(
+            "shrink-0 border-l border-border bg-muted flex flex-col overflow-hidden",
+            isDesktop ? "w-[480px]" : "fixed inset-0 z-[200] border-l-0"
+          )}>
             <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+              {/* モバイル: 閉じるボタン */}
+              {!isDesktop && (
+                <button
+                  onClick={() => toggleRightTab(rightTab)}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-background/50 transition-colors mr-1"
+                  aria-label="閉じる"
+                >
+                  ✕
+                </button>
+              )}
               <span className="text-xs font-bold tracking-wide text-foreground">
                 {rightTab === "graph" ? "Graph" : rightTab === "prov" ? t("panel.prov") : rightTab === "chat" ? "Chat" : rightTab === "history" ? t("panel.history") : "Source"}
               </span>
@@ -1313,8 +1330,13 @@ function NoteEditorInner({
             </div>
           </div>
         )}
-        {/* アイコンレール */}
-        <div className="w-10 shrink-0 border-l border-border bg-muted/50 flex flex-col items-center py-2 gap-1">
+        {/* アイコンレール — デスクトップ: 右端縦レール / モバイル: ボトムバー */}
+        <div className={cn(
+          "shrink-0 border-border bg-muted/50 flex items-center gap-1",
+          isDesktop
+            ? "w-10 border-l flex-col py-2"
+            : "fixed bottom-0 left-0 right-0 z-[100] h-14 border-t justify-center px-2 bg-background/95 backdrop-blur-sm"
+        )}>
           {([
             { tab: "chat" as const, icon: <MessageSquare size={18} />, label: "Chat", show: true },
             { tab: "graph" as const, icon: <Network size={18} />, label: "Graph", show: noteGraphData.nodes.length > 1 },
@@ -1327,7 +1349,8 @@ function NoteEditorInner({
               onClick={() => toggleRightTab(item.tab)}
               title={item.label}
               className={cn(
-                "w-8 h-8 flex items-center justify-center rounded-md transition-colors",
+                "flex items-center justify-center rounded-md transition-colors",
+                isDesktop ? "w-8 h-8" : "w-11 h-11",
                 rightTab === item.tab
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -1348,7 +1371,9 @@ export function NoteApp() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isDesktop = useIsDesktop();
   const fm = useFileManager(authenticated);
 
   const t = useT();
@@ -1367,29 +1392,40 @@ export function NoteApp() {
     return <LoginScreen onSignIn={() => signIn("google-drive")} onSelectLocal={() => switchProvider(isTauri() ? "filesystem" : "local")} />;
   }
 
+  const sidebarProps = {
+    activeFileId: fm.activeFileId,
+    onSelect: (fileId: string) => { fm.handleOpenFile(fileId); setSidebarOpen(false); },
+    onNewNote: () => { fm.handleNewNote(); setSidebarOpen(false); },
+    onRefresh: fm.refreshFiles,
+    onSignOut: signOut,
+    onShowReleaseNotes: () => setShowReleaseNotes(true),
+    onShowSettings: () => { setShowSettings(true); setSidebarOpen(false); },
+    agentConfigured,
+    recentNotes: fm.recentNotes,
+    onShowNoteList: () => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); setSidebarOpen(false); },
+    mediaIndex: fm.mediaIndex,
+    onShowAssetGallery: (type: import("./features/asset-browser").MediaType) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); setSidebarOpen(false); },
+    noteIndex: fm.noteIndex,
+    onShowLabelGallery: (label: string) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); setSidebarOpen(false); },
+    activeAssetType: fm.activeAssetType,
+    activeLabel: fm.activeLabel,
+    filesLoading: fm.filesLoading,
+  };
+
   return (
     <div className="flex flex-col h-screen font-sans antialiased bg-background text-foreground">
       <UpdateBanner />
+      {/* モバイルヘッダー */}
+      <MobileHeader onMenuToggle={() => setSidebarOpen(true)} />
+      {/* モバイル: Sheet ドロワー */}
+      {!isDesktop && (
+        <Sheet open={sidebarOpen} onClose={() => setSidebarOpen(false)} side="left">
+          <FileSidebar {...sidebarProps} />
+        </Sheet>
+      )}
       <div className="flex flex-1 min-h-0">
-      <FileSidebar
-        activeFileId={fm.activeFileId}
-        onSelect={fm.handleOpenFile}
-        onNewNote={fm.handleNewNote}
-        onRefresh={fm.refreshFiles}
-        onSignOut={signOut}
-        onShowReleaseNotes={() => setShowReleaseNotes(true)}
-        onShowSettings={() => setShowSettings(true)}
-        agentConfigured={agentConfigured}
-        recentNotes={fm.recentNotes}
-        onShowNoteList={() => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); }}
-        mediaIndex={fm.mediaIndex}
-        onShowAssetGallery={(type) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); }}
-        noteIndex={fm.noteIndex}
-        onShowLabelGallery={(label) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); }}
-        activeAssetType={fm.activeAssetType}
-        activeLabel={fm.activeLabel}
-        filesLoading={fm.filesLoading}
-      />
+      {/* デスクトップ: 通常のサイドバー */}
+      {isDesktop && <FileSidebar {...sidebarProps} />}
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {fm.activeAssetType ? (
           <AssetGalleryView

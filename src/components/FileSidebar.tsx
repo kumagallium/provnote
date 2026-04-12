@@ -88,7 +88,7 @@ export function FileSidebar({
     return counts;
   }, [noteIndex]);
   return (
-    <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col">
+    <aside className="w-full md:w-64 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col h-full">
       {/* ヘッダー */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between mb-3">
