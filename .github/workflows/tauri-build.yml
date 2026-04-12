@@ -125,4 +125,118 @@ jobs:
           VITE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         with:
           releaseId: ${{ needs.resolve-release.outputs.release_id }}
+          includeUpdaterJson: false
           args: --target ${{ matrix.target }}
+
+      # .sig ファイルをアーティファクトとしてアップロード（updater JSON 生成用）
+      - name: Upload signature artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sig-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
+          if-no-files-found: warn
+
+  # 全ビルド完了後に latest.json を生成してリリースにアップロード
+  generate-updater-json:
+    needs: [resolve-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all signature artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sig-*
+          merge-multiple: true
+          path: sigs
+
+      - name: List signatures
+        run: find sigs -name '*.sig' -type f 2>/dev/null || echo "No sig files found"
+
+      - name: Get release assets
+        id: assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.resolve-release.outputs.release_id }},
+            });
+            core.setOutput('tag', release.tag_name);
+            core.setOutput('published_at', release.published_at || release.created_at);
+            // アセット名を出力
+            for (const a of release.assets) {
+              console.log(`Asset: ${a.name} (${a.browser_download_url})`);
+            }
+            return JSON.stringify(release.assets.map(a => ({
+              name: a.name,
+              url: a.browser_download_url,
+            })));
+          result-encoding: string
+
+      - name: Generate latest.json
+        run: |
+          set -e
+          TAG="${{ steps.assets.outputs.tag }}"
+          VERSION="${TAG#v}"
+          PUB_DATE="${{ steps.assets.outputs.published_at }}"
+          ASSETS='${{ steps.assets.outputs.result }}'
+          BASE_URL="https://github.com/kumagallium/Graphium/releases/download/${TAG}"
+
+          # .sig ファイルの内容を読み取る関数
+          read_sig() {
+            local pattern="$1"
+            local sig_file
+            sig_file=$(find sigs -name "$pattern" -type f 2>/dev/null | head -1)
+            if [ -n "$sig_file" ]; then
+              cat "$sig_file"
+            else
+              echo ""
+            fi
+          }
+
+          # 各プラットフォームの署名を取得
+          MACOS_AARCH64_SIG=$(read_sig "*aarch64*app.tar.gz.sig" || read_sig "Graphium.app.tar.gz.sig")
+          MACOS_X64_SIG=$(read_sig "*x86_64*app.tar.gz.sig" || read_sig "*x64*app.tar.gz.sig")
+          LINUX_SIG=$(read_sig "*AppImage*.sig" || read_sig "*amd64*AppImage.tar.gz.sig")
+          WINDOWS_SIG=$(read_sig "*nsis*.sig" || read_sig "*setup*.sig")
+
+          cat > latest.json << ENDJSON
+          {
+            "version": "${VERSION}",
+            "notes": "See the changelog for details.",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${MACOS_AARCH64_SIG}",
+                "url": "${BASE_URL}/Graphium_aarch64.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${MACOS_X64_SIG}",
+                "url": "${BASE_URL}/Graphium_x64.app.tar.gz"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG}",
+                "url": "${BASE_URL}/Graphium_${VERSION}_amd64.AppImage"
+              },
+              "windows-x86_64": {
+                "signature": "${WINDOWS_SIG}",
+                "url": "${BASE_URL}/Graphium_${VERSION}_x64-setup.exe"
+              }
+            }
+          }
+          ENDJSON
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Upload latest.json to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.assets.outputs.tag }}"
+          # 既存の latest.json があれば削除
+          ASSET_ID=$(gh api repos/${{ github.repository }}/releases/${{ needs.resolve-release.outputs.release_id }}/assets --jq '.[] | select(.name == "latest.json") | .id' 2>/dev/null || true)
+          if [ -n "$ASSET_ID" ]; then
+            gh api -X DELETE repos/${{ github.repository }}/releases/assets/$ASSET_ID
+          fi
+          gh release upload "$TAG" latest.json --clobber
