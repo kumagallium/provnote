@@ -5,6 +5,12 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** モバイルブラウザかどうか */
+export function isMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 /**
  * API のベース URL を取得する。
  * Web 版: "/api" (Vite proxy 経由)

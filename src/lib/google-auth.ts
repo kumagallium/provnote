@@ -2,7 +2,7 @@
 // Web: GIS SDK（Implicit Grant）
 // デスクトップ: Authorization Code + PKCE（google-auth-desktop.ts に委任）
 
-import { isTauri } from "./platform";
+import { isTauri, isMobile } from "./platform";
 import * as desktop from "./google-auth-desktop";
 
 const DEFAULT_CLIENT_ID =
@@ -11,9 +11,12 @@ const CLIENT_ID =
   (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_CLIENT_ID;
 
 const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
+const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const STORAGE_KEY = "graphium_auth";
 // 以前ログインに成功した記録（サイレントリフレッシュ判定用）
 const HAS_CONSENTED_KEY = "graphium_has_consented";
+// リダイレクト認証中フラグ（モバイル用）
+const REDIRECT_PENDING_KEY = "graphium_auth_redirect_pending";
 
 // GIS SDK のグローバル型定義
 declare global {
@@ -91,6 +94,40 @@ function saveToStorage(state: AuthState) {
   }
 }
 
+// OAuth リダイレクト応答をチェック（モバイル用）
+// Google Implicit Grant はトークンを URL フラグメント (#access_token=...) で返す
+function handleOAuthRedirect(): boolean {
+  const hash = window.location.hash;
+  if (!hash || !hash.includes("access_token")) return false;
+
+  const params = new URLSearchParams(hash.substring(1));
+  const accessToken = params.get("access_token");
+  const expiresIn = params.get("expires_in");
+
+  if (accessToken && expiresIn) {
+    const expiresAt = Date.now() + parseInt(expiresIn) * 1000;
+    setAuthState(accessToken, expiresAt);
+    // URL をクリーンアップ（トークンを履歴に残さない）
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    localStorage.removeItem(REDIRECT_PENDING_KEY);
+    return true;
+  }
+
+  // エラー応答
+  const error = params.get("error");
+  if (error) {
+    console.error("OAuth リダイレクトエラー:", error);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    localStorage.removeItem(REDIRECT_PENDING_KEY);
+  }
+  return false;
+}
+
+// モバイル用リダイレクト URI を取得
+function getRedirectUri(): string {
+  return window.location.origin + (import.meta.env.BASE_URL || "/");
+}
+
 // GIS SDK スクリプトをロード
 function loadGisScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -115,6 +152,12 @@ export async function initGoogleAuth(): Promise<void> {
     console.warn("Google OAuth Client ID が設定されていません");
     return;
   }
+
+  // モバイル: OAuth リダイレクト応答をチェック
+  if (handleOAuthRedirect()) {
+    return;
+  }
+
   await loadGisScript();
 
   // サイレントリフレッシュが必要か判定
@@ -187,9 +230,26 @@ function scheduleTokenRefresh(expiresAt: number | null) {
   }, delay);
 }
 
-// サインイン（ポップアップ表示）
+// サインイン
 export function signIn(): void {
   if (isTauri()) { desktop.signInDesktop().catch((e) => console.error("Desktop OAuth error:", e)); return; }
+
+  // モバイル: ポップアップが動作しないため、リダイレクト方式を使用
+  if (isMobile()) {
+    localStorage.setItem(REDIRECT_PENDING_KEY, "true");
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: getRedirectUri(),
+      response_type: "token",
+      scope: SCOPES,
+      prompt: "consent",
+      include_granted_scopes: "true",
+    });
+    window.location.href = `${AUTH_ENDPOINT}?${params.toString()}`;
+    return;
+  }
+
+  // デスクトップブラウザ: GIS SDK ポップアップ方式
   if (!tokenClient) {
     console.error("Google 認証が初期化されていません");
     return;
