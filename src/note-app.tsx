@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText } from "lucide-react";
+import { isTauri } from "./lib/platform";
 import { SandboxEditor } from "./base/editor";
 import { pdfViewerBlock } from "./blocks/pdf-viewer";
 import { bookmarkBlock, bookmarkSlashItem, setBookmarkPickerCallback } from "./blocks/bookmark";
@@ -1362,7 +1363,7 @@ export function NoteApp() {
 
   // 未認証
   if (!authenticated) {
-    return <LoginScreen onSignIn={() => signIn("google-drive")} onSelectLocal={() => switchProvider("local")} />;
+    return <LoginScreen onSignIn={() => signIn("google-drive")} onSelectLocal={() => switchProvider(isTauri() ? "filesystem" : "local")} />;
   }
 
   return (

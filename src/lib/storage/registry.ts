@@ -50,8 +50,10 @@ export function initProviders(): void {
     registerProvider(new LocalFilesystemProvider());
   }
 
-  // 保存された設定を復元。Tauri 環境ではデフォルトを filesystem に
-  const defaultProvider = isTauri() ? "filesystem" : "google-drive";
+  // 保存された設定を復元
+  // Tauri: 前回の選択がなければログイン画面を表示（デフォルトなし）
+  // Web: 前回の選択がなければ google-drive（従来の動作を維持）
+  const defaultProvider = isTauri() ? null : "google-drive";
   let savedId = (typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null) ?? defaultProvider;
 
   // Tauri 環境で IndexedDB 版（local）が保存されていたら filesystem へマイグレーション
@@ -61,15 +63,18 @@ export function initProviders(): void {
       localStorage.setItem(STORAGE_KEY, "filesystem");
     }
   }
-  const provider = providers.get(savedId);
-  if (provider) {
-    activeProvider = provider;
-  } else {
-    // 不明なプロバイダーが保存されていた場合はフォールバック
-    activeProvider = providers.get(defaultProvider)!;
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, defaultProvider);
+
+  if (savedId) {
+    const provider = providers.get(savedId);
+    if (provider) {
+      activeProvider = provider;
+    } else {
+      // 不明なプロバイダー → フォールバック
+      activeProvider = providers.get(isTauri() ? "filesystem" : "google-drive")!;
     }
+  } else {
+    // 未選択状態: filesystem をセットするが signIn しない（ログイン画面表示用）
+    activeProvider = providers.get(isTauri() ? "filesystem" : "google-drive")!;
   }
 }
 

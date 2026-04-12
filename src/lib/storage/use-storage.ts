@@ -31,6 +31,14 @@ export function useStorage() {
       setAuthenticated(state.isSignedIn);
     });
 
+    // 保存された設定がない場合はログイン画面を表示（init をスキップ）
+    const hasSavedProvider = localStorage.getItem(STORAGE_KEY) !== null;
+    if (!hasSavedProvider && !pendingSignInRef.current) {
+      setAuthenticated(false);
+      setLoading(false);
+      return unsubscribe;
+    }
+
     // プロバイダーを初期化（サイレントリフレッシュ等）
     p.init().then(() => {
       setAuthenticated(p.getAuthState().isSignedIn);
