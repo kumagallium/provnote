@@ -35,14 +35,14 @@ Graphium は**段階的開示（progressive disclosure）**を設計の中心に
 
 デスクトップアプリをダウンロードすると、ローカルファイルにノートを保存してオフラインで利用できます。Google Drive 同期にも対応しています。
 
-| プラットフォーム | ダウンロード |
-|----------------|------------|
-| macOS (Apple Silicon) | [Graphium.dmg](https://github.com/kumagallium/Graphium/releases/latest) |
-| macOS (Intel) | [Graphium.dmg](https://github.com/kumagallium/Graphium/releases/latest) |
-| Windows | [Graphium.msi](https://github.com/kumagallium/Graphium/releases/latest) |
-| Linux | [Graphium.AppImage](https://github.com/kumagallium/Graphium/releases/latest) |
+| プラットフォーム | ファイル | 確認方法 |
+|----------------|---------|---------|
+| **macOS** (Apple Silicon — M1/M2/M3/M4) | `Graphium_x.x.x_aarch64.dmg` | Apple メニュー → このMacについて → 「Apple M...」|
+| **macOS** (Intel) | `Graphium_x.x.x_x64.dmg` | Apple メニュー → このMacについて → 「Intel...」|
+| **Windows** | `Graphium_x.x.x_x64-setup.exe` | |
+| **Linux** | `Graphium_x.x.x_amd64.AppImage` | |
 
-> すべてのダウンロードは [Releases](https://github.com/kumagallium/Graphium/releases) ページにあります。
+**[→ Releases からダウンロード](https://github.com/kumagallium/Graphium/releases/latest)**
 
 <details>
 <summary><b>macOS:「Graphium は壊れています」エラーが出る場合</b></summary>

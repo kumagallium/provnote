@@ -35,14 +35,14 @@ No installation required — works in your browser. Notes are saved to Google Dr
 
 Download the desktop app for offline use with local file storage. Google Drive sync is also available.
 
-| Platform | Download |
-|----------|----------|
-| macOS (Apple Silicon) | [Graphium.dmg](https://github.com/kumagallium/Graphium/releases/latest) |
-| macOS (Intel) | [Graphium.dmg](https://github.com/kumagallium/Graphium/releases/latest) |
-| Windows | [Graphium.msi](https://github.com/kumagallium/Graphium/releases/latest) |
-| Linux | [Graphium.AppImage](https://github.com/kumagallium/Graphium/releases/latest) |
+| Platform | File | How to check |
+|----------|------|-------------|
+| **macOS** (Apple Silicon — M1/M2/M3/M4) | `Graphium_x.x.x_aarch64.dmg` | Apple menu →  About This Mac → "Apple M..." |
+| **macOS** (Intel) | `Graphium_x.x.x_x64.dmg` | Apple menu → About This Mac → "Intel..." |
+| **Windows** | `Graphium_x.x.x_x64-setup.exe` | |
+| **Linux** | `Graphium_x.x.x_amd64.AppImage` | |
 
-> All downloads are available on the [Releases](https://github.com/kumagallium/Graphium/releases) page.
+**[→ Download from Releases](https://github.com/kumagallium/Graphium/releases/latest)**
 
 <details>
 <summary><b>macOS: "Graphium is damaged" error</b></summary>
