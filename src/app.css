@@ -79,6 +79,43 @@
   }
 }
 
+/* モバイルレスポンシブ: アニメーション */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+@utility animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out;
+}
+@utility animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
+
+/* モバイルレスポンシブ: BlockNote 見出しサイズ調整 */
+@media (max-width: 767px) {
+  .bn-editor h1 {
+    font-size: 24px !important;
+  }
+  .bn-editor h2 {
+    font-size: 20px !important;
+  }
+  .bn-editor h3 {
+    font-size: 18px !important;
+  }
+}
+
 /* BlockNote SideMenu がサイドバーに隠れないようにする */
 .bn-side-menu {
   z-index: 30 !important;
