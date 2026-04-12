@@ -1,51 +1,16 @@
 name: Tauri Desktop Build
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [created]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  # まずリリースを1つだけ作成（レースコンディション防止）
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create.outputs.result }}
-    steps:
-      - name: Create draft release
-        id: create
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const tag = context.ref.replace('refs/tags/', '');
-            // 既存のドラフトリリースがあれば再利用
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const existing = releases.find(r => r.tag_name === tag && r.draft);
-            if (existing) {
-              console.log(`Reusing existing draft release: ${existing.id}`);
-              return existing.id;
-            }
-            const { data: release } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: `Graphium ${tag}`,
-              body: 'See the [changelog](https://github.com/kumagallium/Graphium/blob/main/CHANGELOG.md) for details.',
-              draft: true,
-              prerelease: false,
-            });
-            console.log(`Created draft release: ${release.id}`);
-            return release.id;
-
   build:
-    needs: create-release
+    # release イベント時は tagpr が作成したリリースを使用
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +33,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -128,22 +95,5 @@ jobs:
           VITE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
           VITE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
+          releaseId: ${{ github.event.release.id }}
           args: --target ${{ matrix.target }}
-
-  # 全プラットフォームのビルド完了後、ドラフトリリースを公開
-  publish-release:
-    needs: [create-release, build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              draft: false,
-            });
-            console.log('Release published successfully');
