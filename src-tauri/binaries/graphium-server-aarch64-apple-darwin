@@ -3,11 +3,12 @@
 # Tauri から spawn され、Node.js でバンドル済みサーバーを起動する
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVER_FILE="$SCRIPT_DIR/../sidecar/server.mjs"
 
-# sidecar ディレクトリからの相対パスで server.mjs を探す
+# ビルド版: Contents/MacOS/ から Contents/Resources/sidecar/ を参照
+SERVER_FILE="$SCRIPT_DIR/../Resources/sidecar/server.mjs"
+
+# 開発時: Contents/sidecar/ を参照
 if [ ! -f "$SERVER_FILE" ]; then
-  # 開発時: プロジェクトルートから探す
   SERVER_FILE="$SCRIPT_DIR/../sidecar/server.mjs"
 fi
 
