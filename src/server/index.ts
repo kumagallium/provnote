@@ -18,7 +18,23 @@ import toolsRoutes from "./routes/tools.js";
 import authRoutes from "./routes/auth.js";
 
 // データディレクトリ設定（環境変数 or デフォルト）
-const dataDir = process.env.DATA_DIR ?? join(process.cwd(), "data");
+// デスクトップアプリ（sidecar）では ~/Documents/Graphium/server-data を使用
+import { homedir } from "node:os";
+import { accessSync, constants as fsConstants } from "node:fs";
+
+function resolveDataDir(): string {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  const cwdData = join(process.cwd(), "data");
+  // cwd が書き込み可能ならそのまま使う（dev モード / Docker）
+  try {
+    accessSync(process.cwd(), fsConstants.W_OK);
+    return cwdData;
+  } catch {
+    // 書き込み不可（ビルド版アプリ）→ ユーザーのドキュメントフォルダ
+    return join(homedir(), "Documents", "Graphium", "server-data");
+  }
+}
+const dataDir = resolveDataDir();
 setModelsDataDir(dataDir);
 setProfilesDataDir(dataDir);
 
