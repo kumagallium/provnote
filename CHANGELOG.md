@@ -1,0 +1,89 @@
+# Changelog
+
+## [v0.3.1](https://github.com/kumagallium/Graphium/compare/v0.3.0...v0.3.1) - 2026-04-12
+- Enable auto-updater with signing and tagpr release automation by @kumagallium in https://github.com/kumagallium/Graphium/pull/80
+
+## [v0.3.0](https://github.com/kumagallium/Graphium/compare/v0.2.0...v0.3.0) - 2026-04-12
+- Introduce StorageProvider abstraction layer by @kumagallium in https://github.com/kumagallium/Graphium/pull/66
+- Add Local (IndexedDB) storage provider for offline use by @kumagallium in https://github.com/kumagallium/Graphium/pull/67
+- UI polish: header menu, gallery nav, icons, icon rail panel by @kumagallium in https://github.com/kumagallium/Graphium/pull/68
+- feat: Page-level AI chat with history persistence by @kumagallium in https://github.com/kumagallium/Graphium/pull/69
+- Add AI edit (replace) for selected blocks by @kumagallium in https://github.com/kumagallium/Graphium/pull/70
+- Add URL bookmark support to asset browser by @kumagallium in https://github.com/kumagallium/Graphium/pull/72
+- feat: Add multi-block selection with floating toolbar by @kumagallium in https://github.com/kumagallium/Graphium/pull/73
+- Rename all provnote references to graphium by @kumagallium in https://github.com/kumagallium/Graphium/pull/71
+- Add built-in AI backend (Vercel AI SDK) by @kumagallium in https://github.com/kumagallium/Graphium/pull/74
+- Add Tauri v2 desktop app shell (Phase D1) by @kumagallium in https://github.com/kumagallium/Graphium/pull/75
+- Add Tauri sidecar for AI backend (Phase D3) by @kumagallium in https://github.com/kumagallium/Graphium/pull/76
+- Add menu bar, auto-updater, and CI/CD (Phase D4) by @kumagallium in https://github.com/kumagallium/Graphium/pull/77
+- Add LocalFilesystemProvider for desktop app by @kumagallium in https://github.com/kumagallium/Graphium/pull/78
+- Add Google OAuth for Tauri desktop app by @kumagallium in https://github.com/kumagallium/Graphium/pull/79
+
+## [v0.2.0](https://github.com/kumagallium/Graphium/compare/v0.1.0...v0.2.0) - 2026-04-08
+- Phase 1: Foundation — link layers, label UX, PROV naming by @kumagallium in https://github.com/kumagallium/Graphium/pull/34
+- [feat] Phase 3: PROV-JSON-LD standardization by @kumagallium in https://github.com/kumagallium/Graphium/pull/35
+- Phase 2: AI chat panel with scope context by @kumagallium in https://github.com/kumagallium/Graphium/pull/36
+- Phase 4a: Note-level sample detection and scope fix by @kumagallium in https://github.com/kumagallium/Graphium/pull/37
+- Phase 4b: Fix build and complete sampleScope custom block by @kumagallium in https://github.com/kumagallium/Graphium/pull/38
+- Phase 4: Index table for sample management with side peek by @kumagallium in https://github.com/kumagallium/Graphium/pull/39
+- Unify design tokens: replace Slate with Crucible green-gray by @kumagallium in https://github.com/kumagallium/Graphium/pull/40
+- Add label support and performance optimizations to side peek by @kumagallium in https://github.com/kumagallium/Graphium/pull/41
+- Fix: Persist auth across refresh with silent token renewal by @kumagallium in https://github.com/kumagallium/Graphium/pull/42
+- Add left panel navigation with index file by @kumagallium in https://github.com/kumagallium/Graphium/pull/43
+- Note list design alignment + @mention click-to-peek by @kumagallium in https://github.com/kumagallium/Graphium/pull/44
+- Split monolithic note-app.tsx into hooks and components by @kumagallium in https://github.com/kumagallium/Graphium/pull/45
+- Clarify standalone identity, split deployment modes, remove ambiguous wording by @kumagallium in https://github.com/kumagallium/Graphium/pull/46
+- Add i18n support with English/Japanese language switching by @kumagallium in https://github.com/kumagallium/Graphium/pull/47
+- Add unit tests for i18n, link-types, and utility modules by @kumagallium in https://github.com/kumagallium/Graphium/pull/48
+- Add Crucible Registry for MCP tool support by @kumagallium in https://github.com/kumagallium/Graphium/pull/49
+- Update README for Crucible integration and add update.sh by @kumagallium in https://github.com/kumagallium/Graphium/pull/50
+- Add AI model and system prompt selectors to settings by @kumagallium in https://github.com/kumagallium/Graphium/pull/51
+- Add delete UI to note list view by @kumagallium in https://github.com/kumagallium/Graphium/pull/52
+- [fix] Persist chat session_id for continuous conversation by @kumagallium in https://github.com/kumagallium/Graphium/pull/53
+- Add asset browser (Phase 5a) by @kumagallium in https://github.com/kumagallium/Graphium/pull/54
+- Add logo, typography, and favicon branding by @kumagallium in https://github.com/kumagallium/Graphium/pull/55
+- Replace /image /video /audio with media picker (Phase 5b) by @kumagallium in https://github.com/kumagallium/Graphium/pull/56
+- Add label gallery and sidebar nav (Phase 5c) by @kumagallium in https://github.com/kumagallium/Graphium/pull/57
+- Group label gallery by value with network modal by @kumagallium in https://github.com/kumagallium/Graphium/pull/58
+- Add Document Provenance (edit history tracking) by @kumagallium in https://github.com/kumagallium/Graphium/pull/59
+- Add PDF export with provenance graph by @kumagallium in https://github.com/kumagallium/Graphium/pull/60
+- Add audit trail for document provenance by @kumagallium in https://github.com/kumagallium/Graphium/pull/61
+- Remove sample-branch pattern expansion by @kumagallium in https://github.com/kumagallium/Graphium/pull/62
+- Add PROV-JSON-LD export and material/tool label distinction by @kumagallium in https://github.com/kumagallium/Graphium/pull/63
+- [feat] Add PDF viewer block by @kumagallium in https://github.com/kumagallium/Graphium/pull/64
+- feat: i18n context label display + orphan label cleanup by @kumagallium in https://github.com/kumagallium/Graphium/pull/65
+
+## [v0.1.0](https://github.com/kumagallium/Graphium/commits/v0.1.0) - 2026-03-26
+- feat: Google Drive integration with note app UI by @kumagallium in https://github.com/kumagallium/Graphium/pull/1
+- feat: Post-merge updates (auto-save, PROV template, privacy) by @kumagallium in https://github.com/kumagallium/Graphium/pull/2
+- fix: Deploy with Google client ID and privacy page by @kumagallium in https://github.com/kumagallium/Graphium/pull/3
+- Unify color palette with forest green theme and add Storybook stories by @kumagallium in https://github.com/kumagallium/Graphium/pull/4
+- Add Google Drive integration, PROV template, and derived notes by @kumagallium in https://github.com/kumagallium/Graphium/pull/5
+- Unify design theme and re-apply tab removal fixes by @kumagallium in https://github.com/kumagallium/Graphium/pull/6
+- Add Obsidian-like network graph for note derivations by @kumagallium in https://github.com/kumagallium/Graphium/pull/7
+- Use block content as derived note title by @kumagallium in https://github.com/kumagallium/Graphium/pull/8
+- Add auto-generated release notes with git hook and modal UI by @kumagallium in https://github.com/kumagallium/Graphium/pull/9
+- Unify graph colors with design.md theme and add smooth interactions by @kumagallium in https://github.com/kumagallium/Graphium/pull/10
+- Fix orphan links when deleting derived notes by @kumagallium in https://github.com/kumagallium/Graphium/pull/11
+- Simplify PROV panel: sample tabs + expand modal by @kumagallium in https://github.com/kumagallium/Graphium/pull/12
+- Replace emoji icons with lucide-react SVG icons by @kumagallium in https://github.com/kumagallium/Graphium/pull/13
+- AI アシスタント機能（crucible-agent 連携） by @kumagallium in https://github.com/kumagallium/Graphium/pull/14
+- Fix SideMenu height alignment for custom headings by @kumagallium in https://github.com/kumagallium/Graphium/pull/15
+- feat: Extend Activity scoping to all heading levels by @kumagallium in https://github.com/kumagallium/Graphium/pull/16
+- Multi-block selection and AI assistant improvements by @kumagallium in https://github.com/kumagallium/Graphium/pull/17
+- Move PROV labels to right-side indicator by @kumagallium in https://github.com/kumagallium/Graphium/pull/18
+- Add AI agent settings for Pages users by @kumagallium in https://github.com/kumagallium/Graphium/pull/19
+- Add API key authentication for crucible-agent by @kumagallium in https://github.com/kumagallium/Graphium/pull/20
+- Improve README onboarding for new users by @kumagallium in https://github.com/kumagallium/Graphium/pull/21
+- Add Docker Compose for one-command local setup with AI by @kumagallium in https://github.com/kumagallium/Graphium/pull/22
+- Fix: remove unpublished container image reference by @kumagallium in https://github.com/kumagallium/Graphium/pull/23
+- Use pre-built GHCR image for crucible-agent by @kumagallium in https://github.com/kumagallium/Graphium/pull/24
+- Fix postgres healthcheck to check correct database by @kumagallium in https://github.com/kumagallium/Graphium/pull/25
+- Fix LiteLLM 401 Unauthorized by adding API key by @kumagallium in https://github.com/kumagallium/Graphium/pull/26
+- Fix: separate LiteLLM and Agent databases by @kumagallium in https://github.com/kumagallium/Graphium/pull/27
+- Fix init-db.sh for Alpine (sh + chmod) by @kumagallium in https://github.com/kumagallium/Graphium/pull/28
+- Add token auto-refresh and media file upload by @kumagallium in https://github.com/kumagallium/Graphium/pull/29
+- Skip login screen in Docker (local storage mode) by @kumagallium in https://github.com/kumagallium/Graphium/pull/30
+- Fix drag handle dropdown menu position offset by @kumagallium in https://github.com/kumagallium/Graphium/pull/31
+- Add atomic design system (Atoms + Molecules) by @kumagallium in https://github.com/kumagallium/Graphium/pull/32
+- Replace remaining inline styles and add Organisms layer by @kumagallium in https://github.com/kumagallium/Graphium/pull/33
