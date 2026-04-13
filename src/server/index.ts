@@ -41,9 +41,14 @@ setProfilesDataDir(dataDir);
 const app = new Hono();
 
 // CORS 設定（開発時のみ必要。本番は同一オリジン）
+// Tauri オリジンも常に含める（dev サーバーをデスクトップアプリが共用する場合に必要）
 const allowedOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:5174")
   .split(",")
   .map((o) => o.trim());
+// Tauri webview オリジンを必ず追加（macOS: tauri://, Windows: https://tauri.localhost）
+for (const tauriOrigin of ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"]) {
+  if (!allowedOrigins.includes(tauriOrigin)) allowedOrigins.push(tauriOrigin);
+}
 
 app.use(
   "/api/*",
