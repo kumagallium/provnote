@@ -64,7 +64,7 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
-import { MobileCaptureView, MemoGalleryView } from "./features/mobile-capture";
+import { MobileCaptureView, MemoGalleryView, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import {
   AssetGalleryView,
   LabelGalleryView,
@@ -210,6 +210,8 @@ type NoteEditorProps = {
   pendingMemoInsert?: { text: string } | null;
   /** メモ挿入完了コールバック */
   onMemoInserted?: () => void;
+  /** メモギャラリーを開くコールバック（スラッシュメニュー用） */
+  onOpenMemoGallery?: () => void;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -263,6 +265,7 @@ function NoteEditorInner({
   onAddUrlBookmark,
   pendingMemoInsert,
   onMemoInserted,
+  onOpenMemoGallery,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -331,6 +334,12 @@ function NoteEditorInner({
     return () => { setMediaPickerCallback(null); };
   }, []);
 
+  // スラッシュメニューからメモピッカーを開くコールバック登録
+  useEffect(() => {
+    setMemoPickerCallback(() => onOpenMemoGallery?.());
+    return () => { setMemoPickerCallback(null); };
+  }, [onOpenMemoGallery]);
+
   // スラッシュメニューから URL ブックマークピッカーを開くコールバック登録
   useEffect(() => {
     setBookmarkPickerCallback(() => setUrlSlashPickerOpen(true));
@@ -366,8 +375,9 @@ function NoteEditorInner({
     // onChange が自動的にトリガーされるので markDirty() は不要
   }, []);
 
-  // スラッシュメニューアイテム（既存メディアから挿入）
+  // スラッシュメニューアイテム（既存メディア・メモから挿入）
   const mediaSlashItems = useMemo(() => getMediaSlashMenuItems(), []);
+  const memoSlashItem = useMemo(() => getMemoSlashMenuItem(), []);
 
   // ── URL ペースト検知 ──
   const [pastedUrl, setPastedUrl] = useState<{ url: string; position: { x: number; y: number }; blockId: string } | null>(null);
@@ -1181,7 +1191,7 @@ function NoteEditorInner({
               blocks={[pdfViewerBlock, bookmarkBlock]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
-              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, ...mediaSlashItems, bookmarkSlashItem]}
+              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, ...mediaSlashItems, bookmarkSlashItem, memoSlashItem]}
               excludeDefaultSlashTitles={DEFAULT_MEDIA_SLASH_TITLES}
               formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
@@ -1506,6 +1516,7 @@ export function NoteApp() {
             loading={capture.captureLoading}
             onCreateCapture={capture.handleCreateCapture}
             onDeleteCapture={capture.handleDeleteCapture}
+            onUploadMedia={fm.handleUploadMedia}
             creating={capture.capturing}
           />
         ) : (
@@ -1542,6 +1553,7 @@ export function NoteApp() {
               }
               setPendingMemoInsert(null);
             }}
+            onOpenMemoGallery={() => { setShowMemos(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); }}
           />
         )}
         {/* 派生ノート作成中のオーバーレイ */}

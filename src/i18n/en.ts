@@ -394,6 +394,10 @@ export const en: Record<string, string> = {
   "memo.insertAndDelete": "Insert and delete memo",
   "memo.insertHint": "Open a note first to insert memos.",
   "memo.inserted": "Memo inserted",
+  "memo.networkTitle": "Memo usage network",
+  "memo.networkEmpty": "No memos have been inserted into notes yet.",
+  "memo.slashTitle": "Memo",
+  "memo.slashSub": "Insert from saved memos",
 
   // ── PDF エクスポート ──
   "pdf.export": "PDF",

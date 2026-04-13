@@ -12,3 +12,4 @@ export {
   clearCaptureCache,
 } from "./capture-store";
 export type { CaptureIndex, CaptureEntry, MemoUsage } from "./capture-store";
+export { getMemoSlashMenuItem, setMemoPickerCallback } from "./slash-menu-item";

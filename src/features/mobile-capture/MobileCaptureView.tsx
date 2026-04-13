@@ -1,8 +1,8 @@
 // モバイル専用クイックキャプチャビュー
-// 付箋インデックス（.graphium-captures.json）をカード形式で表示し、素早く投稿できる
+// メモ一覧（カード） + テキストメモ作成 + メディアキャプチャ（写真・動画・音声）
 
-import { useCallback, useState } from "react";
-import { StickyNote, Plus, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { StickyNote, Plus, Trash2, Camera, Video, Mic } from "lucide-react";
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
 import { formatRelativeTime } from "../navigation/recent-notes-store";
 import { useT } from "../../i18n";
@@ -26,17 +26,12 @@ function CaptureCard({
         setShowDelete((v) => !v);
       }}
     >
-      {/* テキスト */}
       <p className="text-sm text-foreground line-clamp-4 whitespace-pre-wrap mb-1.5">
         {entry.text}
       </p>
-
-      {/* 作成日時 */}
       <p className="text-[10px] text-muted-foreground">
         {formatRelativeTime(entry.createdAt)}
       </p>
-
-      {/* 削除ボタン（長押しで表示） */}
       {showDelete && onDelete && (
         <button
           className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
@@ -58,20 +53,27 @@ export function MobileCaptureView({
   loading,
   onCreateCapture,
   onDeleteCapture,
+  onUploadMedia,
   creating,
 }: {
   captureIndex: CaptureIndex | null;
   loading: boolean;
   onCreateCapture: (text: string) => Promise<void>;
   onDeleteCapture?: (captureId: string) => Promise<void>;
+  /** メディアファイルのアップロード（既存のアセットブラウザに保存） */
+  onUploadMedia?: (file: File) => Promise<string>;
   creating: boolean;
 }) {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
   const captures = captureIndex?.captures ?? [];
 
-  // キャプチャ送信
+  // テキストメモ送信
   const handleSubmit = useCallback(
     async (text: string) => {
       await onCreateCapture(text);
@@ -88,6 +90,27 @@ export function MobileCaptureView({
     },
     [onDeleteCapture]
   );
+
+  // メディアアップロード共通
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !onUploadMedia) return;
+      setUploading(true);
+      try {
+        await onUploadMedia(file);
+      } catch (err) {
+        console.error("メディアアップロードに失敗:", err);
+      } finally {
+        setUploading(false);
+        // input をリセット（同じファイルを再選択できるようにする）
+        e.target.value = "";
+      }
+    },
+    [onUploadMedia]
+  );
+
+  const mediaDisabled = !onUploadMedia || uploading;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
@@ -137,14 +160,79 @@ export function MobileCaptureView({
 
       {/* クイックキャプチャバー */}
       <div className="border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          onClick={() => setShowCaptureDialog(true)}
-          disabled={creating}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm active:opacity-80 transition-opacity disabled:opacity-50"
-        >
-          <Plus size={18} />
-          {creating ? t("memo.creating") : t("memo.new")}
-        </button>
+        {/* アップロード中のインジケーター */}
+        {uploading && (
+          <p className="text-xs text-muted-foreground text-center mb-2">
+            {t("asset.uploading")}
+          </p>
+        )}
+        <div className="flex items-center gap-2">
+          {/* メモ作成ボタン */}
+          <button
+            onClick={() => setShowCaptureDialog(true)}
+            disabled={creating}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm active:opacity-80 transition-opacity disabled:opacity-50"
+          >
+            <Plus size={18} />
+            {creating ? t("memo.creating") : t("memo.new")}
+          </button>
+
+          {/* メディアキャプチャボタン */}
+          {onUploadMedia && (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={mediaDisabled}
+                className="p-3 rounded-xl border border-border text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
+                title={t("asset.type.image")}
+              >
+                <Camera size={20} />
+              </button>
+              <button
+                onClick={() => videoInputRef.current?.click()}
+                disabled={mediaDisabled}
+                className="p-3 rounded-xl border border-border text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
+                title={t("asset.type.video")}
+              >
+                <Video size={20} />
+              </button>
+              <button
+                onClick={() => audioInputRef.current?.click()}
+                disabled={mediaDisabled}
+                className="p-3 rounded-xl border border-border text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
+                title={t("asset.type.audio")}
+              >
+                <Mic size={20} />
+              </button>
+
+              {/* hidden file inputs */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept="audio/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {/* 付箋入力ダイアログ */}

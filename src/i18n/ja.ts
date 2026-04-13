@@ -394,6 +394,10 @@ export const ja: Record<string, string> = {
   "memo.insertAndDelete": "挿入してメモを削除",
   "memo.insertHint": "メモを挿入するにはノートを先に開いてください。",
   "memo.inserted": "メモを挿入しました",
+  "memo.networkTitle": "メモの使用状況",
+  "memo.networkEmpty": "まだメモがノートに挿入されていません。",
+  "memo.slashTitle": "メモ",
+  "memo.slashSub": "保存済みメモから挿入",
 
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
