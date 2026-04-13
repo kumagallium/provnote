@@ -44,6 +44,8 @@ export type LinkStore = {
   getAllLinks: () => BlockLink[];
   /** リンク一括復元（テンプレート読み込み用） */
   restoreLinks: (links: BlockLink[]) => void;
+  /** あるブロック ID に紐づくリンクを別のブロック ID に転送する */
+  transferLinks: (fromBlockId: string, toBlockId: string) => void;
 };
 
 const LinkStoreContext = createContext<LinkStore | null>(null);
@@ -103,6 +105,21 @@ export function LinkStoreProvider({ children }: { children: ReactNode }) {
 
   const getAllLinks = useCallback(() => [...links], [links]);
 
+  const transferLinks = useCallback((fromBlockId: string, toBlockId: string) => {
+    setLinks((prev) =>
+      prev.map((link) => {
+        let updated = link;
+        if (link.sourceBlockId === fromBlockId) {
+          updated = { ...updated, sourceBlockId: toBlockId };
+        }
+        if (link.targetBlockId === fromBlockId) {
+          updated = { ...updated, targetBlockId: toBlockId };
+        }
+        return updated === link ? link : updated;
+      }),
+    );
+  }, []);
+
   const restoreLinks = useCallback((restored: BlockLink[]) => {
     // v1 → v2 マイグレーション: layer フィールドがない場合は自動付与
     const migrated = restored.map((link) => {
@@ -116,7 +133,7 @@ export function LinkStoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <LinkStoreContext.Provider
-      value={{ links, addLink, removeLink, getOutgoing, getIncoming, getAllLinks, restoreLinks }}
+      value={{ links, addLink, removeLink, getOutgoing, getIncoming, getAllLinks, restoreLinks, transferLinks }}
     >
       {children}
     </LinkStoreContext.Provider>

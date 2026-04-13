@@ -164,7 +164,7 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate }: SidePeekProps
   // エディタ準備完了時（依存を安定化し、SandboxEditor の不要な再実行を防ぐ）
   const handleEditorReady = useCallback((editor: any) => {
     editorRef.current = editor;
-    labelAutoRef.current = setupLabelAutoAssign(editor, labelStoreRef.current);
+    labelAutoRef.current = setupLabelAutoAssign(editor, labelStoreRef.current, linkStore);
   }, []);
 
   // 初期コンテンツ（cachedDoc を優先し、レンダリング時に即利用可能にする）

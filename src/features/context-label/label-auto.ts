@@ -7,13 +7,19 @@
 // ──────────────────────────────────────────────
 
 import type { LabelStore } from "./store";
+import type { LinkStore } from "../block-link/store";
 
-// 継承対象のラベル（箇条書きで Enter した時に次行にコピーするラベル）
+// 継承対象のラベル（箇条書きで Enter → 空の次行にもコピーするラベル）
 const INHERITABLE_LABELS = new Set([
   "[材料]",
   "[ツール]",
   "[結果]",
   "[属性]",
+]);
+
+// 分割時のみ継承するラベル（Enter でブロックが分割され、新ブロックにコンテンツがある場合のみ）
+const SPLIT_ONLY_LABELS = new Set([
+  "[手順]",
 ]);
 
 // インデント時に [属性] に変換するラベル
@@ -31,12 +37,15 @@ const INDENT_TO_ATTRIBUTE_LABELS = new Set([
  */
 export function setupLabelAutoAssign(
   editor: any,
-  labelStore: LabelStore
+  labelStore: LabelStore,
+  linkStore?: LinkStore,
 ) {
   // 前回のブロック構成を記録（新規ブロック検出用）
   let prevBlockIds = new Set<string>();
   // 前回のインデントレベルを記録
   let prevIndents = new Map<string, number>();
+  // 前回のブロック内容を記録（先頭 Enter 検出用）
+  let prevContents = new Map<string, boolean>(); // blockId → hasContent
 
   function getBlockIndent(block: any): number {
     // BlockNote の nestingLevel を取得（親ブロックの深さ）
@@ -62,7 +71,39 @@ export function setupLabelAutoAssign(
     const allBlocks = flattenBlocks(editor.document);
     const currentBlockIds = new Set(allBlocks.map((b) => b.block.id));
     const currentIndents = new Map<string, number>();
-    allBlocks.forEach((b) => currentIndents.set(b.block.id, b.depth));
+    const currentContents = new Map<string, boolean>();
+    allBlocks.forEach((b) => {
+      currentIndents.set(b.block.id, b.depth);
+      currentContents.set(b.block.id, blockHasContent(b.block));
+    });
+
+    // 0. 先頭 Enter 検出 → ラベル転送
+    //    ラベル付きブロックが空になり、直後に新ブロック（コンテンツあり）がある場合、
+    //    ラベルを空ブロックから新ブロックに移す
+    for (let i = 0; i < allBlocks.length; i++) {
+      const { block } = allBlocks[i];
+      // 既存ブロック & ラベル付き & 以前はコンテンツがあったが今は空
+      if (
+        prevBlockIds.has(block.id) &&
+        labelStore.labels.has(block.id) &&
+        prevContents.get(block.id) &&
+        !blockHasContent(block)
+      ) {
+        // 直後の新ブロックを探す
+        const next = allBlocks[i + 1];
+        if (next && !prevBlockIds.has(next.block.id) && blockHasContent(next.block)) {
+          const label = labelStore.labels.get(block.id)!;
+          const attrs = labelStore.attributes.get(block.id);
+          labelStore.setLabel(block.id, null);
+          labelStore.setLabel(next.block.id, label);
+          if (attrs) {
+            labelStore.setAttributes(next.block.id, attrs);
+          }
+          // リンクも新ブロックに転送
+          linkStore?.transferLinks(block.id, next.block.id);
+        }
+      }
+    }
 
     // 1. 新規ブロックの検出 → ラベル継承
     for (let i = 0; i < allBlocks.length; i++) {
@@ -70,15 +111,26 @@ export function setupLabelAutoAssign(
       if (prevBlockIds.has(block.id)) continue; // 既存ブロック
       if (labelStore.labels.has(block.id)) continue; // 既にラベルあり
 
-      // 箇条書き系のブロックのみ対象
-      if (block.type !== "bulletListItem" && block.type !== "numberedListItem") continue;
+      // 箇条書き・段落・見出しブロックを対象
+      if (
+        block.type !== "bulletListItem" &&
+        block.type !== "numberedListItem" &&
+        block.type !== "paragraph" &&
+        block.type !== "heading"
+      ) continue;
 
       // 直前のブロック（同じ深さ）を探す
       const prev = findPrevSiblingAt(allBlocks, i, depth);
       if (!prev) continue;
 
       const prevLabel = labelStore.labels.get(prev.block.id);
-      if (prevLabel && INHERITABLE_LABELS.has(prevLabel)) {
+      if (!prevLabel) continue;
+
+      if (INHERITABLE_LABELS.has(prevLabel)) {
+        // 箇条書きラベル: 空行でも継承（Enter で次行を追加するフロー）
+        labelStore.setLabel(block.id, prevLabel);
+      } else if (SPLIT_ONLY_LABELS.has(prevLabel) && blockHasContent(block)) {
+        // 見出しラベル: 分割時（新ブロックにコンテンツあり）のみ継承
         labelStore.setLabel(block.id, prevLabel);
       }
     }
@@ -104,14 +156,30 @@ export function setupLabelAutoAssign(
 
     prevBlockIds = currentBlockIds;
     prevIndents = currentIndents;
+    prevContents = currentContents;
   }
 
   // 初期状態を記録
   const allBlocks = flattenBlocks(editor.document);
   prevBlockIds = new Set(allBlocks.map((b) => b.block.id));
-  allBlocks.forEach((b) => prevIndents.set(b.block.id, b.depth));
+  allBlocks.forEach((b) => {
+    prevIndents.set(b.block.id, b.depth);
+    prevContents.set(b.block.id, blockHasContent(b.block));
+  });
 
   return onDocChange;
+}
+
+/**
+ * ブロックがテキストコンテンツを持つかどうかを判定する
+ */
+function blockHasContent(block: any): boolean {
+  // BlockNote のブロックは content 配列にインラインコンテンツを持つ
+  if (!block.content) return false;
+  if (Array.isArray(block.content)) {
+    return block.content.some((c: any) => c.text?.trim());
+  }
+  return false;
 }
 
 /**

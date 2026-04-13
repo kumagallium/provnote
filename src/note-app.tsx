@@ -468,7 +468,7 @@ function NoteEditorInner({
   const handleEditorReady = useCallback((editor: any) => {
     editorRef.current = editor;
     // ラベル自動設定をセットアップ
-    labelAutoRef.current = setupLabelAutoAssign(editor, labelStore);
+    labelAutoRef.current = setupLabelAutoAssign(editor, labelStore, linkStore);
 
     // URL ペースト検知リスナー
     // 前回のリスナーがあればクリーンアップ

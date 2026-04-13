@@ -172,17 +172,24 @@ export function ProvIndicatorLayer() {
   useEffect(() => {
     window.addEventListener("scroll", compute, true);
     window.addEventListener("resize", compute);
-    // エディタラッパーの幅変化を監視（右パネル展開/折りたたみ時の再計算）
     const wrapper = document.querySelector("[data-label-wrapper]");
     let ro: ResizeObserver | undefined;
+    let mo: MutationObserver | undefined;
     if (wrapper) {
+      // エディタラッパーの幅変化を監視（右パネル展開/折りたたみ時の再計算）
       ro = new ResizeObserver(compute);
       ro.observe(wrapper);
+      // ブロックの追加・削除を監視（ラベルなしブロックの変更でも位置を再計算）
+      mo = new MutationObserver(() => {
+        requestAnimationFrame(compute);
+      });
+      mo.observe(wrapper, { childList: true, subtree: true });
     }
     return () => {
       window.removeEventListener("scroll", compute, true);
       window.removeEventListener("resize", compute);
       ro?.disconnect();
+      mo?.disconnect();
     };
   }, [compute]);
 
