@@ -7,6 +7,7 @@
 // ──────────────────────────────────────────────
 
 import type { LabelStore } from "./store";
+import type { LinkStore } from "../block-link/store";
 
 // 継承対象のラベル（箇条書きで Enter → 空の次行にもコピーするラベル）
 const INHERITABLE_LABELS = new Set([
@@ -36,7 +37,8 @@ const INDENT_TO_ATTRIBUTE_LABELS = new Set([
  */
 export function setupLabelAutoAssign(
   editor: any,
-  labelStore: LabelStore
+  labelStore: LabelStore,
+  linkStore?: LinkStore,
 ) {
   // 前回のブロック構成を記録（新規ブロック検出用）
   let prevBlockIds = new Set<string>();
@@ -97,6 +99,8 @@ export function setupLabelAutoAssign(
           if (attrs) {
             labelStore.setAttributes(next.block.id, attrs);
           }
+          // リンクも新ブロックに転送
+          linkStore?.transferLinks(block.id, next.block.id);
         }
       }
     }
