@@ -64,6 +64,7 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
+import { MobileCaptureView } from "./features/mobile-capture";
 import {
   AssetGalleryView,
   LabelGalleryView,
@@ -1452,6 +1453,17 @@ export function NoteApp() {
             onDeleteNotes={async (ids) => {
               for (const id of ids) await fm.handleDelete(id);
             }}
+          />
+        ) : !isDesktop && !fm.activeFileId ? (
+          /* モバイル: ノート未選択時はクイックキャプチャビューを表示 */
+          <MobileCaptureView
+            noteIndex={fm.noteIndex}
+            onOpenNote={(noteId) => fm.handleOpenFile(noteId)}
+            onCreateCapture={fm.handleCreateCapture}
+            onDeleteNotes={async (ids) => {
+              for (const id of ids) await fm.handleDelete(id);
+            }}
+            creating={fm.capturing}
           />
         ) : (
           <NoteEditor

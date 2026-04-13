@@ -376,6 +376,16 @@ export const ja: Record<string, string> = {
   "updater.install": "再起動して更新",
   "updater.installing": "ダウンロード中...",
 
+  // ── モバイルキャプチャ ──
+  "capture.title": "キャプチャ",
+  "capture.count": "{count} 件",
+  "capture.empty": "まだキャプチャがありません。下のボタンをタップして作成しましょう。",
+  "capture.newMemo": "メモを作成",
+  "capture.creating": "作成中...",
+  "capture.placeholder": "メモを入力...",
+  "capture.saving": "Google Drive に保存中...",
+  "capture.hint": "送信ボタンをタップして保存",
+
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "エクスポート中...",

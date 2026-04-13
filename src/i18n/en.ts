@@ -376,6 +376,16 @@ export const en: Record<string, string> = {
   "updater.install": "Restart to update",
   "updater.installing": "Downloading...",
 
+  // ── モバイルキャプチャ ──
+  "capture.title": "Captures",
+  "capture.count": "{count} notes",
+  "capture.empty": "No captures yet. Tap the button below to create one.",
+  "capture.newMemo": "New Memo",
+  "capture.creating": "Creating...",
+  "capture.placeholder": "Write your memo here...",
+  "capture.saving": "Saving to Google Drive...",
+  "capture.hint": "Tap the send button to save",
+
   // ── PDF エクスポート ──
   "pdf.export": "PDF",
   "pdf.exporting": "Exporting...",
