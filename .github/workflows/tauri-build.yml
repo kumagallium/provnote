@@ -13,7 +13,6 @@ permissions:
   contents: write
 
 jobs:
-  # workflow_dispatch 時はタグからリリース ID を解決する
   resolve-release:
     runs-on: ubuntu-latest
     outputs:
@@ -84,14 +83,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      # Linux 固有: WebView + UI 依存ライブラリ
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      # sidecar ラッパーの作成（各プラットフォーム用）
       - name: Create sidecar wrapper (Unix)
         if: matrix.platform != 'windows-latest'
         run: |
@@ -128,111 +125,89 @@ jobs:
           includeUpdaterJson: false
           args: --target ${{ matrix.target }}
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          VITE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
-          VITE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
-        with:
-          releaseId: ${{ needs.resolve-release.outputs.release_id }}
-          includeUpdaterJson: false
-          args: --target ${{ matrix.target }}
-
-      # tauri-action がアップロード時に .sig を消す場合があるため、
-      # ビルド出力全体から .sig を探してアップロード
-      - name: Upload signature artifacts
-        shell: bash
-        run: |
-          mkdir -p /tmp/sigs
-          find src-tauri/target -name '*.sig' -type f -exec cp {} /tmp/sigs/ \; 2>/dev/null || true
-          echo "Collected signatures:"
-          ls -la /tmp/sigs/ 2>/dev/null || echo "No sig files"
-
-      - name: Upload signature to Actions artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: sig-${{ matrix.target }}
-          path: /tmp/sigs/*.sig
-          if-no-files-found: warn
-
-  # 全ビルド完了後に latest.json を生成してリリースにアップロード
+  # 全ビルド完了後、リリースアセットをダウンロードして署名 → latest.json 生成
   generate-updater-json:
     needs: [resolve-release, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all signature artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: sig-*
-          merge-multiple: true
-          path: sigs
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
 
-      - name: List signatures
-        run: find sigs -name '*.sig' -type f 2>/dev/null || echo "No sig files found"
-
-      - name: Get release assets
-        id: assets
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: release } = await github.rest.repos.getRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.resolve-release.outputs.release_id }},
-            });
-            core.setOutput('tag', release.tag_name);
-            core.setOutput('published_at', release.published_at || release.created_at);
-            // アセット名を出力
-            for (const a of release.assets) {
-              console.log(`Asset: ${a.name} (${a.browser_download_url})`);
-            }
-            return JSON.stringify(release.assets.map(a => ({
-              name: a.name,
-              url: a.browser_download_url,
-            })));
-          result-encoding: string
-
-      - name: Generate latest.json
+      - name: Download updater assets and sign
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           set -e
-          TAG="${{ steps.assets.outputs.tag }}"
-          VERSION="${TAG#v}"
-          PUB_DATE="${{ steps.assets.outputs.published_at }}"
-          ASSETS='${{ steps.assets.outputs.result }}'
-          BASE_URL="https://github.com/kumagallium/Graphium/releases/download/${TAG}"
+          TAG="${{ needs.resolve-release.outputs.tag }}"
+          REPO="${{ github.repository }}"
 
-          # .sig ファイルの内容を読み取る関数
+          # 秘密鍵をデコードしてファイルに書き出し
+          echo "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d > /tmp/signing.key
+
+          mkdir -p /tmp/assets
+
+          # 署名対象ファイルをダウンロード
+          ASSETS=(
+            "Graphium_aarch64.app.tar.gz"
+            "Graphium_x64.app.tar.gz"
+          )
+
+          # バージョン番号付きアセット
+          VERSION="${TAG#v}"
+          ASSETS+=(
+            "Graphium_${VERSION}_amd64.AppImage"
+            "Graphium_${VERSION}_x64-setup.exe"
+          )
+
+          for ASSET in "${ASSETS[@]}"; do
+            echo "Downloading $ASSET..."
+            gh release download "$TAG" --pattern "$ASSET" --dir /tmp/assets --repo "$REPO" --clobber 2>/dev/null || {
+              echo "WARNING: $ASSET not found, skipping"
+              continue
+            }
+
+            echo "Signing $ASSET..."
+            echo "" | minisign -S -s /tmp/signing.key -m "/tmp/assets/$ASSET" 2>/dev/null || true
+          done
+
+          # 秘密鍵を削除
+          rm -f /tmp/signing.key
+
+          echo "Signatures generated:"
+          ls -la /tmp/assets/*.minisig 2>/dev/null || echo "No signatures"
+
+      - name: Build latest.json
+        run: |
+          set -e
+          TAG="${{ needs.resolve-release.outputs.tag }}"
+          VERSION="${TAG#v}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+
           read_sig() {
-            local pattern="$1"
-            local sig_file
-            sig_file=$(find sigs -name "$pattern" -type f 2>/dev/null | head -1)
-            if [ -n "$sig_file" ]; then
-              cat "$sig_file"
-            else
-              echo ""
+            local file="/tmp/assets/$1.minisig"
+            if [ -f "$file" ]; then
+              cat "$file"
             fi
           }
 
-          # 各プラットフォームの署名を取得
-          MACOS_AARCH64_SIG=$(read_sig "*aarch64*app.tar.gz.sig" || read_sig "Graphium.app.tar.gz.sig")
-          MACOS_X64_SIG=$(read_sig "*x86_64*app.tar.gz.sig" || read_sig "*x64*app.tar.gz.sig")
-          LINUX_SIG=$(read_sig "*AppImage*.sig" || read_sig "*amd64*AppImage.tar.gz.sig")
-          WINDOWS_SIG=$(read_sig "*nsis*.sig" || read_sig "*setup*.sig")
+          DARWIN_AARCH64_SIG=$(read_sig "Graphium_aarch64.app.tar.gz")
+          DARWIN_X64_SIG=$(read_sig "Graphium_x64.app.tar.gz")
+          LINUX_SIG=$(read_sig "Graphium_${VERSION}_amd64.AppImage")
+          WINDOWS_SIG=$(read_sig "Graphium_${VERSION}_x64-setup.exe")
 
-          cat > latest.json << ENDJSON
+          cat > latest.json <<EOF
           {
             "version": "${VERSION}",
             "notes": "See the changelog for details.",
-            "pub_date": "${PUB_DATE}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "darwin-aarch64": {
-                "signature": "${MACOS_AARCH64_SIG}",
+                "signature": "${DARWIN_AARCH64_SIG}",
                 "url": "${BASE_URL}/Graphium_aarch64.app.tar.gz"
               },
               "darwin-x86_64": {
-                "signature": "${MACOS_X64_SIG}",
+                "signature": "${DARWIN_X64_SIG}",
                 "url": "${BASE_URL}/Graphium_x64.app.tar.gz"
               },
               "linux-x86_64": {
@@ -245,7 +220,7 @@ jobs:
               }
             }
           }
-          ENDJSON
+          EOF
 
           echo "Generated latest.json:"
           cat latest.json
@@ -254,10 +229,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.assets.outputs.tag }}"
-          # 既存の latest.json があれば削除
-          ASSET_ID=$(gh api repos/${{ github.repository }}/releases/${{ needs.resolve-release.outputs.release_id }}/assets --jq '.[] | select(.name == "latest.json") | .id' 2>/dev/null || echo "")
-          if [ -n "$ASSET_ID" ]; then
-            gh api -X DELETE repos/${{ github.repository }}/releases/assets/"$ASSET_ID"
-          fi
+          TAG="${{ needs.resolve-release.outputs.tag }}"
           gh release upload "$TAG" latest.json --clobber --repo "${{ github.repository }}"
