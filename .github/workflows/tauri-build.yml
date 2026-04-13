@@ -130,10 +130,8 @@ jobs:
     needs: [resolve-release, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Install pnpm and Tauri CLI
-        run: |
-          npm install -g pnpm
-          pnpm add -g @tauri-apps/cli
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli
 
       - name: Download updater assets and sign
         env:
