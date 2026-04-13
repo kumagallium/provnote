@@ -57,11 +57,16 @@ type AuthState = {
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 // サイレントリフレッシュのタイムアウト（秒）
 const SILENT_REFRESH_TIMEOUT_MS = 5000;
+// サイレントリフレッシュの最大リトライ回数
+const MAX_REFRESH_RETRIES = 3;
+// リトライ間隔（ミリ秒）
+const REFRESH_RETRY_INTERVAL_MS = 10 * 1000;
 
 let tokenClient: TokenClient | null = null;
 let authState: AuthState = loadFromStorage();
 let authListeners: Array<(token: string | null) => void> = [];
 let refreshTimerId: ReturnType<typeof setTimeout> | null = null;
+let refreshRetryCount = 0;
 
 // 以前ログインに成功したことがあるか
 function hasPreviousConsent(): boolean {
@@ -170,7 +175,16 @@ export async function initGoogleAuth(): Promise<void> {
     callback: (response) => {
       if (response.error) {
         console.error("Google 認証エラー:", response.error);
-        setAuthState(null, null);
+        // リトライ可能ならスケジュール
+        if (refreshRetryCount < MAX_REFRESH_RETRIES) {
+          console.log(`サイレントリフレッシュをリトライします (${refreshRetryCount}/${MAX_REFRESH_RETRIES})`);
+          refreshTimerId = setTimeout(() => {
+            refreshTimerId = null;
+            attemptSilentRefresh();
+          }, REFRESH_RETRY_INTERVAL_MS);
+        } else {
+          setAuthState(null, null);
+        }
       } else {
         const expiresAt = Date.now() + response.expires_in * 1000;
         setAuthState(response.access_token, expiresAt);
@@ -181,11 +195,21 @@ export async function initGoogleAuth(): Promise<void> {
     },
     error_callback: (error) => {
       console.error("Google 認証エラー:", error);
-      // サイレントリフレッシュ失敗 → ログイン画面へ
+      // リトライ可能ならスケジュール
+      if (refreshRetryCount < MAX_REFRESH_RETRIES) {
+        console.log(`サイレントリフレッシュをリトライします (${refreshRetryCount}/${MAX_REFRESH_RETRIES})`);
+        refreshTimerId = setTimeout(() => {
+          refreshTimerId = null;
+          attemptSilentRefresh();
+        }, REFRESH_RETRY_INTERVAL_MS);
+      }
       resolveSilentRefresh?.();
       resolveSilentRefresh = null;
     },
   });
+
+  // タブのフォアグラウンド復帰時にトークンをチェック
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 
   if (authState.accessToken) {
     // 有効なトークンがある → リスナーに通知 + 自動更新タイマーをセット
@@ -211,6 +235,13 @@ function setAuthState(token: string | null, expiresAt: number | null) {
   authListeners.forEach((fn) => fn(token));
 }
 
+// サイレントリフレッシュを実行（リトライ付き）
+function attemptSilentRefresh() {
+  if (!tokenClient) return;
+  refreshRetryCount++;
+  tokenClient.requestAccessToken({ prompt: "" });
+}
+
 // トークン期限切れ前に自動更新をスケジュール
 function scheduleTokenRefresh(expiresAt: number | null) {
   // 既存タイマーをクリア
@@ -218,16 +249,42 @@ function scheduleTokenRefresh(expiresAt: number | null) {
     clearTimeout(refreshTimerId);
     refreshTimerId = null;
   }
+  // リフレッシュ成功時はリトライカウントをリセット
+  if (expiresAt) refreshRetryCount = 0;
+
   if (!expiresAt || !tokenClient) return;
 
   const delay = expiresAt - Date.now() - REFRESH_MARGIN_MS;
-  if (delay <= 0) return; // 既に余裕がない場合はスキップ
+  if (delay <= 0) return;
 
   refreshTimerId = setTimeout(() => {
     refreshTimerId = null;
-    // prompt: "" で同意済みユーザーはポップアップなしで更新
-    tokenClient?.requestAccessToken({ prompt: "" });
+    attemptSilentRefresh();
   }, delay);
+}
+
+// タブがフォアグラウンドに戻った時にトークン状態をチェック
+function handleVisibilityChange() {
+  if (document.visibilityState !== "visible") return;
+  if (isTauri() || !tokenClient || !hasPreviousConsent()) return;
+
+  // トークンが既に期限切れ → 即リフレッシュ
+  if (!authState.accessToken || !authState.expiresAt) {
+    attemptSilentRefresh();
+    return;
+  }
+
+  // 期限切れ間近（残り REFRESH_MARGIN_MS 以内）→ 即リフレッシュ
+  const remaining = authState.expiresAt - Date.now();
+  if (remaining < REFRESH_MARGIN_MS) {
+    attemptSilentRefresh();
+    return;
+  }
+
+  // タイマーが消えている場合（バックグラウンドで停止された）→ 再スケジュール
+  if (refreshTimerId === null) {
+    scheduleTokenRefresh(authState.expiresAt);
+  }
 }
 
 // サインイン
