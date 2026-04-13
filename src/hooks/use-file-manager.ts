@@ -189,7 +189,9 @@ export function useFileManager(authenticated: boolean) {
     (async () => {
       await refreshFiles();
       const lastFileId = localStorage.getItem("graphium_last_file");
-      if (lastFileId && !activeFileIdRef.current) {
+      // モバイル（768px 未満）ではキャプチャビューをデフォルトにするため、最後のファイルを復元しない
+      const isMobile = window.innerWidth < 768;
+      if (lastFileId && !activeFileIdRef.current && !isMobile) {
         // ファイル一覧に存在するか確認（ゴミ箱内のファイルを開かないようにする）
         const currentFiles = await listFiles();
         if (currentFiles.some((f) => f.id === lastFileId)) {
