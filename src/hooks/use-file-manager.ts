@@ -33,6 +33,7 @@ import {
   renameMediaEntry,
   extractMediaFromBlocks,
   mimeToMediaType,
+  readMediaIndex,
   ensureMediaIndex,
   type MediaIndex,
   type MediaIndexEntry,
@@ -225,7 +226,25 @@ export function useFileManager(authenticated: boolean) {
     return () => { cancelled = true; };
   }, [authenticated, files, filesLoading]);
 
-  // メディアインデックスの初期構築（ノートインデックス構築後に実行）
+  // メディアインデックスの先行読み込み（既存ファイルから即座に取得 — モバイル高速表示用）
+  useEffect(() => {
+    if (!authenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const idx = await readMediaIndex();
+        if (!cancelled && idx && !mediaIndexRef.current) {
+          mediaIndexRef.current = idx;
+          setMediaIndex(idx);
+        }
+      } catch {
+        // 先行読み込み失敗は無視（後続の ensureMediaIndex で構築される）
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authenticated]);
+
+  // メディアインデックスの完全構築（ノートインデックス構築後に実行、先行読み込みを上書き）
   useEffect(() => {
     if (!authenticated || !noteIndex || files.length === 0) return;
     let cancelled = false;

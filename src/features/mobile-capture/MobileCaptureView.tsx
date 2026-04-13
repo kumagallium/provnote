@@ -1,15 +1,22 @@
 // モバイル専用クイックキャプチャビュー
-// メモ一覧（カード） + テキストメモ作成 + メディアキャプチャ（写真・動画・音声）
+// メモ + メディア（画像・動画・音声）を時系列カードで表示 + キャプチャバー
 
-import { useCallback, useRef, useState } from "react";
-import { StickyNote, Plus, Trash2, Camera, Video, Mic } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { StickyNote, Plus, Trash2, Camera, Video, Mic, Image, Volume2 } from "lucide-react";
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
+import type { MediaIndex, MediaIndexEntry } from "../asset-browser/media-index";
 import { formatRelativeTime } from "../navigation/recent-notes-store";
 import { useT } from "../../i18n";
 import { CaptureDialog } from "./CaptureDialog";
 
-// 付箋カード（1枚分）
-function CaptureCard({
+// ── 統合タイムラインアイテム ──
+
+type TimelineItem =
+  | { kind: "memo"; entry: CaptureEntry; timestamp: string }
+  | { kind: "media"; entry: MediaIndexEntry; timestamp: string };
+
+// メモカード
+function MemoCard({
   entry,
   onDelete,
 }: {
@@ -48,8 +55,39 @@ function CaptureCard({
   );
 }
 
+// メディアカード（サムネイル付き）
+function MediaCard({ entry }: { entry: MediaIndexEntry }) {
+  const icon = entry.type === "video" ? <Video size={20} /> :
+               entry.type === "audio" ? <Volume2 size={20} /> :
+               <Image size={20} />;
+
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
+      {entry.type === "image" ? (
+        <img
+          src={entry.thumbnailUrl}
+          alt={entry.name}
+          className="w-full h-24 object-cover bg-muted"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-full h-24 flex items-center justify-center bg-muted text-muted-foreground">
+          {icon}
+        </div>
+      )}
+      <div className="p-2">
+        <p className="text-[11px] text-foreground truncate">{entry.name}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {formatRelativeTime(entry.uploadedAt)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function MobileCaptureView({
   captureIndex,
+  mediaIndex,
   loading,
   onCreateCapture,
   onDeleteCapture,
@@ -57,10 +95,10 @@ export function MobileCaptureView({
   creating,
 }: {
   captureIndex: CaptureIndex | null;
+  mediaIndex?: MediaIndex | null;
   loading: boolean;
   onCreateCapture: (text: string) => Promise<void>;
   onDeleteCapture?: (captureId: string) => Promise<void>;
-  /** メディアファイルのアップロード（既存のアセットブラウザに保存） */
   onUploadMedia?: (file: File) => Promise<string>;
   creating: boolean;
 }) {
@@ -71,7 +109,23 @@ export function MobileCaptureView({
   const audioInputRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
-  const captures = captureIndex?.captures ?? [];
+  // メモ + メディアを時系列で統合
+  const timeline = useMemo(() => {
+    const items: TimelineItem[] = [];
+    // メモ
+    for (const entry of captureIndex?.captures ?? []) {
+      items.push({ kind: "memo", entry, timestamp: entry.createdAt });
+    }
+    // メディア（image, video, audio のみ。URL や PDF はスキップ）
+    for (const entry of mediaIndex?.media ?? []) {
+      if (entry.type === "image" || entry.type === "video" || entry.type === "audio") {
+        items.push({ kind: "media", entry, timestamp: entry.uploadedAt });
+      }
+    }
+    // 新しい順
+    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return items;
+  }, [captureIndex, mediaIndex]);
 
   // テキストメモ送信
   const handleSubmit = useCallback(
@@ -103,7 +157,6 @@ export function MobileCaptureView({
         console.error("メディアアップロードに失敗:", err);
       } finally {
         setUploading(false);
-        // input をリセット（同じファイルを再選択できるようにする）
         e.target.value = "";
       }
     },
@@ -116,17 +169,20 @@ export function MobileCaptureView({
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       {/* ヘッダー */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="text-base font-semibold text-foreground">
-          {t("memo.title")}
-        </h1>
+        <div className="flex items-center gap-2">
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="w-6 h-6" />
+          <h1 className="text-base font-semibold text-foreground">
+            Graphium
+          </h1>
+        </div>
         <span className="text-xs text-muted-foreground">
           {loading
-            ? t("nav.loadingNotes")
-            : t("memo.count", { count: String(captures.length) })}
+            ? t("common.loading")
+            : t("memo.count", { count: String(timeline.length) })}
         </span>
       </div>
 
-      {/* カード一覧 */}
+      {/* タイムライン一覧 */}
       <div className="flex-1 overflow-auto px-3 py-3">
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -134,7 +190,7 @@ export function MobileCaptureView({
               {t("common.loading")}
             </p>
           </div>
-        ) : captures.length === 0 ? (
+        ) : timeline.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <StickyNote size={32} className="text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
@@ -143,24 +199,30 @@ export function MobileCaptureView({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5">
-            {captures.map((entry) => (
-              <CaptureCard
-                key={entry.id}
-                entry={entry}
-                onDelete={
-                  onDeleteCapture
-                    ? () => handleDelete(entry.id)
-                    : undefined
-                }
-              />
-            ))}
+            {timeline.map((item) =>
+              item.kind === "memo" ? (
+                <MemoCard
+                  key={item.entry.id}
+                  entry={item.entry}
+                  onDelete={
+                    onDeleteCapture
+                      ? () => handleDelete(item.entry.id)
+                      : undefined
+                  }
+                />
+              ) : (
+                <MediaCard
+                  key={item.entry.fileId}
+                  entry={item.entry}
+                />
+              )
+            )}
           </div>
         )}
       </div>
 
       {/* クイックキャプチャバー */}
       <div className="border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {/* アップロード中のインジケーター */}
         {uploading && (
           <p className="text-xs text-muted-foreground text-center mb-2">
             {t("asset.uploading")}
@@ -205,7 +267,6 @@ export function MobileCaptureView({
                 <Mic size={20} />
               </button>
 
-              {/* hidden file inputs */}
               <input
                 ref={fileInputRef}
                 type="file"

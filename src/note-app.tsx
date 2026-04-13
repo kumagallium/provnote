@@ -1492,10 +1492,12 @@ export function NoteApp() {
   return (
     <div className="flex flex-col h-screen font-sans antialiased bg-background text-foreground">
       <UpdateBanner />
-      {/* モバイルヘッダー */}
-      <MobileHeader onMenuToggle={() => setSidebarOpen(true)} />
-      {/* モバイル: Sheet ドロワー */}
-      {!isDesktop && (
+      {/* モバイルヘッダー（メモ画面では非表示 — 記録特化体験） */}
+      {(isDesktop || fm.activeFileId) && (
+        <MobileHeader onMenuToggle={() => setSidebarOpen(true)} />
+      )}
+      {/* モバイル: Sheet ドロワー（メモ画面では非表示） */}
+      {!isDesktop && fm.activeFileId && (
         <Sheet open={sidebarOpen} onClose={() => setSidebarOpen(false)} side="left">
           <FileSidebar {...sidebarProps} />
         </Sheet>
@@ -1548,6 +1550,7 @@ export function NoteApp() {
           /* モバイル: ノート未選択時はクイックキャプチャビューを表示 */
           <MobileCaptureView
             captureIndex={capture.captureIndex}
+            mediaIndex={fm.mediaIndex}
             loading={capture.captureLoading}
             onCreateCapture={capture.handleCreateCapture}
             onDeleteCapture={capture.handleDeleteCapture}
