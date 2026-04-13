@@ -1,11 +1,231 @@
 // PC 向けメモギャラリービュー
-// サイドバーの「メモ」クリックで表示。カード一覧 + エディタへの挿入機能
+// サイドバーの「メモ」クリックで表示。カード一覧 + エディタへの挿入 + ネットワーク図
 
-import { useCallback, useState } from "react";
-import { StickyNote, Trash2, ClipboardCopy, Check } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { StickyNote, Trash2, ClipboardCopy, Network } from "lucide-react";
+import cytoscape from "cytoscape";
+import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
 import { formatRelativeTime } from "../navigation/recent-notes-store";
 import { useT } from "../../i18n";
+import { Modal, ModalHeader, ModalBody } from "../../ui/modal";
+
+// fcose レイアウト登録
+ensureCytoscapePlugins();
+
+// ── ネットワーク図 ──
+
+const GRAPH_BG = "#fafdf7";
+const MEMO_COLOR = "#c08b3e";
+const NOTE_COLOR = "#5b8fb9";
+const EDGE_COLOR = "#d4c9a8";
+
+const networkStyle: cytoscape.StylesheetStyle[] = [
+  {
+    selector: "node",
+    style: {
+      label: "data(label)",
+      "text-wrap": "wrap",
+      "text-max-width": "120px",
+      "font-size": "11px",
+      "font-family": "Inter, system-ui, sans-serif",
+      "text-valign": "bottom",
+      "text-margin-y": 6,
+      "background-color": "data(color)",
+      width: "data(size)",
+      height: "data(size)",
+      "border-width": 2,
+      "border-color": "data(borderColor)",
+      color: "#6b7f6e",
+      "transition-property": "background-color, border-color, opacity, width, height" as any,
+      "transition-duration": 200,
+    },
+  },
+  {
+    selector: "node.hover",
+    style: { "border-width": 3, "overlay-opacity": 0.06, "overlay-color": "#000" },
+  },
+  {
+    selector: "node.faded",
+    style: { opacity: 0.15 },
+  },
+  {
+    selector: "edge",
+    style: {
+      width: 1.5,
+      "line-color": EDGE_COLOR,
+      "curve-style": "unbundled-bezier" as any,
+      "control-point-distances": 30,
+      "control-point-weights": 0.5,
+      opacity: 1,
+      "transition-property": "opacity, width, line-color" as any,
+      "transition-duration": 200,
+    },
+  },
+  {
+    selector: "edge.hover-connected",
+    style: { width: 2.5, "line-color": MEMO_COLOR, "z-index": 10 },
+  },
+  {
+    selector: "edge.faded",
+    style: { opacity: 0.08 },
+  },
+];
+
+function MemoNetworkModal({
+  open,
+  onClose,
+  captures,
+}: {
+  open: boolean;
+  onClose: () => void;
+  captures: CaptureEntry[];
+}) {
+  const t = useT();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<cytoscape.Core | null>(null);
+
+  useEffect(() => {
+    if (!open || !containerRef.current) return;
+
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return;
+
+      const elements: cytoscape.ElementDefinition[] = [];
+      const noteIds = new Set<string>();
+
+      // メモノードと、接続先のノートノード
+      for (const cap of captures) {
+        if (!cap.usedIn || cap.usedIn.length === 0) continue;
+        // メモノード（先頭 20 文字）
+        const memoLabel = cap.text.length > 20 ? cap.text.slice(0, 20) + "…" : cap.text;
+        elements.push({
+          data: {
+            id: cap.id,
+            label: memoLabel,
+            color: MEMO_COLOR,
+            borderColor: "#a67832",
+            size: 34,
+            isCenter: true,
+          },
+        });
+        for (const usage of cap.usedIn) {
+          if (!noteIds.has(usage.noteId)) {
+            noteIds.add(usage.noteId);
+            elements.push({
+              data: {
+                id: usage.noteId,
+                label: usage.noteTitle,
+                color: NOTE_COLOR,
+                borderColor: "#4a7da6",
+                size: 30,
+                isCenter: false,
+              },
+            });
+          }
+          elements.push({
+            data: {
+              id: `${cap.id}->${usage.noteId}`,
+              source: cap.id,
+              target: usage.noteId,
+            },
+          });
+        }
+      }
+
+      if (elements.length === 0) return;
+
+      if (cyRef.current) cyRef.current.destroy();
+
+      const cy = cytoscape({
+        container: containerRef.current,
+        elements,
+        style: networkStyle,
+        layout: { name: "preset" },
+        userZoomingEnabled: true,
+        userPanningEnabled: true,
+        boxSelectionEnabled: false,
+        wheelSensitivity: 0.3,
+        minZoom: 0.3,
+        maxZoom: 3,
+      });
+
+      const layout = cy.layout({
+        name: "fcose",
+        animate: true,
+        animationDuration: 600,
+        animationEasing: "ease-out-cubic" as any,
+        quality: "default",
+        randomize: true,
+        nodeRepulsion: 5000,
+        idealEdgeLength: 100,
+        edgeElasticity: 0.45,
+        gravity: 0.3,
+        nodeSeparation: 60,
+        padding: 30,
+      } as any);
+      layout.on("layoutstop", () => cy.fit(undefined, 20));
+      layout.run();
+
+      // ホバーエフェクト
+      cy.on("mouseover", "node", (evt) => {
+        const node = evt.target;
+        const neighborhood = node.neighborhood();
+        cy.elements().addClass("faded");
+        node.removeClass("faded").addClass("hover");
+        neighborhood.removeClass("faded");
+        neighborhood.edges().addClass("hover-connected");
+      });
+      cy.on("mouseout", "node", () => {
+        cy.elements().removeClass("faded hover hover-connected");
+      });
+
+      cyRef.current = cy;
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+    };
+  }, [open, captures]);
+
+  // usedIn のあるメモが1つもない場合
+  const hasUsage = captures.some((c) => c.usedIn && c.usedIn.length > 0);
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <div className="w-[600px]">
+        <ModalHeader onClose={onClose}>{t("memo.networkTitle")}</ModalHeader>
+        <ModalBody className="p-0">
+          {/* 凡例 */}
+          <div className="px-4 py-2 border-b border-border flex items-center gap-4 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: MEMO_COLOR }} />
+              {t("memo.title")}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: NOTE_COLOR }} />
+              {t("nav.noteColumn")}
+            </span>
+          </div>
+          {/* グラフ */}
+          {hasUsage ? (
+            <div ref={containerRef} className="w-full" style={{ height: 360, background: GRAPH_BG }} />
+          ) : (
+            <div className="flex items-center justify-center py-16" style={{ background: GRAPH_BG }}>
+              <p className="text-xs text-muted-foreground">{t("memo.networkEmpty")}</p>
+            </div>
+          )}
+        </ModalBody>
+      </div>
+    </Modal>
+  );
+}
+
+// ── メモカード ──
 
 function MemoCard({
   entry,
@@ -23,12 +243,9 @@ function MemoCard({
 
   return (
     <div className="bg-card border border-border rounded-lg p-4 group hover:border-primary/30 transition-colors">
-      {/* テキスト */}
       <p className="text-sm text-foreground whitespace-pre-wrap mb-2">
         {entry.text}
       </p>
-
-      {/* メタ情報 + アクション */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground">
@@ -66,7 +283,8 @@ function MemoCard({
   );
 }
 
-// 挿入確認ダイアログ
+// ── 挿入確認ダイアログ ──
+
 function InsertConfirmDialog({
   onInsertAndKeep,
   onInsertAndDelete,
@@ -111,6 +329,8 @@ function InsertConfirmDialog({
   );
 }
 
+// ── メインコンポーネント ──
+
 export function MemoGalleryView({
   captureIndex,
   loading,
@@ -124,13 +344,14 @@ export function MemoGalleryView({
   onBack: () => void;
   onInsertMemo?: (captureId: string, text: string, deleteAfter: boolean) => void;
   onDeleteMemo?: (captureId: string) => void;
-  /** ノートが開かれていない場合 true（挿入ボタンを無効化） */
   insertDisabled?: boolean;
 }) {
   const t = useT();
   const captures = captureIndex?.captures ?? [];
-  // 挿入確認ダイアログ用の state
   const [pendingInsert, setPendingInsert] = useState<{ id: string; text: string } | null>(null);
+  const [showNetwork, setShowNetwork] = useState(false);
+
+  const hasUsage = captures.some((c) => c.usedIn && c.usedIn.length > 0);
 
   const handleInsertAndKeep = useCallback(() => {
     if (!pendingInsert || !onInsertMemo) return;
@@ -158,6 +379,16 @@ export function MemoGalleryView({
         <span className="text-xs text-muted-foreground">
           {loading ? t("common.loading") : t("memo.count", { count: String(captures.length) })}
         </span>
+        {/* ネットワーク図ボタン */}
+        {hasUsage && (
+          <button
+            onClick={() => setShowNetwork(true)}
+            className="ml-auto p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={t("memo.networkTitle")}
+          >
+            <Network size={16} />
+          </button>
+        )}
       </div>
 
       {/* 挿入先のヒント */}
@@ -201,6 +432,13 @@ export function MemoGalleryView({
           onCancel={() => setPendingInsert(null)}
         />
       )}
+
+      {/* ネットワーク図モーダル */}
+      <MemoNetworkModal
+        open={showNetwork}
+        onClose={() => setShowNetwork(false)}
+        captures={captures}
+      />
     </div>
   );
 }
