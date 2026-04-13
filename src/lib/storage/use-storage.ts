@@ -16,6 +16,8 @@ export function useStorage() {
   const [providerVersion, setProviderVersion] = useState(0);
   // init 完了後に signIn を自動実行するフラグ
   const pendingSignInRef = useRef(false);
+  // init() が完了したかどうか
+  const initDoneRef = useRef(false);
 
   useEffect(() => {
     // プロバイダーを初期化
@@ -34,6 +36,7 @@ export function useStorage() {
     // 保存された設定がない場合はログイン画面を表示（init をスキップ）
     const hasSavedProvider = localStorage.getItem(STORAGE_KEY) !== null;
     if (!hasSavedProvider && !pendingSignInRef.current) {
+      initDoneRef.current = false;
       setAuthenticated(false);
       setLoading(false);
       return unsubscribe;
@@ -41,6 +44,7 @@ export function useStorage() {
 
     // プロバイダーを初期化（サイレントリフレッシュ等）
     p.init().then(() => {
+      initDoneRef.current = true;
       setAuthenticated(p.getAuthState().isSignedIn);
       setLoading(false);
       // 切り替えサインインが保留中なら実行
@@ -48,6 +52,10 @@ export function useStorage() {
         pendingSignInRef.current = false;
         p.signIn();
       }
+    }).catch((e) => {
+      console.error("ストレージ初期化エラー:", e);
+      initDoneRef.current = false;
+      setLoading(false);
     });
 
     return unsubscribe;
@@ -62,6 +70,7 @@ export function useStorage() {
         localStorage.removeItem("graphium-recent-notes");
         // init 完了後に signIn を自動実行するようフラグを立てる
         pendingSignInRef.current = true;
+        initDoneRef.current = false;
         setActiveProvider(providerId);
         setLoading(true);
         setProviderVersion((v) => v + 1);
@@ -70,6 +79,22 @@ export function useStorage() {
       // プロバイダー選択を永続化（モバイルのリダイレクト認証ではページがリロードされるため）
       if (providerId) {
         localStorage.setItem(STORAGE_KEY, providerId);
+      }
+      // init 未実行の場合は先に初期化してから signIn
+      if (!initDoneRef.current && provider) {
+        setLoading(true);
+        provider.init().then(() => {
+          initDoneRef.current = true;
+          setAuthenticated(provider.getAuthState().isSignedIn);
+          setLoading(false);
+          if (!provider.getAuthState().isSignedIn) {
+            provider.signIn();
+          }
+        }).catch((e) => {
+          console.error("ストレージ初期化エラー:", e);
+          setLoading(false);
+        });
+        return;
       }
       provider?.signIn();
     },
