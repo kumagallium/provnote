@@ -142,8 +142,8 @@ jobs:
           TAG="${{ needs.resolve-release.outputs.tag }}"
           REPO="${{ github.repository }}"
 
-          # 秘密鍵をデコードしてファイルに書き出し（base64 エンコードされた minisign 鍵）
-          echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '\n\r ' | base64 -d > /tmp/signing.key
+          # 秘密鍵をデコードしてファイルに書き出し（Node.js でシェル問題を回避）
+          node -e "require('fs').writeFileSync('/tmp/signing.key', Buffer.from(process.env.TAURI_SIGNING_PRIVATE_KEY, 'base64'))"
           echo "Key file size: $(wc -c < /tmp/signing.key) bytes"
           echo "Key file first line: $(head -1 /tmp/signing.key)"
 
