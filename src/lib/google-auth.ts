@@ -173,6 +173,7 @@ export async function initGoogleAuth(): Promise<void> {
     const hasPkceSession = webPkce.hasRefreshToken();
     if (hasPkceSession) {
       // 既に PKCE セッションがある → サーバー検出をスキップして PKCE 初期化
+      webPkce.onAuthChange((token) => authListeners.forEach((fn) => fn(token)));
       await webPkce.initPkceAuth();
       return;
     }
@@ -180,6 +181,9 @@ export async function initGoogleAuth(): Promise<void> {
     const pkceSupported = await webPkce.detectPkceSupport();
     if (pkceSupported) {
       console.log("PKCE サーバーを検出、Authorization Code フローを使用します");
+      // PKCE のイベントをメインのリスナー配列に転送
+      // （onAuthChange の登録が initGoogleAuth の完了前に行われるため）
+      webPkce.onAuthChange((token) => authListeners.forEach((fn) => fn(token)));
       await webPkce.initPkceAuth();
       return;
     }
@@ -413,9 +417,9 @@ export function getAccessToken(): string | null {
 }
 
 // 認証状態が変わったときのリスナー
+// PKCE のイベントは initGoogleAuth 内の転送リスナー経由で authListeners に到達する
 export function onAuthChange(fn: (token: string | null) => void): () => void {
   if (isTauri()) return desktop.onAuthChange(fn);
-  if (webPkce.isPkceAvailable()) return webPkce.onAuthChange(fn);
   authListeners.push(fn);
   return () => {
     authListeners = authListeners.filter((l) => l !== fn);
