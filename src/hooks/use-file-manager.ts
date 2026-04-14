@@ -103,6 +103,19 @@ export function useFileManager(authenticated: boolean) {
     }
   }, []);
 
+  // メディアインデックスを再読み込み（Pull-to-Refresh 用）
+  const refreshMediaIndex = useCallback(async () => {
+    try {
+      const idx = await readMediaIndex();
+      if (idx) {
+        mediaIndexRef.current = idx;
+        setMediaIndex(idx);
+      }
+    } catch (err) {
+      console.error("メディアインデックスの再読み込みに失敗:", err);
+    }
+  }, []);
+
   // ネットワークグラフを構築（全ノートの派生関係を取得）
   const rebuildGraph = useCallback(
     async (currentId: string | null, fileList: GraphiumFile[]) => {
@@ -670,6 +683,7 @@ export function useFileManager(authenticated: boolean) {
     setActiveAssetType,
     // アクション
     refreshFiles,
+    refreshMediaIndex,
     handleOpenFile,
     handleNewNote,
     handleNewFromTemplate,

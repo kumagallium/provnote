@@ -105,6 +105,18 @@ export function useCapture(authenticated: boolean) {
     }
   }, []);
 
+  // インデックスを再読み込み（Pull-to-Refresh 用）
+  const refreshCaptures = useCallback(async () => {
+    try {
+      const index = await readCaptureIndex();
+      const resolved = index ?? createEmptyCaptureIndex();
+      indexRef.current = resolved;
+      setCaptureIndex(resolved);
+    } catch (err) {
+      console.error("キャプチャ再読み込みに失敗:", err);
+    }
+  }, []);
+
   // メモのテキストを編集
   const handleEditCapture = useCallback(async (captureId: string, newText: string) => {
     try {
@@ -126,5 +138,6 @@ export function useCapture(authenticated: boolean) {
     handleDeleteCapture,
     handleEditCapture,
     handleRecordUsage,
+    refreshCaptures,
   };
 }

@@ -1567,6 +1567,9 @@ export function NoteApp() {
             onEditCapture={capture.handleEditCapture}
             onUploadMedia={fm.handleUploadMedia}
             onAddUrlBookmark={fm.handleAddUrlBookmark}
+            onRefresh={async () => {
+              await Promise.all([capture.refreshCaptures(), fm.refreshMediaIndex()]);
+            }}
             creating={capture.capturing}
           />
         ) : (

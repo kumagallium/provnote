@@ -2,7 +2,7 @@
 // メモ + メディア（画像・動画・音声）を時系列カードで表示 + キャプチャバー
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StickyNote, Plus, Trash2, Camera, Video, Mic, Image, Volume2, Search, X, Link } from "lucide-react";
+import { StickyNote, Plus, Trash2, Camera, Video, Mic, Image, Volume2, Search, X, Link, RefreshCw } from "lucide-react";
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
 import type { MediaIndex, MediaIndexEntry } from "../asset-browser/media-index";
 import { getFaviconUrl } from "../asset-browser/media-index";
@@ -243,6 +243,7 @@ export function MobileCaptureView({
   onEditCapture,
   onUploadMedia,
   onAddUrlBookmark,
+  onRefresh,
   creating,
 }: {
   captureIndex: CaptureIndex | null;
@@ -253,17 +254,60 @@ export function MobileCaptureView({
   onEditCapture?: (captureId: string, newText: string) => void;
   onUploadMedia?: (file: File) => Promise<string>;
   onAddUrlBookmark?: (entry: MediaIndexEntry) => void;
+  onRefresh?: () => Promise<void>;
   creating: boolean;
 }) {
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
   const [detailEntry, setDetailEntry] = useState<CaptureEntry | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const pulling = useRef(false);
   const t = useT();
+
+  const PULL_THRESHOLD = 60;
+
+  // Pull-to-Refresh ハンドラ
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+      pulling.current = true;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!pulling.current) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (dy > 0) {
+      setPullDistance(Math.min(dy * 0.5, 100));
+    } else {
+      pulling.current = false;
+      setPullDistance(0);
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(async () => {
+    if (!pulling.current) return;
+    pulling.current = false;
+    if (pullDistance >= PULL_THRESHOLD && onRefresh && !refreshing) {
+      setRefreshing(true);
+      setPullDistance(0);
+      try {
+        await onRefresh();
+      } finally {
+        setRefreshing(false);
+      }
+    } else {
+      setPullDistance(0);
+    }
+  }, [pullDistance, onRefresh, refreshing]);
 
   // メモ + メディアを時系列で統合
   const timeline = useMemo(() => {
@@ -373,8 +417,27 @@ export function MobileCaptureView({
         </div>
       )}
 
-      {/* タイムライン一覧 */}
-      <div className="flex-1 overflow-auto px-3 py-3">
+      {/* タイムライン一覧（Pull-to-Refresh 対応） */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto px-3 py-3"
+        onTouchStart={onRefresh ? handleTouchStart : undefined}
+        onTouchMove={onRefresh ? handleTouchMove : undefined}
+        onTouchEnd={onRefresh ? handleTouchEnd : undefined}
+      >
+        {/* Pull-to-Refresh インジケーター */}
+        {(pullDistance > 0 || refreshing) && (
+          <div
+            className="flex items-center justify-center transition-all duration-200"
+            style={{ height: refreshing ? 40 : pullDistance, overflow: "hidden" }}
+          >
+            <RefreshCw
+              size={18}
+              className={`text-muted-foreground ${refreshing ? "animate-spin" : ""}`}
+              style={{ opacity: refreshing ? 1 : Math.min(pullDistance / PULL_THRESHOLD, 1) }}
+            />
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <p className="text-sm text-muted-foreground">
