@@ -57,6 +57,32 @@ Then open the app normally.
 
 </details>
 
+### Mobile (iPhone / Android)
+
+Graphium works as a **Progressive Web App (PWA)** on mobile browsers. No app store download needed — just add it to your home screen for an app-like experience.
+
+#### Add to Home Screen (iPhone)
+
+1. Open **https://kumagallium.github.io/Graphium/** in Safari
+2. Tap the **Share** button (square with arrow)
+3. Scroll down and tap **"Add to Home Screen"**
+4. Tap **"Add"** — Graphium appears as an app icon
+
+Once added, Graphium launches in full-screen mode without the browser navigation bar.
+
+#### Mobile features
+
+| Feature | Description |
+|---------|-------------|
+| **Quick capture** | Tap the + button to jot down memos instantly |
+| **Memo editing** | Tap any memo card to view and edit its content |
+| **Photo / Video / Audio** | Capture media directly from the camera or microphone |
+| **URL bookmarks** | Save web links with automatic metadata preview |
+| **Media preview** | Tap image/video/audio cards to view or play them |
+| **Pull-to-refresh** | Pull down the timeline to sync latest data |
+
+The mobile view is optimized for quick data capture in the field. For full editing with context labels and provenance features, use the desktop or tablet view.
+
 ## Interoperability
 
 Graphium exports provenance as **[PROV-JSON-LD](https://www.w3.org/submissions/2024/SUBM-prov-jsonld-20240825/)** — a W3C standard built on Linked Data. This is not a proprietary format: any tool that understands PROV-DM or JSON-LD can consume Graphium's output. Provenance data is portable by design.
@@ -151,6 +177,7 @@ Google Drive sync works without any configuration. AI features require the backe
 - **Google Drive storage** — notes saved as `.graphium.json` files
 - **Google OAuth 2.0** authentication
 - **Desktop app** — Tauri-based native app with local file storage and Google Drive sync
+- **Mobile PWA** — Quick capture (memos, photos, video, audio, bookmarks) with pull-to-refresh and media preview
 
 ### Screenshots
 
