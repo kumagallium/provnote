@@ -168,28 +168,31 @@ export async function initGoogleAuth(): Promise<void> {
   }
 
   // セルフホスト環境: PKCE サーバーが利用可能かチェック
-  // PKCE の refresh_token がある場合は優先的にチェック
   if (!isMobile()) {
+    // PKCE のイベント転送を常に登録（リスナー登録タイミング問題の回避）
+    webPkce.onAuthChange((token) => authListeners.forEach((fn) => fn(token)));
+
     const hasPkceSession = webPkce.hasRefreshToken();
     if (hasPkceSession) {
-      // 既に PKCE セッションがある → サーバー検出をスキップして PKCE 初期化
-      webPkce.onAuthChange((token) => authListeners.forEach((fn) => fn(token)));
+      // 既に PKCE セッションがある → リフレッシュを試行
+      webPkce.markServerAvailable();
       await webPkce.initPkceAuth();
-      return;
-    }
-    // サーバー検出（初回のみ）
-    const pkceSupported = await webPkce.detectPkceSupport();
-    if (pkceSupported) {
-      console.log("PKCE サーバーを検出、Authorization Code フローを使用します");
-      // PKCE のイベントをメインのリスナー配列に転送
-      // （onAuthChange の登録が initGoogleAuth の完了前に行われるため）
-      webPkce.onAuthChange((token) => authListeners.forEach((fn) => fn(token)));
-      await webPkce.initPkceAuth();
-      return;
+      // リフレッシュ成功 → PKCE モードで続行
+      if (webPkce.isSignedIn()) return;
+      // リフレッシュ失敗 → refresh_token 無効、GIS にフォールバック
+      console.warn("PKCE リフレッシュ失敗、GIS フローにフォールバックします");
+    } else {
+      // サーバー検出（初回のみ）
+      const pkceSupported = await webPkce.detectPkceSupport();
+      if (pkceSupported) {
+        console.log("PKCE サーバーを検出、Authorization Code フローを使用します");
+        await webPkce.initPkceAuth();
+        return;
+      }
     }
   }
 
-  // PKCE 非対応環境: GIS Implicit Grant フォールバック
+  // PKCE 非対応環境 or PKCE リフレッシュ失敗: GIS Implicit Grant フォールバック
   await loadGisScript();
 
   // サイレントリフレッシュが必要か判定
