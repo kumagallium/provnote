@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StickyNote, Plus, Trash2, Camera, Video, Mic, Image, Volume2, Search, X, Link } from "lucide-react";
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
 import type { MediaIndex, MediaIndexEntry } from "../asset-browser/media-index";
+import { getFaviconUrl } from "../asset-browser/media-index";
 import { UrlBookmarkModal } from "../asset-browser/UrlBookmarkModal";
 import { formatRelativeTime } from "../navigation/recent-notes-store";
 import { useT } from "../../i18n";
@@ -179,6 +180,32 @@ function MemoCard({
 
 // メディアカード（サムネイル付き）
 function MediaCard({ entry }: { entry: MediaIndexEntry }) {
+  // URL ブックマークカード
+  if (entry.type === "url") {
+    const domain = entry.urlMeta?.domain ?? "";
+    return (
+      <a
+        href={entry.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="bg-card border border-border rounded-lg overflow-hidden block active:bg-muted/30 transition-colors"
+      >
+        <div className="w-full h-24 flex items-center justify-center bg-muted/50">
+          <img
+            src={getFaviconUrl(domain, 64)}
+            alt=""
+            className="w-10 h-10 rounded"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        </div>
+        <div className="p-2">
+          <p className="text-[11px] text-foreground truncate">{entry.name}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{domain}</p>
+        </div>
+      </a>
+    );
+  }
+
   const icon = entry.type === "video" ? <Video size={20} /> :
                entry.type === "audio" ? <Volume2 size={20} /> :
                <Image size={20} />;
@@ -245,9 +272,9 @@ export function MobileCaptureView({
     for (const entry of captureIndex?.captures ?? []) {
       items.push({ kind: "memo", entry, timestamp: entry.createdAt });
     }
-    // メディア（image, video, audio のみ。URL や PDF はスキップ）
+    // メディア（image, video, audio, url。PDF はスキップ）
     for (const entry of mediaIndex?.media ?? []) {
-      if (entry.type === "image" || entry.type === "video" || entry.type === "audio") {
+      if (entry.type === "image" || entry.type === "video" || entry.type === "audio" || entry.type === "url") {
         items.push({ kind: "media", entry, timestamp: entry.uploadedAt });
       }
     }
