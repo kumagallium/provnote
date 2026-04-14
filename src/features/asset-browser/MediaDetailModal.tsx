@@ -206,7 +206,7 @@ function UrlPreview({ entry }: { entry: MediaIndexEntry }) {
   );
 }
 
-function MediaPreview({ entry }: { entry: MediaIndexEntry }) {
+export function MediaPreview({ entry }: { entry: MediaIndexEntry }) {
   switch (entry.type) {
     case "image":
       return <ResolvedImage entry={entry} />;

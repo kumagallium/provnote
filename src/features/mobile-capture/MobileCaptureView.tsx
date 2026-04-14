@@ -6,6 +6,7 @@ import { StickyNote, Plus, Trash2, Camera, Video, Mic, Image, Volume2, Search, X
 import type { CaptureIndex, CaptureEntry } from "./capture-store";
 import type { MediaIndex, MediaIndexEntry } from "../asset-browser/media-index";
 import { getFaviconUrl } from "../asset-browser/media-index";
+import { MediaPreview } from "../asset-browser/MediaDetailModal";
 import { UrlBookmarkModal } from "../asset-browser/UrlBookmarkModal";
 import { formatRelativeTime } from "../navigation/recent-notes-store";
 import { useT } from "../../i18n";
@@ -135,6 +136,57 @@ function MobileMemoEditModal({
   );
 }
 
+// ── モバイル用メディアプレビューモーダル ──
+
+function MobileMediaPreviewModal({
+  entry,
+  onClose,
+}: {
+  entry: MediaIndexEntry;
+  onClose: () => void;
+}) {
+  const t = useT();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/50"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-background border-t border-border rounded-t-2xl shadow-2xl w-full max-h-[85dvh] flex flex-col overflow-hidden animate-slide-up">
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <p className="text-sm font-medium text-foreground truncate">{entry.name}</p>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none"
+          >
+            ✕
+          </button>
+        </div>
+        {/* プレビュー */}
+        <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-muted/30 min-h-[200px]">
+          <MediaPreview entry={entry} />
+        </div>
+        {/* フッター情報 */}
+        <div className="px-4 py-2 border-t border-border flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">
+            {entry.type === "url" ? entry.urlMeta?.domain ?? "" : entry.mimeType}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {formatRelativeTime(entry.uploadedAt)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // メモカード
 function MemoCard({
   entry,
@@ -179,16 +231,14 @@ function MemoCard({
 }
 
 // メディアカード（サムネイル付き）
-function MediaCard({ entry }: { entry: MediaIndexEntry }) {
+function MediaCard({ entry, onTap }: { entry: MediaIndexEntry; onTap?: () => void }) {
   // URL ブックマークカード
   if (entry.type === "url") {
     const domain = entry.urlMeta?.domain ?? "";
     return (
-      <a
-        href={entry.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="bg-card border border-border rounded-lg overflow-hidden block active:bg-muted/30 transition-colors"
+      <div
+        className="bg-card border border-border rounded-lg overflow-hidden cursor-pointer active:bg-muted/30 transition-colors"
+        onClick={() => onTap?.()}
       >
         <div className="w-full h-24 flex items-center justify-center bg-muted/50">
           <img
@@ -202,7 +252,7 @@ function MediaCard({ entry }: { entry: MediaIndexEntry }) {
           <p className="text-[11px] text-foreground truncate">{entry.name}</p>
           <p className="text-[10px] text-muted-foreground truncate">{domain}</p>
         </div>
-      </a>
+      </div>
     );
   }
 
@@ -211,7 +261,10 @@ function MediaCard({ entry }: { entry: MediaIndexEntry }) {
                <Image size={20} />;
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
+    <div
+      className="bg-card border border-border rounded-lg overflow-hidden cursor-pointer active:bg-muted/30 transition-colors"
+      onClick={() => onTap?.()}
+    >
       {entry.type === "image" ? (
         <img
           src={entry.thumbnailUrl}
@@ -260,6 +313,7 @@ export function MobileCaptureView({
   const [showCaptureDialog, setShowCaptureDialog] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
   const [detailEntry, setDetailEntry] = useState<CaptureEntry | null>(null);
+  const [mediaPreviewEntry, setMediaPreviewEntry] = useState<MediaIndexEntry | null>(null);
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -469,6 +523,7 @@ export function MobileCaptureView({
                 <MediaCard
                   key={item.entry.fileId}
                   entry={item.entry}
+                  onTap={() => setMediaPreviewEntry(item.entry)}
                 />
               )
             )}
@@ -595,6 +650,14 @@ export function MobileCaptureView({
             setShowBookmarkModal(false);
           }}
           onClose={() => setShowBookmarkModal(false)}
+        />
+      )}
+
+      {/* メディアプレビューモーダル */}
+      {mediaPreviewEntry && (
+        <MobileMediaPreviewModal
+          entry={mediaPreviewEntry}
+          onClose={() => setMediaPreviewEntry(null)}
         />
       )}
     </div>
