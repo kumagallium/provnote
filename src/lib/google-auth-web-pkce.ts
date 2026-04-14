@@ -166,11 +166,6 @@ async function exchangeCode(
 
   const data = await res.json();
   const expiresAt = Date.now() + data.expires_in * 1000;
-  if (import.meta.env.DEV) {
-    console.log("[web-pkce] Token exchange result:",
-      "has_access_token:", !!data.access_token,
-      "has_refresh_token:", !!data.refresh_token);
-  }
   setAuthState(data.access_token, data.refresh_token ?? null, expiresAt);
 }
 
