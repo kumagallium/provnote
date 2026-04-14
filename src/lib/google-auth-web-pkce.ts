@@ -195,7 +195,11 @@ async function refreshAccessToken(): Promise<void> {
 // --- コールバックのリダイレクト URI ---
 
 function getCallbackRedirectUri(): string {
-  // サーバーのコールバック URL を使用
+  // dev 環境: Vite (5174) と backend (3001) が別ポートなので backend に直接リダイレクト
+  // 本番環境: 同一オリジンなのでそのまま使用
+  if (import.meta.env.DEV) {
+    return "http://localhost:3001/api/auth/callback";
+  }
   return `${window.location.origin}/api/auth/callback`;
 }
 
