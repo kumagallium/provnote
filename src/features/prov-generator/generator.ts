@@ -13,10 +13,12 @@ import { buildDocumentProvenanceBundle, type DocumentProvenanceBundle } from "..
 
 // ── PROV-JSON-LD の型定義（Phase 3: 埋め込み形式） ──
 
-/** 埋め込み属性（[属性] ラベルの段落テキスト） */
+/** 埋め込み属性（[属性] ラベルの段落テキスト、またはメディア子ブロック） */
 export type ProvAttribute = {
   "rdfs:label": string;
   "graphium:blockId"?: string;
+  "graphium:mediaUrl"?: string;
+  "graphium:mediaType"?: string;
 };
 
 export type ProvJsonLdNode = {
@@ -55,9 +57,13 @@ type InternalNode = {
   label: string;
   blockId: string;
   params?: Record<string, string>;
-  attributes?: { label: string; blockId: string }[];
+  attributes?: { label: string; blockId: string; mediaUrl?: string; mediaType?: string }[];
   /** Entity サブタイプ（material / tool） */
   entitySubtype?: import("../context-label/labels").EntitySubtype;
+  /** メディアブロックの種類（image / video / audio / pdf / file） */
+  mediaType?: string;
+  /** メディア URL */
+  mediaUrl?: string;
 };
 
 type InternalRelation = {
@@ -240,6 +246,19 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     return [scopeActId];
   }
 
+  /** メディアブロックの場合にラベル・mediaType・mediaUrl を返すヘルパー */
+  const MEDIA_BLOCK_TYPES_SET = new Set(["image", "video", "audio", "file", "pdf"]);
+  function getEntityLabelAndMedia(block: any): { label: string; mediaType?: string; mediaUrl?: string } {
+    if (MEDIA_BLOCK_TYPES_SET.has(block.type) && block.props?.url) {
+      const url: string = block.props.url;
+      const name = block.props.name
+        || decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
+        || block.id.slice(0, 8);
+      return { label: name, mediaType: block.type, mediaUrl: url };
+    }
+    return { label: getBlockText(block) };
+  }
+
   // ── [材料] / [ツール] → Entity + used 関係 ──
   // Phase 3: テーブルの場合は行ごとに個別 Entity に展開
   const INPUT_LABELS: CoreLabel[] = ["[材料]", "[ツール]"];
@@ -279,45 +298,20 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
           }
         }
       } else {
-        // 段落: 従来通り
+        // 段落・メディア: ヘルパーでラベルとメディア属性を取得
         const entityId = `entity_${lb.block.id}`;
+        const { label: entityLabel, mediaType, mediaUrl } = getEntityLabelAndMedia(lb.block);
         nodes.push({
           "@id": entityId,
           "@type": "prov:Entity",
-          label: getBlockText(lb.block),
+          label: entityLabel,
           blockId: lb.block.id,
           entitySubtype: subtype,
+          mediaType,
+          mediaUrl,
         });
         for (const actId of getActivityIdsForScope(lb.block.id)) {
           relations.push({ "@type": "prov:used", from: actId, to: entityId });
-        }
-      }
-    }
-  }
-
-  // ── [属性] → 親ノードの graphium:attributes に埋め込み ──
-  // 独立ノードは作らず、親の Entity/Activity のプロパティとして格納
-  for (const lb of labeledBlocks) {
-    if (lb.coreLabel === "[属性]") {
-      const attrText = getBlockText(lb.block);
-      const attrEntry = { label: attrText, blockId: lb.block.id };
-
-      // 親ブロックの PROV ノードを探す
-      const parentNodeId = findParentLabeledNodeId(lb.block.id, blocks, labels, labeledBlocks);
-      if (parentNodeId) {
-        const parentNode = nodes.find((n) => n["@id"] === parentNodeId);
-        if (parentNode) {
-          if (!parentNode.attributes) parentNode.attributes = [];
-          parentNode.attributes.push(attrEntry);
-        }
-      } else {
-        // 親がない場合はスコープの Activity に埋め込む
-        for (const actId of getActivityIdsForScope(lb.block.id)) {
-          const actNode = nodes.find((n) => n["@id"] === actId);
-          if (actNode) {
-            if (!actNode.attributes) actNode.attributes = [];
-            actNode.attributes.push(attrEntry);
-          }
         }
       }
     }
@@ -345,27 +339,197 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
           }
         } else {
           const entityId = `result_${lb.block.id}`;
+          const { label: entityLabel, mediaType, mediaUrl } = getEntityLabelAndMedia(lb.block);
           nodes.push({
             "@id": entityId,
             "@type": "prov:Entity",
-            label: getBlockText(lb.block),
+            label: entityLabel,
             blockId: lb.block.id,
+            mediaType,
+            mediaUrl,
           });
           for (const actId of getActivityIdsForScope(lb.block.id)) {
             relations.push({ "@type": "prov:wasGeneratedBy", from: entityId, to: actId });
           }
         }
       } else {
+        // 段落・メディア
         const entityId = `result_${lb.block.id}`;
+        const { label: entityLabel, mediaType, mediaUrl } = getEntityLabelAndMedia(lb.block);
         nodes.push({
           "@id": entityId,
           "@type": "prov:Entity",
-          label: getBlockText(lb.block),
+          label: entityLabel,
           blockId: lb.block.id,
+          mediaType,
+          mediaUrl,
         });
         for (const actId of getActivityIdsForScope(lb.block.id)) {
           relations.push({ "@type": "prov:wasGeneratedBy", from: entityId, to: actId });
         }
+      }
+    }
+  }
+
+  // ── [属性] → 親ノードの graphium:attributes に埋め込み ──
+  // 独立ノードは作らず、親の Entity/Activity のプロパティとして格納
+  // ※ [結果] ノード生成後に実行する（result_ ノードを参照するため）
+  for (const lb of labeledBlocks) {
+    if (lb.coreLabel === "[属性]") {
+      // メディアブロックの場合はファイル名・URL・タイプを取得
+      const { label: attrLabel, mediaUrl, mediaType } = getEntityLabelAndMedia(lb.block);
+      const attrEntry = { label: attrLabel, blockId: lb.block.id, mediaUrl, mediaType };
+
+      // 親ブロックの PROV ノードを探す
+      const parentNodeId = findParentLabeledNodeId(lb.block.id, blocks, labels, labeledBlocks);
+      if (parentNodeId) {
+        const parentNode = nodes.find((n) => n["@id"] === parentNodeId);
+        if (parentNode) {
+          if (!parentNode.attributes) parentNode.attributes = [];
+          parentNode.attributes.push(attrEntry);
+        }
+      } else {
+        // 親がない場合はスコープの Activity に埋め込む
+        for (const actId of getActivityIdsForScope(lb.block.id)) {
+          const actNode = nodes.find((n) => n["@id"] === actId);
+          if (actNode) {
+            if (!actNode.attributes) actNode.attributes = [];
+            actNode.attributes.push(attrEntry);
+          }
+        }
+      }
+    }
+  }
+
+  // ── ラベルなしメディアブロック → 祖先 Entity の属性として埋め込み ──
+  // ブロックツリーの親子関係を辿り、[材料]/[ツール]/[結果] の祖先があれば
+  // その Entity の属性として埋め込む。
+
+  const MEDIA_BLOCK_TYPES = ["image", "video", "audio", "file", "pdf"];
+  const ENTITY_LABEL_SET: CoreLabel[] = ["[材料]", "[ツール]", "[結果]"];
+
+  // ラベルなしメディアブロックの祖先を探して属性として埋め込む
+  const embeddedMediaIds = new Set<string>();
+
+  for (const block of flatBlocks) {
+    // ラベル付き or 非メディア → スキップ
+    if (labels.has(block.id)) continue;
+    if (!MEDIA_BLOCK_TYPES.includes(block.type)) continue;
+    if (!block.props?.url) continue;
+
+    // ブロックツリーを遡って [材料]/[ツール]/[結果] の祖先を探す
+    const parentNodeId = findParentLabeledNodeId(block.id, blocks, labels, labeledBlocks);
+    if (!parentNodeId) continue;
+
+    const url: string = block.props.url;
+    const mediaName = block.props.name
+      || decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
+      || block.id.slice(0, 8);
+
+    // 親ノードを探す（テーブル展開時は複数行 Entity がある → 全行に付与）
+    const parentNodes = nodes.filter((n) =>
+      n["@id"] === parentNodeId || n["@id"].startsWith(`${parentNodeId}_`)
+    );
+
+    for (const parentNode of parentNodes) {
+      if (!parentNode.attributes) parentNode.attributes = [];
+      parentNode.attributes.push({
+        label: mediaName,
+        blockId: block.id,
+        mediaUrl: url,
+        mediaType: block.type,
+      });
+    }
+
+    embeddedMediaIds.add(block.id);
+  }
+
+  // ── メディアブロック → Entity（ラベル付きセクション内、かつ子ブロックでないもの） ──
+  // フラットブロックを走査し、直前のラベルコンテキスト（[材料]/[ツール]/[結果]）を追跡。
+  // メディアブロックがラベル付きセクション内にあれば PROV Entity として生成する。
+  // 同一 URL のメディアは 1 Entity にまとめ、複数の prov:used/wasGeneratedBy を付与。
+  // ※ 子ブロックとして既に親の属性に埋め込まれたメディアは除外。
+
+  type EntityLabelContext = { coreLabel: CoreLabel };
+
+  let currentEntityLabel: EntityLabelContext | null = null;
+  // URL → デデュプ情報（同一メディアを 1 Entity にまとめる）
+  const mediaEntityMap = new Map<string, {
+    entityId: string;
+    activityIds: Set<string>;
+    coreLabel: CoreLabel;
+  }>();
+
+  for (const block of flatBlocks) {
+    // ラベルコンテキストの更新
+    const rawLabel = labels.get(block.id);
+    if (rawLabel) {
+      const normalized = normalizeLabel(rawLabel);
+      if (ENTITY_LABEL_SET.includes(normalized as CoreLabel)) {
+        currentEntityLabel = { coreLabel: normalized as CoreLabel };
+      } else {
+        // [手順] や [属性] など他のコアラベルはメディアのコンテキストをリセット
+        currentEntityLabel = null;
+      }
+    }
+
+    // 見出しブロックでコンテキストをリセット（新しいセクションの開始）
+    if (block.type === "heading" && !rawLabel) {
+      currentEntityLabel = null;
+    }
+
+    // メディアブロックの検出（子ブロックとして既に処理済みのものは除外）
+    if (
+      MEDIA_BLOCK_TYPES.includes(block.type) &&
+      block.props?.url &&
+      currentEntityLabel &&
+      !embeddedMediaIds.has(block.id)
+    ) {
+      const url: string = block.props.url;
+      const actIds = getActivityIdsForScope(block.id);
+      const { coreLabel } = currentEntityLabel;
+
+      if (mediaEntityMap.has(url)) {
+        // 同一メディア → Activity 関係のみ追加
+        const existing = mediaEntityMap.get(url)!;
+        for (const actId of actIds) {
+          existing.activityIds.add(actId);
+        }
+      } else {
+        // 新規メディア Entity を生成
+        const prefix = coreLabel === "[結果]" ? "result_media" : "entity_media";
+        const entityId = `${prefix}_${block.id}`;
+        const mediaName = block.props.name
+          || decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
+          || block.id.slice(0, 8);
+
+        const subtype = LABEL_TO_ENTITY_SUBTYPE[coreLabel];
+        nodes.push({
+          "@id": entityId,
+          "@type": "prov:Entity",
+          label: mediaName,
+          blockId: block.id,
+          entitySubtype: subtype,
+          mediaType: block.type,
+          mediaUrl: url,
+        });
+
+        mediaEntityMap.set(url, {
+          entityId,
+          activityIds: new Set(actIds),
+          coreLabel,
+        });
+      }
+    }
+  }
+
+  // メディア Entity の PROV 関係を生成
+  for (const [, info] of mediaEntityMap) {
+    for (const actId of info.activityIds) {
+      if (info.coreLabel === "[結果]") {
+        relations.push({ "@type": "prov:wasGeneratedBy", from: info.entityId, to: actId });
+      } else {
+        relations.push({ "@type": "prov:used", from: actId, to: info.entityId });
       }
     }
   }
@@ -441,18 +605,34 @@ function buildProvJsonLd(
     if (n.entitySubtype) {
       jsonLdNode["graphium:entityType"] = n.entitySubtype;
     }
+    // メディア Entity のプロパティ
+    if (n.mediaType) {
+      jsonLdNode["graphium:mediaType"] = n.mediaType;
+    }
+    if (n.mediaUrl) {
+      jsonLdNode["graphium:mediaUrl"] = n.mediaUrl;
+    }
     // 構造化属性（テーブルから展開された params）
     if (n.params) {
       for (const [k, v] of Object.entries(n.params)) {
         jsonLdNode[`graphium:${k}` as `graphium:${string}`] = v;
       }
     }
-    // 埋め込み属性（[属性] ラベルの段落テキスト）
+    // 埋め込み属性（[属性] ラベルの段落テキスト、メディア子ブロック）
     if (n.attributes && n.attributes.length > 0) {
-      jsonLdNode["graphium:attributes"] = n.attributes.map((a) => ({
-        "rdfs:label": a.label,
-        "graphium:blockId": a.blockId,
-      }));
+      jsonLdNode["graphium:attributes"] = n.attributes.map((a) => {
+        const attr: ProvAttribute = {
+          "rdfs:label": a.label,
+          "graphium:blockId": a.blockId,
+        };
+        if (a.mediaUrl) {
+          attr["graphium:mediaUrl"] = a.mediaUrl;
+        }
+        if (a.mediaType) {
+          attr["graphium:mediaType"] = a.mediaType;
+        }
+        return attr;
+      });
     }
     nodeMap.set(n["@id"], jsonLdNode);
   }
@@ -542,13 +722,22 @@ function extractCellText(cell: any): string {
   return "";
 }
 
-/** InlineContent 配列からテキストを結合 */
+/** InlineContent 配列からテキストを結合（リンク・画像の URL も抽出） */
 function extractInlineText(inlines: any[]): string {
   if (!Array.isArray(inlines)) return "";
   return inlines
     .map((inline: any) => {
       if (typeof inline === "string") return inline;
       if (inline.type === "text") return inline.text ?? "";
+      // リンク: テキストがあればテキスト、なければ href
+      if (inline.type === "link") {
+        const linkText = extractInlineText(inline.content ?? []);
+        return linkText || (inline.href ?? "");
+      }
+      // 画像インライン: URL を返す
+      if (inline.type === "image" && inline.props?.url) {
+        return inline.props.url;
+      }
       return "";
     })
     .join("")
