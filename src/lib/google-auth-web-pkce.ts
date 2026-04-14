@@ -4,10 +4,14 @@
 
 import { apiBase } from "./platform";
 
+// PKCE フローには client_secret が必要なため、Desktop 用のクライアント資格情報を使用
+// （Web 用 client_id には client_secret が存在しない）
 const DEFAULT_CLIENT_ID =
   "743366655410-p5k3us8jof0ni4tintbkliq6dqhan13d.apps.googleusercontent.com";
 const CLIENT_ID =
-  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_CLIENT_ID;
+  (import.meta.env.VITE_GOOGLE_DESKTOP_CLIENT_ID as string) ||
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+  DEFAULT_CLIENT_ID;
 
 const SCOPES =
   "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";

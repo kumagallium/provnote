@@ -7,9 +7,11 @@
 import { Hono } from "hono";
 
 // Google OAuth 設定（サーバー側でトークン交換するため client_secret が必要）
+// PKCE フローでは Desktop 用の client_id + client_secret ペアを使用
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const CLIENT_ID =
   process.env.GOOGLE_CLIENT_ID ??
+  process.env.VITE_GOOGLE_DESKTOP_CLIENT_ID ??
   process.env.VITE_GOOGLE_CLIENT_ID ??
   "743366655410-p5k3us8jof0ni4tintbkliq6dqhan13d.apps.googleusercontent.com";
 const CLIENT_SECRET =
