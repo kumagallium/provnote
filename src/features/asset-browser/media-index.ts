@@ -477,6 +477,21 @@ export function generateUrlBookmarkId(): string {
   return `url_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** 指定 URL を参照しているメディアブロックの ID リストを返す */
+export function findBlockIdsByMediaUrl(blocks: any[], targetUrl: string): string[] {
+  const ids: string[] = [];
+  const MEDIA_TYPES = new Set(["image", "video", "audio", "file", "pdf"]);
+  for (const block of blocks) {
+    if (MEDIA_TYPES.has(block.type) && block.props?.url === targetUrl) {
+      ids.push(block.id);
+    }
+    if (block.children?.length) {
+      ids.push(...findBlockIdsByMediaUrl(block.children, targetUrl));
+    }
+  }
+  return ids;
+}
+
 /** ノートのブロックからメディア URL → blockId のマップを構築 */
 export function extractMediaFromBlocks(blocks: any[]): Map<string, string> {
   const map = new Map<string, string>();
