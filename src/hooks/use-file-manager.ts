@@ -648,7 +648,27 @@ export function useFileManager(authenticated: boolean) {
 
     // 参照ノートのブロック props.name を一括更新
     const noteIds = new Set(entry.usedIn.map((u) => u.noteId));
+    const activeId = activeFileIdRef.current;
+
+    // 現在開いているノートはキャッシュから即座に更新（楽観的更新）
+    if (activeId && noteIds.has(activeId)) {
+      const cached = docCacheRef.current.get(activeId);
+      if (cached) {
+        let changed = false;
+        for (const page of cached.pages) {
+          changed = updateBlockNameByUrl(page.blocks, entry.url, newName) || changed;
+        }
+        if (changed) {
+          setActiveDoc({ ...cached });
+          setEditorKey((k) => k + 1);
+          saveFile(activeId, cached).catch((err) => console.warn(`ブロック名保存失敗 (activeNote):`, err));
+        }
+      }
+    }
+
+    // 他のノートはバックグラウンドで更新
     for (const noteId of noteIds) {
+      if (noteId === activeId) continue;
       try {
         const doc = await loadFile(noteId);
         let changed = false;
@@ -658,10 +678,6 @@ export function useFileManager(authenticated: boolean) {
         if (changed) {
           await saveFile(noteId, doc);
           docCacheRef.current.set(noteId, doc);
-          // 現在開いているノートなら activeDoc も更新（エディタ再マウント時に反映）
-          if (noteId === activeFileIdRef.current) {
-            setActiveDoc(doc);
-          }
         }
       } catch (err) {
         console.warn(`ブロック名更新失敗 (noteId=${noteId}):`, err);
