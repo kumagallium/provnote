@@ -112,6 +112,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // モデル追加フォーム
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addMode, setAddMode] = useState<"new" | "existing">("new");
+  const [sourceModelId, setSourceModelId] = useState<string | null>(null);
   const [addProvider, setAddProvider] = useState("anthropic");
   const [addApiKey, setAddApiKey] = useState("");
   const [addApiBase, setAddApiBase] = useState("");
@@ -122,6 +124,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [modelDisplayName, setModelDisplayName] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
+
+  // 既存プロバイダーグループ（provider + apiBase でグループ化）
+  type ProviderGroup = { provider: string; apiBase: string; label: string; representativeId: string };
+  const providerGroups: ProviderGroup[] = (() => {
+    const seen = new Map<string, ProviderGroup>();
+    for (const m of models) {
+      const key = `${m.provider}::${m.api_base}`;
+      if (!seen.has(key)) {
+        const providerName = PROVIDERS.find((p) => p.id === m.provider)?.name ?? m.provider;
+        const label = m.api_base ? `${providerName} (${m.api_base})` : providerName;
+        seen.set(key, { provider: m.provider, apiBase: m.api_base, label, representativeId: m.id });
+      }
+    }
+    return Array.from(seen.values());
+  })();
 
   // 削除確認
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -191,6 +208,36 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // ── モデル追加フロー ──
   const handleFetchAvailable = useCallback(async () => {
+    // 既存プロバイダーモードの場合は source_model_id を使う
+    if (addMode === "existing" && sourceModelId) {
+      setFetchingAvailable(true);
+      setAddError("");
+      setAvailableModels([]);
+      try {
+        const res = await fetch(`${apiBase()}/models/available`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_model_id: sourceModelId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Error ${res.status}`);
+        }
+        const data = await res.json();
+        setAvailableModels(data.models ?? []);
+        if (data.models?.length > 0) {
+          setSelectedModelId(data.models[0]);
+          setModelDisplayName(data.models[0]);
+        }
+      } catch (err) {
+        setAddError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setFetchingAvailable(false);
+      }
+      return;
+    }
+
+    // 新規プロバイダーモード
     if (!addApiKey.trim()) {
       setAddError(t("settings.addModel.apiKeyRequired"));
       return;
@@ -224,7 +271,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } finally {
       setFetchingAvailable(false);
     }
-  }, [addProvider, addApiKey, addApiBase, t]);
+  }, [addMode, sourceModelId, addProvider, addApiKey, addApiBase, t]);
 
   const handleAddModel = useCallback(async () => {
     const modelId = customModelId.trim() || selectedModelId;
@@ -235,16 +282,23 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setAdding(true);
     setAddError("");
     try {
+      // 既存プロバイダーモードでは source_model_id を使い、apiKey は送信しない
+      const reqBody: Record<string, string | undefined> = {
+        model_name: modelDisplayName.trim() || modelId,
+        provider: addProvider,
+        model_id: modelId,
+      };
+      if (addMode === "existing" && sourceModelId) {
+        reqBody.source_model_id = sourceModelId;
+      } else {
+        reqBody.api_key = addApiKey.trim();
+        reqBody.api_base = addApiBase.trim() || undefined;
+      }
+
       const res = await fetch(`${apiBase()}/models`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model_name: modelDisplayName.trim() || modelId,
-          provider: addProvider,
-          model_id: modelId,
-          api_key: addApiKey.trim(),
-          api_base: addApiBase.trim() || undefined,
-        }),
+        body: JSON.stringify(reqBody),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -252,6 +306,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }
       // 成功 → フォームリセット、一覧更新
       setShowAddForm(false);
+      setAddMode("new");
+      setSourceModelId(null);
       setAddProvider("anthropic");
       setAddApiKey("");
       setAddApiBase("");
@@ -265,7 +321,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } finally {
       setAdding(false);
     }
-  }, [addProvider, addApiKey, addApiBase, selectedModelId, customModelId, modelDisplayName, refreshModels, t]);
+  }, [addMode, sourceModelId, addProvider, addApiKey, addApiBase, selectedModelId, customModelId, modelDisplayName, refreshModels, t]);
 
   const handleDeleteModel = useCallback(async (id: string) => {
     try {
@@ -530,7 +586,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <h3 className="text-xs font-semibold text-foreground">{t("settings.models.title")}</h3>
                 {!showAddForm && (
                   <button
-                    onClick={() => setShowAddForm(true)}
+                    onClick={() => { setShowAddForm(true); setAddMode(models.length > 0 ? "existing" : "new"); }}
                     className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
                   >
                     <Plus size={14} /> {t("settings.models.add")}
@@ -546,7 +602,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className="rounded-lg border border-dashed border-border p-4 text-center">
                   <p className="text-xs text-muted-foreground mb-2">{t("settings.models.empty")}</p>
                   <button
-                    onClick={() => setShowAddForm(true)}
+                    onClick={() => { setShowAddForm(true); setAddMode(models.length > 0 ? "existing" : "new"); }}
                     className="text-xs text-primary hover:text-primary/80 font-medium"
                   >
                     <Plus size={12} className="inline mr-1" />{t("settings.models.addFirst")}
@@ -625,66 +681,151 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                 <h4 className="text-xs font-semibold text-foreground">{t("settings.addModel.title")}</h4>
 
-                {/* ステップ1: プロバイダー + API キー */}
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.provider")}</label>
-                  <div className="relative">
-                    <select
-                      value={addProvider}
-                      onChange={(e) => {
-                        setAddProvider(e.target.value);
+                {/* モード切り替え（既存プロバイダーがある場合のみ表示） */}
+                {providerGroups.length > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setAddMode("existing");
                         setAvailableModels([]);
                         setSelectedModelId("");
                         setCustomModelId("");
                         setAddError("");
                       }}
-                      className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm"
+                      className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                        addMode === "existing"
+                          ? "border-primary bg-primary/10 text-primary font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
                     >
-                      {PROVIDERS.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      {t("settings.addModel.useExisting")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAddMode("new");
+                        setSourceModelId(null);
+                        setAvailableModels([]);
+                        setSelectedModelId("");
+                        setCustomModelId("");
+                        setAddError("");
+                      }}
+                      className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                        addMode === "new"
+                          ? "border-primary bg-primary/10 text-primary font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t("settings.addModel.newProvider")}
+                    </button>
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.apiKey")}</label>
-                  <Input
-                    type="password"
-                    value={addApiKey}
-                    onChange={(e) => setAddApiKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="font-mono text-sm"
-                  />
-                </div>
+                {/* 既存プロバイダーモード */}
+                {addMode === "existing" && providerGroups.length > 0 ? (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.selectProvider")}</label>
+                      <div className="space-y-1">
+                        {providerGroups.map((g) => (
+                          <button
+                            key={g.representativeId}
+                            onClick={() => {
+                              setSourceModelId(g.representativeId);
+                              setAddProvider(g.provider);
+                              setAvailableModels([]);
+                              setSelectedModelId("");
+                              setCustomModelId("");
+                              setAddError("");
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs rounded-md border transition-colors ${
+                              sourceModelId === g.representativeId
+                                ? "border-primary bg-primary/10 text-primary font-medium"
+                                : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                            }`}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                {/* API Base URL（openai-compatible の場合は必須、他はオプション） */}
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1 block">
-                    API Base URL
-                    {addProvider === "openai-compatible" && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-                  <Input
-                    type="url"
-                    value={addApiBase}
-                    onChange={(e) => setAddApiBase(e.target.value)}
-                    placeholder={API_BASE_HINTS[addProvider] ?? ""}
-                  />
-                </div>
+                    <Button
+                      size="sm"
+                      onClick={handleFetchAvailable}
+                      disabled={fetchingAvailable || !sourceModelId}
+                      className="w-full"
+                    >
+                      {fetchingAvailable ? (
+                        <><Loader2 size={14} className="animate-spin mr-1" /> {t("settings.addModel.fetching")}</>
+                      ) : (
+                        t("settings.addModel.fetchModels")
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {/* 新規プロバイダーモード: プロバイダー + API キー */}
+                    <div>
+                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.provider")}</label>
+                      <div className="relative">
+                        <select
+                          value={addProvider}
+                          onChange={(e) => {
+                            setAddProvider(e.target.value);
+                            setAvailableModels([]);
+                            setSelectedModelId("");
+                            setCustomModelId("");
+                            setAddError("");
+                          }}
+                          className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm"
+                        >
+                          {PROVIDERS.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      </div>
+                    </div>
 
-                <Button
-                  size="sm"
-                  onClick={handleFetchAvailable}
-                  disabled={fetchingAvailable || !addApiKey.trim()}
-                  className="w-full"
-                >
-                  {fetchingAvailable ? (
-                    <><Loader2 size={14} className="animate-spin mr-1" /> {t("settings.addModel.fetching")}</>
-                  ) : (
-                    t("settings.addModel.fetchModels")
-                  )}
-                </Button>
+                    <div>
+                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.apiKey")}</label>
+                      <Input
+                        type="password"
+                        value={addApiKey}
+                        onChange={(e) => setAddApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="font-mono text-sm"
+                      />
+                    </div>
+
+                    {/* API Base URL（openai-compatible の場合は必須、他はオプション） */}
+                    <div>
+                      <label className="text-xs font-medium text-foreground mb-1 block">
+                        API Base URL
+                        {addProvider === "openai-compatible" && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      <Input
+                        type="url"
+                        value={addApiBase}
+                        onChange={(e) => setAddApiBase(e.target.value)}
+                        placeholder={API_BASE_HINTS[addProvider] ?? ""}
+                      />
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={handleFetchAvailable}
+                      disabled={fetchingAvailable || !addApiKey.trim()}
+                      className="w-full"
+                    >
+                      {fetchingAvailable ? (
+                        <><Loader2 size={14} className="animate-spin mr-1" /> {t("settings.addModel.fetching")}</>
+                      ) : (
+                        t("settings.addModel.fetchModels")
+                      )}
+                    </Button>
+                  </>
+                )}
 
                 {/* ステップ2: モデル選択 */}
                 {availableModels.length > 0 && (
@@ -756,6 +897,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <button
                   onClick={() => {
                     setShowAddForm(false);
+                    setAddMode("new");
+                    setSourceModelId(null);
                     setAddError("");
                     setAvailableModels([]);
                   }}
