@@ -646,13 +646,9 @@ export function useFileManager(authenticated: boolean) {
     setMediaIndex(updated);
     saveMediaIndex(updated).catch((err) => console.warn("メディアインデックス保存失敗:", err));
 
-    // 参照ノートのブロック props.name を更新（現在エディタで開いているノートは NoteApp 側で処理）
-    const otherNoteIds = new Set(
-      entry.usedIn
-        .map((u) => u.noteId)
-        .filter((id) => id !== activeFileIdRef.current),
-    );
-    for (const noteId of otherNoteIds) {
+    // 参照ノートのブロック props.name を一括更新
+    const noteIds = new Set(entry.usedIn.map((u) => u.noteId));
+    for (const noteId of noteIds) {
       try {
         const doc = await loadFile(noteId);
         let changed = false;
@@ -661,8 +657,11 @@ export function useFileManager(authenticated: boolean) {
         }
         if (changed) {
           await saveFile(noteId, doc);
-          // ドキュメントキャッシュも更新
           docCacheRef.current.set(noteId, doc);
+          // 現在開いているノートなら activeDoc も更新（エディタ再マウント時に反映）
+          if (noteId === activeFileIdRef.current) {
+            setActiveDoc(doc);
+          }
         }
       } catch (err) {
         console.warn(`ブロック名更新失敗 (noteId=${noteId}):`, err);
