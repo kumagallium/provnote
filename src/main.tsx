@@ -11,11 +11,18 @@ import "./app.css";
 
 // ── Tauri 環境: sidecar サーバー起動 + メニュー + 自動更新 ──
 if (isTauri()) {
-  startSidecar();
+  // sidecar 起動を await し、失敗時もアプリは続行（AI 機能のみ無効化）
+  startSidecar().then((ok) => {
+    if (!ok) console.warn("[main] sidecar 起動失敗 — AI 機能は利用不可");
+  });
   initMenuListener();
   initUpdater();
-  window.addEventListener("beforeunload", () => {
-    stopSidecar();
+  // beforeunload ではなく Tauri ウィンドウ閉じイベントで停止
+  // （HMR リロードで sidecar が誤って kill されるのを防ぐ）
+  import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+    getCurrentWindow().onCloseRequested(async () => {
+      await stopSidecar();
+    });
   });
 }
 

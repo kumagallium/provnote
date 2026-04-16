@@ -81,6 +81,20 @@ export async function startSidecar(): Promise<boolean> {
   }
 }
 
+/** sidecar サーバーが生きているか確認し、死んでいたら再起動 */
+export async function ensureSidecar(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    const res = await fetch(HEALTH_URL);
+    if (res.ok) return true;
+  } catch {
+    // 応答なし → 再起動を試みる
+  }
+  console.warn("[sidecar] Backend not responding, attempting restart...");
+  sidecarProcess = null;
+  return startSidecar();
+}
+
 /** sidecar サーバーを停止する */
 export async function stopSidecar(): Promise<void> {
   if (sidecarProcess) {

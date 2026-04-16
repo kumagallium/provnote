@@ -46,11 +46,27 @@ export function AiAssistantPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // バックエンド接続 + モデル登録状態をチェック
+  // バックエンド接続 + モデル登録状態をチェック（sidecar 死亡時は自動復旧を試みる）
   useEffect(() => {
-    fetchModels()
-      .then((res) => setAiStatus(res.models.length > 0 ? "connected" : "no-models"))
-      .catch(() => setAiStatus("no-backend"));
+    const check = async () => {
+      try {
+        const res = await fetchModels();
+        setAiStatus(res.models.length > 0 ? "connected" : "no-models");
+      } catch {
+        // sidecar が死んでいたら再起動を試みる
+        const { ensureSidecar } = await import("../../lib/sidecar");
+        const recovered = await ensureSidecar();
+        if (recovered) {
+          try {
+            const res = await fetchModels();
+            setAiStatus(res.models.length > 0 ? "connected" : "no-models");
+            return;
+          } catch { /* 復旧後も失敗 */ }
+        }
+        setAiStatus("no-backend");
+      }
+    };
+    check();
   }, []);
 
   // 新しいメッセージが追加されたら自動スクロール
