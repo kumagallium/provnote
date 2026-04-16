@@ -33,6 +33,7 @@ import {
   renameMediaFile,
   renameMediaEntry,
   extractMediaFromBlocks,
+  updateBlockNameByUrl,
   mimeToMediaType,
   readMediaIndex,
   ensureMediaIndex,
@@ -633,6 +634,7 @@ export function useFileManager(authenticated: boolean) {
   }, []);
 
   // メディアリネーム（モーダルから呼ぶ）
+  // Drive ファイル名・メディアインデックス・参照ノートのブロック props.name を一括更新
   const handleRenameMedia = useCallback(async (entry: MediaIndexEntry, newName: string) => {
     // URL ブックマークは Drive ファイルがないのでインデックスのみ更新
     if (entry.type !== "url") {
@@ -643,6 +645,29 @@ export function useFileManager(authenticated: boolean) {
     mediaIndexRef.current = updated;
     setMediaIndex(updated);
     saveMediaIndex(updated).catch((err) => console.warn("メディアインデックス保存失敗:", err));
+
+    // 参照ノートのブロック props.name を更新（現在エディタで開いているノートは NoteApp 側で処理）
+    const otherNoteIds = new Set(
+      entry.usedIn
+        .map((u) => u.noteId)
+        .filter((id) => id !== activeFileIdRef.current),
+    );
+    for (const noteId of otherNoteIds) {
+      try {
+        const doc = await loadFile(noteId);
+        let changed = false;
+        for (const page of doc.pages) {
+          changed = updateBlockNameByUrl(page.blocks, entry.url, newName) || changed;
+        }
+        if (changed) {
+          await saveFile(noteId, doc);
+          // ドキュメントキャッシュも更新
+          docCacheRef.current.set(noteId, doc);
+        }
+      } catch (err) {
+        console.warn(`ブロック名更新失敗 (noteId=${noteId}):`, err);
+      }
+    }
   }, []);
 
   // メディア削除（ギャラリーから呼ぶ）
