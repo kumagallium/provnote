@@ -1,5 +1,6 @@
 // ログイン・ストレージ選択画面
 
+import { useState, useEffect } from "react";
 import { useT } from "../i18n";
 import { isTauri } from "../lib/platform";
 
@@ -10,6 +11,14 @@ type Props = {
 
 export function LoginScreen({ onSignIn, onSelectLocal }: Props) {
   const t = useT();
+  const [version, setVersion] = useState<string>("");
+  useEffect(() => {
+    if (isTauri()) {
+      import("@tauri-apps/api/app").then(({ getVersion }) =>
+        getVersion().then(setVersion),
+      ).catch(() => {});
+    }
+  }, []);
   return (
     <div className="flex items-center justify-center h-dvh bg-background">
       <div className="text-center space-y-6 max-w-sm">
@@ -66,6 +75,9 @@ export function LoginScreen({ onSignIn, onSelectLocal }: Props) {
             {t("login.localNote")}
           </p>
         </div>
+        {version && (
+          <p className="text-xs text-muted-foreground/50 pt-4">v{version}</p>
+        )}
       </div>
     </div>
   );
