@@ -6,7 +6,7 @@
 // POST /api/models/available — プロバイダーのモデル一覧取得
 
 import { Hono } from "hono";
-import { listModels, addModel, updateModel, removeModel, getDefaultModel } from "../config/models.js";
+import { listModels, addModel, updateModel, removeModel, getDefaultModel, getModel } from "../config/models.js";
 import { fetchAvailableModels } from "../services/llm.js";
 
 const app = new Hono();
@@ -29,16 +29,30 @@ app.get("/", (c) => {
 });
 
 // モデル追加
+// source_model_id を指定すると、既存モデルの認証情報（apiKey / apiBase）を再利用する
 app.post("/", async (c) => {
   const body = await c.req.json<{
     model_name: string;
     provider: string;
     model_id: string;
-    api_key: string;
+    api_key?: string;
     api_base?: string;
+    source_model_id?: string;
   }>();
 
-  if (!body.model_name || !body.provider || !body.model_id || !body.api_key) {
+  // source_model_id が指定された場合、既存モデルから認証情報を取得
+  let apiKey = body.api_key ?? "";
+  let apiBase = body.api_base;
+  if (body.source_model_id) {
+    const source = getModel(body.source_model_id);
+    if (!source) {
+      return c.json({ error: "参照元モデルが見つかりません" }, 404);
+    }
+    apiKey = source.apiKey;
+    if (apiBase === undefined) apiBase = source.apiBase ?? undefined;
+  }
+
+  if (!body.model_name || !body.provider || !body.model_id || !apiKey) {
     return c.json({ error: "必須フィールドが不足しています" }, 400);
   }
 
@@ -46,8 +60,8 @@ app.post("/", async (c) => {
     name: body.model_name,
     provider: body.provider,
     modelId: body.model_id,
-    apiKey: body.api_key,
-    apiBase: body.api_base ?? null,
+    apiKey,
+    apiBase: apiBase ?? null,
   });
 
   return c.json({ message: `Model '${model.name}' added`, id: model.id }, 201);
@@ -89,23 +103,36 @@ app.delete("/:id", (c) => {
 });
 
 // プロバイダーのモデル一覧を取得
+// source_model_id を指定すると、既存モデルの認証情報を使って取得する
 app.post("/available", async (c) => {
   const body = await c.req.json<{
-    provider: string;
-    api_key: string;
+    provider?: string;
+    api_key?: string;
     api_base?: string;
+    source_model_id?: string;
   }>();
 
-  if (!body.provider || !body.api_key) {
+  let provider = body.provider ?? "";
+  let apiKey = body.api_key ?? "";
+  let apiBaseUrl = body.api_base;
+
+  // source_model_id が指定された場合、既存モデルから認証情報を取得
+  if (body.source_model_id) {
+    const source = getModel(body.source_model_id);
+    if (!source) {
+      return c.json({ error: "参照元モデルが見つかりません" }, 404);
+    }
+    provider = source.provider;
+    apiKey = source.apiKey;
+    if (apiBaseUrl === undefined) apiBaseUrl = source.apiBase ?? undefined;
+  }
+
+  if (!provider || !apiKey) {
     return c.json({ error: "provider と api_key は必須です" }, 400);
   }
 
   try {
-    const models = await fetchAvailableModels(
-      body.provider,
-      body.api_key,
-      body.api_base,
-    );
+    const models = await fetchAvailableModels(provider, apiKey, apiBaseUrl);
     return c.json({ models });
   } catch (err) {
     const message = err instanceof Error ? err.message : "不明なエラー";

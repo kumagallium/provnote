@@ -252,6 +252,9 @@ export const ja: Record<string, string> = {
   "settings.addModel.displayName": "表示名",
   "settings.addModel.addButton": "追加",
   "settings.addModel.adding": "追加中...",
+  "settings.addModel.useExisting": "既存プロバイダーから追加",
+  "settings.addModel.newProvider": "新しいプロバイダー",
+  "settings.addModel.selectProvider": "プロバイダーを選択",
   // ── Registry ──
   "settings.registry.title": "Crucible Registry URL",
   "settings.registry.placeholder": "http://localhost:8080",
