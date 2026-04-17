@@ -1,0 +1,161 @@
+// Embedding Store（IndexedDB ベース）
+// Wiki セクションの embedding ベクトルをローカルに保存・検索する
+// ノートデータとは別の IndexedDB データベースを使用
+
+const DB_NAME = "graphium-embeddings";
+const DB_VERSION = 1;
+const STORE_NAME = "embeddings";
+
+export type EmbeddingRecord = {
+  /** 複合キー: `${documentId}:${sectionId}` */
+  id: string;
+  documentId: string;
+  sectionId: string;
+  /** embedding ベクトル */
+  vector: number[];
+  /** embedding モデルバージョン */
+  modelVersion: string;
+  /** embedding 対象テキスト（階層コンテキスト付き） */
+  text: string;
+  updatedAt: string;
+};
+
+export type SearchResult = {
+  documentId: string;
+  sectionId: string;
+  score: number;
+  text: string;
+};
+
+/** IndexedDB を開く */
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        store.createIndex("documentId", "documentId", { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** トランザクションヘルパー */
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, mode);
+    const store = tx.objectStore(STORE_NAME);
+    const req = fn(store);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** 全件取得ヘルパー */
+async function getAll(): Promise<EmbeddingRecord[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** コサイン類似度を計算 */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) return 0;
+  return dotProduct / denominator;
+}
+
+export const embeddingStore = {
+  /** embedding を保存（upsert） */
+  async setEmbedding(
+    documentId: string,
+    sectionId: string,
+    vector: number[],
+    modelVersion: string,
+    text: string,
+  ): Promise<void> {
+    const id = `${documentId}:${sectionId}`;
+    const record: EmbeddingRecord = {
+      id,
+      documentId,
+      sectionId,
+      vector,
+      modelVersion,
+      text,
+      updatedAt: new Date().toISOString(),
+    };
+    await withStore("readwrite", (store) => store.put(record));
+  },
+
+  /** ベクトル検索（brute-force コサイン類似度） */
+  async searchByVector(queryVector: number[], topK: number): Promise<SearchResult[]> {
+    const records = await getAll();
+    const scored = records.map((r) => ({
+      documentId: r.documentId,
+      sectionId: r.sectionId,
+      score: cosineSimilarity(queryVector, r.vector),
+      text: r.text,
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK);
+  },
+
+  /** 特定ドキュメントの全 embedding を削除 */
+  async deleteByDocument(documentId: string): Promise<void> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const index = store.index("documentId");
+      const req = index.openCursor(IDBKeyRange.only(documentId));
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          cursor.delete();
+          cursor.continue();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+
+  /** 特定ドキュメントの全 embedding を取得 */
+  async getAllByDocument(documentId: string): Promise<EmbeddingRecord[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const index = store.index("documentId");
+      const req = index.getAll(IDBKeyRange.only(documentId));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  /** 全 embedding を削除（再構築用） */
+  async clear(): Promise<void> {
+    await withStore("readwrite", (store) => store.clear());
+  },
+};

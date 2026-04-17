@@ -2,7 +2,7 @@
 // NoteApp のファイル一覧/キャッシュ/開く/新規/保存/削除/派生/グラフ/インデックスを集約
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GraphiumFile, GraphiumDocument } from "../lib/document-types";
+import type { GraphiumFile, GraphiumDocument, WikiKind } from "../lib/document-types";
 import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
@@ -19,6 +19,7 @@ import {
   updateIndexEntry,
   removeIndexEntry,
   saveIndexFile,
+  buildIndexEntry,
   type RecentNote,
   type GraphiumIndex,
 } from "../features/navigation";
@@ -50,6 +51,24 @@ const createFile = (title: string, content: GraphiumDocument) => storage().creat
 const saveFile = (id: string, content: GraphiumDocument) => storage().saveFile(id, content);
 const deleteFile = (id: string) => storage().deleteFile(id);
 const uploadMediaFileWithMeta = (file: File) => storage().uploadMedia(file);
+// Wiki ドキュメント操作ヘルパー
+const listWikiFiles = () => storage().listWikiFiles?.() ?? Promise.resolve([]);
+const loadWikiFile = (id: string) => {
+  if (!storage().loadWikiFile) throw new Error("Wiki 非対応のストレージプロバイダーです");
+  return storage().loadWikiFile!(id);
+};
+const createWikiFile = (title: string, content: GraphiumDocument) => {
+  if (!storage().createWikiFile) throw new Error("Wiki 非対応のストレージプロバイダーです");
+  return storage().createWikiFile!(title, content);
+};
+const saveWikiFile = (id: string, content: GraphiumDocument) => {
+  if (!storage().saveWikiFile) throw new Error("Wiki 非対応のストレージプロバイダーです");
+  return storage().saveWikiFile!(id, content);
+};
+const deleteWikiFileFromStorage = (id: string) => {
+  if (!storage().deleteWikiFile) throw new Error("Wiki 非対応のストレージプロバイダーです");
+  return storage().deleteWikiFile!(id);
+};
 
 export function useFileManager(authenticated: boolean) {
   const [files, setFiles] = useState<GraphiumFile[]>([]);
@@ -91,13 +110,20 @@ export function useFileManager(authenticated: boolean) {
   const [activeAssetType, setActiveAssetType] = useState<MediaType | null>(null);
   // ラベルギャラリーの表示状態
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  // Wiki 関連の状態
+  const [wikiFiles, setWikiFiles] = useState<GraphiumFile[]>([]);
+  const [activeWikiKind, setActiveWikiKind] = useState<WikiKind | null>(null);
 
-  // ファイル一覧を取得
+  // ファイル一覧を取得（ノートと Wiki を並列取得）
   const refreshFiles = useCallback(async () => {
     setFilesLoading(true);
     try {
-      const result = await listFiles();
-      setFiles(result);
+      const [noteResult, wikiResult] = await Promise.all([
+        listFiles(),
+        listWikiFiles(),
+      ]);
+      setFiles(noteResult);
+      setWikiFiles(wikiResult);
     } catch (err) {
       console.error("ファイル一覧の取得に失敗:", err);
     } finally {
@@ -153,6 +179,7 @@ export function useFileManager(authenticated: boolean) {
       setShowNoteList(false);
       setActiveAssetType(null);
       setActiveLabel(null);
+      setActiveWikiKind(null);
       // サイドピーク等から保存済みドキュメントが渡された場合、キャッシュを即時更新
       if (cachedDoc) {
         docCacheRef.current.set(fileId, cachedDoc);
@@ -231,9 +258,9 @@ export function useFileManager(authenticated: boolean) {
   useEffect(() => {
     if (!authenticated) return;
     if (filesLoading) return; // ファイル一覧取得中はインデックス構築をスキップ
-    if (files.length === 0) {
-      // ノートが無い場合は空のインデックスをセット（NoteListView の loading 解除）
-      const emptyIndex: GraphiumIndex = { version: 3, updatedAt: new Date().toISOString(), notes: [] };
+    if (files.length === 0 && wikiFiles.length === 0) {
+      // ノートも Wiki もない場合は空のインデックスをセット
+      const emptyIndex: GraphiumIndex = { version: 4, updatedAt: new Date().toISOString(), notes: [] };
       noteIndexRef.current = emptyIndex;
       setNoteIndex(emptyIndex);
       return;
@@ -242,14 +269,44 @@ export function useFileManager(authenticated: boolean) {
     (async () => {
       // 先行読み込みの結果を取得（listFiles と並行して既に読み込み済み）
       const prefetched = prefetchedIndexRef.current ? await prefetchedIndexRef.current : undefined;
-      const index = await ensureIndex(files, docCacheRef.current, prefetched);
+      // ノートのインデックスを構築
+      const index = files.length > 0
+        ? await ensureIndex(files, docCacheRef.current, prefetched)
+        : { version: 4, updatedAt: new Date().toISOString(), notes: [] } as GraphiumIndex;
+
+      // Wiki ファイルのインデックスエントリを追加
+      if (wikiFiles.length > 0) {
+        // 既にインデックスに含まれている Wiki エントリを除外
+        const existingWikiIds = new Set(
+          index.notes.filter((n) => n.source === "ai").map((n) => n.noteId)
+        );
+        const newWikiFiles = wikiFiles.filter((f) => !existingWikiIds.has(f.id));
+
+        if (newWikiFiles.length > 0) {
+          const wikiDocs = await Promise.allSettled(
+            newWikiFiles.map(async (f) => {
+              const doc = await loadWikiFile(f.id);
+              return { file: f, doc };
+            })
+          );
+          for (const result of wikiDocs) {
+            if (result.status === "fulfilled") {
+              const { file, doc } = result.value;
+              const entry = buildIndexEntry(file.id, doc, file);
+              index.notes.push(entry);
+            }
+          }
+          index.updatedAt = new Date().toISOString();
+        }
+      }
+
       if (!cancelled) {
         noteIndexRef.current = index;
         setNoteIndex(index);
       }
     })();
     return () => { cancelled = true; };
-  }, [authenticated, files, filesLoading]);
+  }, [authenticated, files, wikiFiles, filesLoading]);
 
   // メディアインデックスの先行読み込み（既存ファイルから即座に取得 — モバイル高速表示用）
   useEffect(() => {
@@ -711,6 +768,117 @@ export function useFileManager(authenticated: boolean) {
     saveMediaIndex(updated).catch((err) => console.warn("メディアインデックス保存失敗:", err));
   }, []);
 
+  // --- Wiki ドキュメント操作 ---
+
+  // Wiki を開く
+  const handleOpenWikiFile = useCallback(async (wikiId: string) => {
+    try {
+      setShowNoteList(false);
+      setActiveAssetType(null);
+      setActiveLabel(null);
+      setActiveWikiKind(null);
+
+      const cached = docCacheRef.current.get(`wiki:${wikiId}`);
+      if (cached) {
+        setActiveFileId(`wiki:${wikiId}`);
+        setActiveDoc(cached);
+        setEditorKey((k) => k + 1);
+        return;
+      }
+      const doc = await loadWikiFile(wikiId);
+      docCacheRef.current.set(`wiki:${wikiId}`, doc);
+      setActiveFileId(`wiki:${wikiId}`);
+      setActiveDoc(doc);
+      setEditorKey((k) => k + 1);
+    } catch (err) {
+      console.error("Wiki の読み込みに失敗:", err);
+    }
+  }, [setActiveFileId]);
+
+  // Wiki を保存
+  const handleSaveWikiFile = useCallback(
+    async (wikiId: string, doc: GraphiumDocument) => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        await saveWikiFile(wikiId, doc);
+        docCacheRef.current.set(`wiki:${wikiId}`, doc);
+        setWikiFiles((prev) =>
+          prev.map((f) =>
+            f.id === wikiId
+              ? { ...f, name: `${doc.title}.graphium.json`, modifiedTime: new Date().toISOString() }
+              : f
+          )
+        );
+        // インデックスを更新
+        if (noteIndexRef.current) {
+          const updated = updateIndexEntry(noteIndexRef.current, wikiId, doc);
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+      } catch (err) {
+        console.error("Wiki の保存に失敗:", err);
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    },
+    []
+  );
+
+  // Wiki を削除
+  const handleDeleteWikiFile = useCallback(
+    async (wikiId: string) => {
+      try {
+        docCacheRef.current.delete(`wiki:${wikiId}`);
+        await deleteWikiFileFromStorage(wikiId);
+        // インデックスから除去
+        if (noteIndexRef.current) {
+          const updated = removeIndexEntry(noteIndexRef.current, wikiId);
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+        if (activeFileId === `wiki:${wikiId}`) {
+          setActiveFileId(null);
+          setActiveDoc(null);
+          setEditorKey((k) => k + 1);
+        }
+        setWikiFiles((prev) => prev.filter((f) => f.id !== wikiId));
+      } catch (err) {
+        console.error("Wiki の削除に失敗:", err);
+      }
+    },
+    [activeFileId, setActiveFileId]
+  );
+
+  // Wiki の新規作成（Ingest 結果の保存用）
+  const handleCreateWikiFile = useCallback(
+    async (doc: GraphiumDocument): Promise<string> => {
+      const newId = await createWikiFile(doc.title, doc);
+      docCacheRef.current.set(`wiki:${newId}`, doc);
+      const now = new Date().toISOString();
+      const newFile: GraphiumFile = {
+        id: newId,
+        name: `${doc.title}.graphium.json`,
+        modifiedTime: now,
+        createdTime: now,
+      };
+      setWikiFiles((prev) => [newFile, ...prev]);
+      // インデックスに追加
+      if (noteIndexRef.current) {
+        const updated = updateIndexEntry(noteIndexRef.current, newId, doc, newFile);
+        noteIndexRef.current = updated;
+        setNoteIndex(updated);
+        saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+      }
+      return newId;
+    },
+    []
+  );
+
   return {
     // 状態
     files,
@@ -747,5 +915,13 @@ export function useFileManager(authenticated: boolean) {
     handleDeleteMedia,
     handleRenameMedia,
     handleAddUrlBookmark,
+    // Wiki
+    wikiFiles,
+    activeWikiKind,
+    setActiveWikiKind,
+    handleOpenWikiFile,
+    handleSaveWikiFile,
+    handleDeleteWikiFile,
+    handleCreateWikiFile,
   };
 }

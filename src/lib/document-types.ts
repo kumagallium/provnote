@@ -3,6 +3,44 @@
 
 import type { DocumentProvenance } from "../features/document-provenance/types";
 
+// AI Wiki ドキュメントの種類
+export type WikiKind = "summary" | "concept";
+
+// AI Wiki ドキュメントのステータス
+// draft: 生成直後 or 品質が低い。Retriever のコンテキスト注入対象外
+// published: ユーザーが確認済み or confidence が高い。Retriever の対象
+export type WikiStatus = "draft" | "published";
+
+// AI Wiki ドキュメントのメタデータ
+export type WikiMeta = {
+  kind: WikiKind;
+  /** 生成元ノート ID リスト */
+  derivedFromNotes: string[];
+  /** 生成元チャットセッション ID リスト */
+  derivedFromChats: string[];
+  /** ISO 8601 生成日時 */
+  generatedAt: string;
+  /** 生成に使用した LLM */
+  generatedBy: {
+    model: string;
+    version: string;
+  };
+  status: WikiStatus;
+  /** 最後に Ingest を実行した日時 */
+  lastIngestedAt?: string;
+  /** Ingest 時に使用した Skill 名 */
+  skillsUsed?: string[];
+  /** 人間が編集したセクションの blockId リスト（Ingest 時の上書き保護用） */
+  editedSections?: string[];
+  /** セクション単位の embedding メタデータ */
+  sectionEmbeddings?: {
+    sectionId: string;
+    modelVersion: string;
+  }[];
+  /** Wiki の生成言語 */
+  language?: string;
+};
+
 // Graphium ファイルのメタデータ
 export type GraphiumFile = {
   id: string;
@@ -66,6 +104,10 @@ export type GraphiumDocument = {
   chats?: ScopeChat[];
   /** ドキュメント来歴（編集操作の PROV-DM 記録） */
   documentProvenance?: DocumentProvenance;
+  /** ドキュメントソース: "human"（既存ノート）or "ai"（Wiki ドキュメント） */
+  source?: "human" | "ai";
+  /** AI Wiki ドキュメントのメタデータ（source === "ai" の場合のみ） */
+  wikiMeta?: WikiMeta;
   createdAt: string;
   modifiedAt: string;
 };

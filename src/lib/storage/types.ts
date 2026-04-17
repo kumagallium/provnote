@@ -63,4 +63,11 @@ export interface StorageProvider {
 
   // --- キャッシュクリア ---
   clearCache(): void;
+
+  // --- Wiki ドキュメント CRUD ---
+  listWikiFiles?(): Promise<GraphiumFile[]>;
+  loadWikiFile?(fileId: string): Promise<GraphiumDocument>;
+  createWikiFile?(title: string, content: GraphiumDocument): Promise<string>;
+  saveWikiFile?(fileId: string, content: GraphiumDocument): Promise<void>;
+  deleteWikiFile?(fileId: string): Promise<void>;
 }

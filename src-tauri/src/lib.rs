@@ -28,6 +28,16 @@ fn media_dir() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Wiki ドキュメントの保存先ディレクトリを取得（~/Documents/Graphium/wiki/）
+fn wiki_dir() -> Result<PathBuf, String> {
+    let dir = dirs::document_dir()
+        .ok_or("ドキュメントフォルダが見つかりません")?
+        .join("Graphium")
+        .join("wiki");
+    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
 /// アプリデータの保存先ディレクトリを取得（~/Documents/Graphium/appdata/）
 fn appdata_dir() -> Result<PathBuf, String> {
     let dir = dirs::document_dir()
@@ -118,6 +128,73 @@ fn delete_note_file(file_id: String) -> Result<(), String> {
     let path = notes_dir()?.join(format!("{file_id}.json"));
     if path.exists() {
         fs::remove_file(&path).map_err(|e| format!("ファイル削除失敗: {e}"))?;
+    }
+    Ok(())
+}
+
+// --- Wiki ファイル操作（notes と同じロジック、ディレクトリだけ wiki_dir() を使う） ---
+
+/// Wiki ファイル一覧を取得
+#[tauri::command]
+fn list_wiki_files() -> Result<Vec<FileInfo>, String> {
+    let dir = wiki_dir()?;
+    let mut files = Vec::new();
+
+    let entries = fs::read_dir(&dir).map_err(|e| format!("ディレクトリ読み取り失敗: {e}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("エントリ読み取り失敗: {e}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let id = path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let metadata =
+                fs::metadata(&path).map_err(|e| format!("メタデータ取得失敗: {e}"))?;
+            let modified = metadata
+                .modified()
+                .map_err(|e| format!("更新日時取得失敗: {e}"))?;
+            let created = metadata.created().unwrap_or(modified);
+
+            files.push(FileInfo {
+                id,
+                name,
+                modified_time: humantime::format_rfc3339(modified).to_string(),
+                created_time: humantime::format_rfc3339(created).to_string(),
+            });
+        }
+    }
+
+    files.sort_by(|a, b| b.modified_time.cmp(&a.modified_time));
+    Ok(files)
+}
+
+/// Wiki ファイルを読み込み
+#[tauri::command]
+fn read_wiki_file(file_id: String) -> Result<String, String> {
+    let path = wiki_dir()?.join(format!("{file_id}.json"));
+    fs::read_to_string(&path).map_err(|e| format!("Wiki 読み取り失敗: {e}"))
+}
+
+/// Wiki ファイルを書き込み
+#[tauri::command]
+fn write_wiki_file(file_id: String, content: String) -> Result<(), String> {
+    let path = wiki_dir()?.join(format!("{file_id}.json"));
+    fs::write(&path, content).map_err(|e| format!("Wiki 書き込み失敗: {e}"))
+}
+
+/// Wiki ファイルを削除
+#[tauri::command]
+fn delete_wiki_file(file_id: String) -> Result<(), String> {
+    let path = wiki_dir()?.join(format!("{file_id}.json"));
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("Wiki 削除失敗: {e}"))?;
     }
     Ok(())
 }
@@ -273,6 +350,10 @@ pub fn run() {
             read_note_file,
             write_note_file,
             delete_note_file,
+            list_wiki_files,
+            read_wiki_file,
+            write_wiki_file,
+            delete_wiki_file,
             save_media_file,
             read_media_file,
             list_media_files_cmd,

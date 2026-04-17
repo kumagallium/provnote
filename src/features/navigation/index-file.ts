@@ -1,14 +1,15 @@
 // .graphium-index.json の型定義と Drive 読み書き
 // 全ノートのメタデータを1ファイルに集約し、一覧・検索・被参照計算を高速化する
 
-import type { GraphiumDocument, GraphiumFile } from "../../lib/document-types";
+import type { GraphiumDocument, GraphiumFile, WikiKind } from "../../lib/document-types";
 import { getActiveProvider } from "../../lib/storage/registry";
 
 // ── 型定義 ──
 
 // インデックスのスキーマバージョン
 // extractBlockText の改善等、インデックス構築ロジックが変わった場合にインクリメントする
-const INDEX_SCHEMA_VERSION = 3;
+// v4: source, wikiKind フィールドを追加（Wiki ドキュメント対応）
+const INDEX_SCHEMA_VERSION = 4;
 
 export type GraphiumIndex = {
   version: number;
@@ -36,6 +37,10 @@ export type NoteIndexEntry = {
     targetBlockId?: string;
     layer: "prov" | "knowledge";
   }[];
+  /** ドキュメントソース: "human" or "ai"（Wiki） */
+  source?: "human" | "ai";
+  /** Wiki ドキュメントの種類（source === "ai" の場合のみ） */
+  wikiKind?: WikiKind;
 };
 
 // ── Drive API ──
@@ -229,6 +234,8 @@ export function buildIndexEntry(
     headings,
     labels,
     outgoingLinks,
+    source: doc.source,
+    wikiKind: doc.wikiMeta?.kind,
   };
 }
 

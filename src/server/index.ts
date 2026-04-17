@@ -16,6 +16,7 @@ import profilesRoutes from "./routes/profiles.js";
 import agentRoutes from "./routes/agent.js";
 import toolsRoutes from "./routes/tools.js";
 import authRoutes from "./routes/auth.js";
+import wikiRoutes from "./routes/wiki.js";
 
 // データディレクトリ設定（環境変数 or デフォルト）
 // デスクトップアプリ（sidecar）では ~/Documents/Graphium/server-data を使用
@@ -67,6 +68,7 @@ app.route("/api/profiles", profilesRoutes);
 app.route("/api/agent", agentRoutes);
 app.route("/api/tools", toolsRoutes);
 app.route("/api/auth", authRoutes);
+app.route("/api/wiki", wikiRoutes);
 
 // 本番環境: 静的ファイル配信（SERVE_STATIC 環境変数で有効化）
 const staticDir = process.env.SERVE_STATIC;

@@ -64,6 +64,8 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
+import { WikiListView, WikiBanner, ingestNote, buildWikiDocument, embedWikiSections } from "./features/wiki";
+import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
 import {
@@ -114,6 +116,9 @@ function NoteHeaderMenu({
   pdfExporting,
   onExportProvJsonLd,
   provExportDisabled,
+  onIngestToWiki,
+  ingestDisabled,
+  isWikiDoc,
   t,
 }: {
   onSave: () => void;
@@ -122,6 +127,9 @@ function NoteHeaderMenu({
   pdfExporting: boolean;
   onExportProvJsonLd: () => void;
   provExportDisabled: boolean;
+  onIngestToWiki?: () => void;
+  ingestDisabled?: boolean;
+  isWikiDoc?: boolean;
   t: (key: string) => string;
 }) {
   const [open, setOpen] = useState(false);
@@ -177,6 +185,19 @@ function NoteHeaderMenu({
             <Share2 size={14} />
             {t("prov.export")}
           </button>
+          {onIngestToWiki && !isWikiDoc && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className={itemClass}
+                disabled={ingestDisabled}
+                onClick={() => { onIngestToWiki(); setOpen(false); }}
+              >
+                <span className="text-sm">🤖</span>
+                Add to Knowledge
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -216,6 +237,10 @@ type NoteEditorProps = {
   captureIndex?: import("./features/mobile-capture").CaptureIndex | null;
   /** エディタ参照を親に伝播するコールバック */
   onEditorRef?: (editor: any) => void;
+  /** Knowledge に追加コールバック */
+  onIngestToWiki?: () => void;
+  /** Wiki ドキュメントかどうか */
+  isWikiDoc?: boolean;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -271,6 +296,8 @@ function NoteEditorInner({
   onMemoInserted,
   captureIndex: captureIndexProp,
   onEditorRef,
+  onIngestToWiki,
+  isWikiDoc,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -1216,6 +1243,9 @@ function NoteEditorInner({
           pdfExporting={pdfExporting}
           onExportProvJsonLd={handleExportProvJsonLd}
           provExportDisabled={!provDoc || provDoc["@graph"].length === 0}
+          onIngestToWiki={onIngestToWiki}
+          ingestDisabled={!fileId || saving}
+          isWikiDoc={isWikiDoc}
           t={t}
         />
       </div>
@@ -1517,6 +1547,19 @@ export function NoteApp() {
     memoCount: capture.captureIndex?.captures.length ?? 0,
     onShowMemos: () => { setShowMemos(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setSidebarOpen(false); },
     memosActive: showMemos,
+    wikiCounts: fm.noteIndex ? (() => {
+      let summary = 0;
+      let concept = 0;
+      for (const n of fm.noteIndex.notes) {
+        if (n.source === "ai") {
+          if (n.wikiKind === "summary") summary++;
+          else if (n.wikiKind === "concept") concept++;
+        }
+      }
+      return { summary, concept };
+    })() : undefined,
+    onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); },
+    activeWikiKind: fm.activeWikiKind,
   };
 
   return (
@@ -1576,6 +1619,14 @@ export function NoteApp() {
             onNavigateNote={(noteId) => { setShowMemos(false); fm.handleOpenFile(noteId); }}
             insertDisabled={!fm.activeFileId}
           />
+        ) : fm.activeWikiKind ? (
+          <WikiListView
+            noteIndex={fm.noteIndex}
+            wikiKind={fm.activeWikiKind}
+            onOpenWiki={(wikiId) => { fm.setActiveWikiKind(null); fm.handleOpenWikiFile(wikiId); }}
+            onBack={() => fm.setActiveWikiKind(null)}
+            onDeleteWiki={fm.handleDeleteWikiFile}
+          />
         ) : !isDesktop && !fm.activeFileId ? (
           /* モバイル: ノート未選択時はクイックキャプチャビューを表示 */
           <MobileCaptureView
@@ -1593,11 +1644,57 @@ export function NoteApp() {
             creating={capture.capturing}
           />
         ) : (
+          <>
+          {/* Wiki バナー（AI 生成ドキュメントの場合） */}
+          {fm.activeDoc?.source === "ai" && fm.activeDoc?.wikiMeta && (
+            <WikiBanner
+              wikiMeta={fm.activeDoc.wikiMeta}
+              onApprove={() => {
+                if (!fm.activeDoc?.wikiMeta || !fm.activeFileId) return;
+                const updatedDoc = {
+                  ...fm.activeDoc,
+                  wikiMeta: { ...fm.activeDoc.wikiMeta, status: "published" as const },
+                  modifiedAt: new Date().toISOString(),
+                };
+                const wikiId = fm.activeFileId.replace("wiki:", "");
+                fm.handleSaveWikiFile(wikiId, updatedDoc);
+              }}
+              onRegenerate={async () => {
+                if (!fm.activeDoc?.wikiMeta) return;
+                // 由来ノートから再生成（簡易版: 最初の由来ノートのみ）
+                const sourceNoteId = fm.activeDoc.wikiMeta.derivedFromNotes[0];
+                if (!sourceNoteId) return;
+                const sourceDoc = fm.getCachedDoc(sourceNoteId);
+                if (!sourceDoc) return;
+                try {
+                  const result = await ingestNote(sourceNoteId, sourceDoc, [], "ja");
+                  if (result.wikis.length > 0) {
+                    const newDoc = buildWikiDocument(result.wikis[0], sourceNoteId, result.model);
+                    const wikiId = fm.activeFileId!.replace("wiki:", "");
+                    await fm.handleSaveWikiFile(wikiId, newDoc);
+                    fm.handleOpenWikiFile(wikiId);
+                  }
+                } catch (err) {
+                  console.error("Wiki の再生成に失敗:", err);
+                }
+              }}
+              onDelete={() => {
+                if (!fm.activeFileId) return;
+                const wikiId = fm.activeFileId.replace("wiki:", "");
+                fm.handleDeleteWikiFile(wikiId);
+              }}
+            />
+          )}
           <NoteEditor
             key={fm.editorKey}
-            fileId={fm.activeFileId}
+            fileId={fm.activeFileId?.replace("wiki:", "") ?? fm.activeFileId}
             initialDoc={fm.activeDoc}
-            onSave={fm.handleSave}
+            onSave={fm.activeDoc?.source === "ai"
+              ? (doc: GraphiumDocument) => {
+                  const wikiId = fm.activeFileId?.replace("wiki:", "");
+                  if (wikiId) fm.handleSaveWikiFile(wikiId, doc);
+                }
+              : fm.handleSave}
             onDeriveNote={fm.handleDeriveNote}
             onAiDeriveNote={fm.handleAiDeriveNote}
             onNavigateNote={fm.handleOpenFile}
@@ -1628,7 +1725,39 @@ export function NoteApp() {
             }}
             captureIndex={capture.captureIndex}
             onEditorRef={(editor) => { noteEditorRef.current = editor; }}
+            isWikiDoc={fm.activeDoc?.source === "ai"}
+            onIngestToWiki={fm.activeDoc?.source !== "ai" ? async () => {
+              if (!fm.activeFileId || !fm.activeDoc) return;
+              try {
+                // 既存 Wiki 一覧を取得
+                const existingWikis = (fm.noteIndex?.notes ?? [])
+                  .filter((n) => n.source === "ai" && n.wikiKind)
+                  .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+
+                const result = await ingestNote(fm.activeFileId, fm.activeDoc, existingWikis, "ja");
+                if (result.wikis.length === 0) {
+                  alert("Knowledge の抽出に十分な内容がありませんでした。");
+                  return;
+                }
+
+                // 生成された Wiki をすべて保存
+                for (const wiki of result.wikis) {
+                  const wikiDoc = buildWikiDocument(wiki, fm.activeFileId, result.model);
+                  const newId = await fm.handleCreateWikiFile(wikiDoc);
+                  // Embedding をバックグラウンドで生成
+                  embedWikiSections(newId, wikiDoc).catch((err) =>
+                    console.warn("Embedding 生成失敗:", err)
+                  );
+                }
+
+                alert(`${result.wikis.length} 件の Wiki を生成しました。サイドバーの AI セクションで確認できます。`);
+              } catch (err) {
+                console.error("Ingest 失敗:", err);
+                alert(`Knowledge への追加に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`);
+              }
+            } : undefined}
           />
+          </>
         )}
         {/* 派生ノート作成中のオーバーレイ */}
         {fm.deriving && (
