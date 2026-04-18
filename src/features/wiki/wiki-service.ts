@@ -58,9 +58,20 @@ export function buildWikiDocument(
   ingesterOutput: IngesterOutput,
   sourceNoteId: string,
   model: string | null,
+  sourceNoteTitle?: string,
+  existingWikiTitles?: { id: string; title: string }[],
 ): GraphiumDocument {
   const now = new Date().toISOString();
   const blocks = convertSectionsToBlocks(ingesterOutput.sections);
+
+  // 関連セクションを追加（派生元ノート + 関連 Concept）
+  const relationBlocks = buildRelationBlocks(
+    sourceNoteId,
+    sourceNoteTitle,
+    ingesterOutput.relatedConcepts,
+    existingWikiTitles,
+  );
+  blocks.push(...relationBlocks);
 
   const wikiMeta: WikiMeta = {
     kind: ingesterOutput.kind,
@@ -175,6 +186,103 @@ function convertSectionsToBlocks(
   }
 
   return blocks;
+}
+
+/**
+ * 関連セクションのブロックを構築する
+ * 派生元ノートへのリンクと関連 Concept を含む
+ */
+function buildRelationBlocks(
+  sourceNoteId: string,
+  sourceNoteTitle?: string,
+  relatedConcepts?: string[],
+  existingWikiTitles?: { id: string; title: string }[],
+): any[] {
+  const blocks: any[] = [];
+
+  // 「関連」見出し
+  blocks.push({
+    id: crypto.randomUUID(),
+    type: "heading",
+    props: { textColor: "default", backgroundColor: "default", textAlignment: "left", level: 2 },
+    content: [{ type: "text", text: "References", styles: {} }],
+    children: [],
+  });
+
+  // 派生元ノートへのリンク
+  const sourceLabel = sourceNoteTitle ?? sourceNoteId;
+  blocks.push({
+    id: crypto.randomUUID(),
+    type: "bulletListItem",
+    props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+    content: [
+      { type: "text", text: "Source: ", styles: { bold: true } },
+      {
+        type: "mention",
+        props: { noteId: sourceNoteId, label: sourceLabel },
+      },
+    ],
+    children: [],
+  });
+
+  // 関連 Concept へのリンク
+  if (relatedConcepts && relatedConcepts.length > 0 && existingWikiTitles) {
+    for (const conceptTitle of relatedConcepts) {
+      const wiki = existingWikiTitles.find((w) => w.title === conceptTitle);
+      if (wiki) {
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "bulletListItem",
+          props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+          content: [
+            { type: "text", text: "Related: ", styles: { bold: true } },
+            {
+              type: "mention",
+              props: { noteId: wiki.id, label: `🤖 ${conceptTitle}` },
+            },
+          ],
+          children: [],
+        });
+      } else {
+        // Wiki が見つからない場合はテキストとして表示
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "bulletListItem",
+          props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+          content: [
+            { type: "text", text: `Related: ${conceptTitle}`, styles: {} },
+          ],
+          children: [],
+        });
+      }
+    }
+  }
+
+  return blocks;
+}
+
+/**
+ * Wiki ドキュメントの editedSections を更新する
+ * 保存前に呼び出し、元のブロック構成と比較して変更があったセクションを記録する
+ * 簡易実装: 保存時点の全 H2 ブロック ID を editedSections として記録
+ */
+export function markEditedSections(doc: GraphiumDocument): GraphiumDocument {
+  if (doc.source !== "ai" || !doc.wikiMeta) return doc;
+
+  const page = doc.pages[0];
+  if (!page) return doc;
+
+  const h2BlockIds = page.blocks
+    .filter((b: any) => b.type === "heading" && b.props?.level === 2)
+    .map((b: any) => b.id);
+
+  return {
+    ...doc,
+    wikiMeta: {
+      ...doc.wikiMeta,
+      editedSections: h2BlockIds,
+    },
+  };
 }
 
 /**

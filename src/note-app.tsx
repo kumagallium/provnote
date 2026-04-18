@@ -750,16 +750,30 @@ function NoteEditorInner({
         }
         const selectedModel = getSelectedModel();
         const disabledTools = getDisabledTools();
+        // Wiki Retriever: 関連する Wiki コンテキストを検索
+        let wikiContext: string | undefined;
+        try {
+          const { retrieveWikiContext } = await import("./features/wiki/retriever");
+          wikiContext = (await retrieveWikiContext(userMessage)) ?? undefined;
+        } catch {
+          // Retriever 失敗は無視（embedding が無い場合など）
+        }
         const response = await runAgent({
           message: userMessage,
           session_id: aiAssistant.sessionId ?? undefined,
           profile: getSelectedProfile(),
           ...(disabledTools.length > 0 ? { disabled_tools: disabledTools } : {}),
+          ...(wikiContext ? { wiki_context: wikiContext } : {}),
           options: { max_turns: 5, ...(selectedModel && { model: selectedModel }) },
         });
+        // Wiki コンテキストが使われた場合、応答にさりげなく参照情報を付与
+        let assistantMessage = response.message;
+        if (wikiContext) {
+          assistantMessage += "\n\n---\n📎 *Knowledge referenced*";
+        }
         aiAssistant.addMessage({
           role: "assistant",
-          content: response.message,
+          content: assistantMessage,
           timestamp: new Date().toISOString(),
         });
         aiAssistant.setSessionId(response.session_id);
@@ -1763,7 +1777,8 @@ export function NoteApp() {
                     }
                   }
                   // 新規作成
-                  const wikiDoc = buildWikiDocument(wiki, fm.activeFileId, result.model);
+                  const wikiTitleMap = existingWikis.map((w) => ({ id: w.id, title: w.title }));
+                  const wikiDoc = buildWikiDocument(wiki, fm.activeFileId, result.model, fm.activeDoc.title, wikiTitleMap);
                   const newId = await fm.handleCreateWikiFile(wikiDoc);
                   titles.push(`${wiki.kind}: ${wiki.title}`);
                   embedWikiSections(newId, wikiDoc).catch((err) =>

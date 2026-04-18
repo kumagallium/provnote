@@ -23,6 +23,8 @@ app.post("/run", async (c) => {
     messages?: ModelMessage[];
     server_names?: string[];
     disabled_tools?: string[];
+    /** Wiki Retriever が検索したコンテキスト（フロントエンドで embedding 検索済み） */
+    wiki_context?: string;
     options?: {
       max_turns?: number;
       model?: string;
@@ -66,6 +68,11 @@ app.post("/run", async (c) => {
   const registryUrl = getRegistryUrl(c);
   const registryKey = getRegistryKey();
   const allServers = await fetchRegistryServers(registryUrl, registryKey);
+
+  // Wiki コンテキストを注入（Retriever 結果）
+  if (body.wiki_context) {
+    systemPrompt += `\n\n${body.wiki_context}`;
+  }
 
   // Skill をシステムプロンプトに注入
   const skills = filterSkills(allServers);

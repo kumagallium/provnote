@@ -9,6 +9,8 @@ export type NoteNode = {
   isCurrent: boolean;
   /** 現在ノートからのホップ数（0=自分, 1=直接, 2=2ホップ） */
   hop: number;
+  /** Wiki ドキュメントかどうか（グラフ上で別色・別形状にする） */
+  isWiki?: boolean;
 };
 
 export type NoteEdge = {
@@ -109,6 +111,14 @@ export function buildNoteGraph(
         }
       }
     }
+    // Wiki の derivedFromNotes: Wiki → 派生元ノートのエッジ
+    if (doc.source === "ai" && doc.wikiMeta?.derivedFromNotes) {
+      for (const sourceNoteId of doc.wikiMeta.derivedFromNotes) {
+        if (fileIds.has(sourceNoteId)) {
+          addEdge(sourceNoteId, fileId, "ingest");
+        }
+      }
+    }
   }
 
   // BFS で2ホップ以内のノードを取得
@@ -143,11 +153,13 @@ export function buildNoteGraph(
   for (const [id, hop] of hopMap) {
     const title =
       docs.get(id)?.title ?? fileNameMap.get(id) ?? "不明なノート";
+    const doc = docs.get(id);
     nodes.push({
       id,
       title,
       isCurrent: id === currentNoteId,
       hop,
+      isWiki: doc?.source === "ai",
     });
   }
 

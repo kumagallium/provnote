@@ -19,6 +19,8 @@ export type AgentRunRequest = {
   custom_instructions?: string;
   server_names?: string[];
   disabled_tools?: string[];
+  /** Wiki Retriever が検索したコンテキスト */
+  wiki_context?: string;
   options?: {
     max_turns?: number;
     model?: string;
