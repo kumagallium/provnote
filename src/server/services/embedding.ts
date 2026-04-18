@@ -21,7 +21,8 @@ export async function generateEmbeddings(
   const { createOpenAI } = await import("@ai-sdk/openai");
   const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
 
-  const embeddingModelId = "text-embedding-3-small";
+  // 登録されたモデルの modelId をそのまま使う（text-embedding-3-small 等をハードコードしない）
+  const embeddingModelId = config.modelId;
 
   let embeddingModel;
   if (config.provider === "openai") {
@@ -42,10 +43,9 @@ export async function generateEmbeddings(
     });
     embeddingModel = provider.textEmbeddingModel(embeddingModelId);
   } else {
-    // OpenAI API キーがない場合はエラー
     throw new Error(
       `Embedding は OpenAI / OpenAI 互換プロバイダーのみ対応しています（現在: ${config.provider}）。` +
-      "Settings → AI Setup で OpenAI モデルを追加してください。"
+      "Settings → AI Setup で OpenAI 互換モデルを追加してください。"
     );
   }
 
