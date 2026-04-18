@@ -610,6 +610,10 @@ function NoteEditorInner({
       derivedFromBlockId: initialDoc?.derivedFromBlockId,
       documentProvenance: currentProvenance,
       chats: savedChats.length > 0 ? savedChats : undefined,
+      // Wiki メタデータを保持（source, wikiMeta, generatedBy）
+      source: initialDoc?.source,
+      wikiMeta: initialDoc?.wikiMeta,
+      generatedBy: initialDoc?.generatedBy,
       createdAt: initialDoc?.createdAt || new Date().toISOString(),
       modifiedAt: new Date().toISOString(),
     };
