@@ -251,8 +251,9 @@ export class LocalStorageProvider implements StorageProvider {
 
   async listWikiFiles(): Promise<GraphiumFile[]> {
     const records = await getAll<{ id: string; name: string; modifiedTime: string; createdTime: string }>(STORE_FILES);
-    return records
-      .filter((r) => r.id.startsWith("__wiki__"))
+    const wikiRecords = records.filter((r) => r.id.startsWith("__wiki__"));
+    console.log(`[wiki-debug] LocalProvider.listWikiFiles: total records=${records.length}, wiki records=${wikiRecords.length}`, wikiRecords.map(r => r.id));
+    return wikiRecords
       .map((r) => ({
         id: r.id.replace("__wiki__", ""),
         name: r.name,

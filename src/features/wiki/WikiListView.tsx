@@ -1,9 +1,11 @@
 // Wiki リストビュー（メインエリアに表示）
 // Summary / Concept カテゴリ別に Wiki ドキュメント一覧を表示
+// wikiFiles + wikiMetas から直接描画（noteIndex に依存しない）
 
 import { useMemo, useState } from "react";
 import { ArrowLeft, Bot, Search, Trash2 } from "lucide-react";
 import type { WikiKind } from "../../lib/document-types";
+import type { GraphiumFile } from "../../lib/document-types";
 import type { GraphiumIndex } from "../navigation/index-file";
 
 /** 日付を YYYY-MM-DD 形式でフォーマット */
@@ -13,17 +15,27 @@ function formatDate(isoDate: string): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+type WikiMeta = {
+  title: string;
+  kind: WikiKind;
+  status: string;
+  headings: string[];
+};
+
 type Props = {
   noteIndex: GraphiumIndex | null;
   wikiKind: WikiKind;
+  wikiFiles: GraphiumFile[];
+  wikiMetas: Map<string, WikiMeta>;
   onOpenWiki: (wikiId: string) => void;
   onBack: () => void;
   onDeleteWiki: (wikiId: string) => Promise<void>;
 };
 
 export function WikiListView({
-  noteIndex,
   wikiKind,
+  wikiFiles,
+  wikiMetas,
   onOpenWiki,
   onBack,
   onDeleteWiki,
@@ -31,13 +43,22 @@ export function WikiListView({
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // インデックスから Wiki エントリをフィルタ
+  // wikiFiles + wikiMetas からフィルタ
   const wikiEntries = useMemo(() => {
-    if (!noteIndex) return [];
-    return noteIndex.notes
-      .filter((n) => n.source === "ai" && n.wikiKind === wikiKind)
+    return wikiFiles
+      .filter((f) => {
+        const meta = wikiMetas.get(f.id);
+        return meta && meta.kind === wikiKind;
+      })
+      .map((f) => ({
+        id: f.id,
+        title: wikiMetas.get(f.id)!.title,
+        modifiedAt: f.modifiedTime,
+        status: wikiMetas.get(f.id)!.status,
+        headings: wikiMetas.get(f.id)!.headings,
+      }))
       .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
-  }, [noteIndex, wikiKind]);
+  }, [wikiFiles, wikiMetas, wikiKind]);
 
   // 検索フィルタ
   const filtered = useMemo(() => {
@@ -89,7 +110,7 @@ export function WikiListView({
 
       {/* リスト */}
       <div className="flex-1 overflow-y-auto">
-        {!noteIndex ? (
+        {wikiMetas.size === 0 && wikiFiles.length > 0 ? (
           <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
             Loading...
           </div>
@@ -104,8 +125,8 @@ export function WikiListView({
           <div className="divide-y divide-border">
             {filtered.map((entry) => (
               <button
-                key={entry.noteId}
-                onClick={() => onOpenWiki(entry.noteId)}
+                key={entry.id}
+                onClick={() => onOpenWiki(entry.id)}
                 className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors group"
               >
                 <div className="flex items-start gap-3">
@@ -115,7 +136,13 @@ export function WikiListView({
                       <span className="text-sm font-medium text-foreground truncate">
                         {entry.title}
                       </span>
-                      {/* status バッジ（headings から draft/published を推定: Wiki の最初の heading が status 情報を含む場合） */}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                        entry.status === "published"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      }`}>
+                        {entry.status}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-muted-foreground">
@@ -123,14 +150,14 @@ export function WikiListView({
                       </span>
                       {entry.headings.length > 0 && (
                         <span className="text-[10px] text-muted-foreground truncate">
-                          {entry.headings.map((h) => h.text).join(" / ")}
+                          {entry.headings.join(" / ")}
                         </span>
                       )}
                     </div>
                   </div>
                   <button
-                    onClick={(e) => handleDelete(e, entry.noteId)}
-                    disabled={deletingId === entry.noteId}
+                    onClick={(e) => handleDelete(e, entry.id)}
+                    disabled={deletingId === entry.id}
                     className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
                     title="Delete"
                   >

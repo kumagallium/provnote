@@ -1674,17 +1674,15 @@ export function NoteApp() {
     memoCount: capture.captureIndex?.captures.length ?? 0,
     onShowMemos: () => { setShowMemos(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setSidebarOpen(false); },
     memosActive: showMemos,
-    wikiCounts: fm.noteIndex ? (() => {
+    wikiCounts: (() => {
       let summary = 0;
       let concept = 0;
-      for (const n of fm.noteIndex.notes) {
-        if (n.source === "ai") {
-          if (n.wikiKind === "summary") summary++;
-          else if (n.wikiKind === "concept") concept++;
-        }
+      for (const meta of fm.wikiMetas.values()) {
+        if (meta.kind === "summary") summary++;
+        else if (meta.kind === "concept") concept++;
       }
       return { summary, concept };
-    })() : undefined,
+    })(),
     onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); },
     activeWikiKind: fm.activeWikiKind,
   };
@@ -1750,6 +1748,8 @@ export function NoteApp() {
           <WikiListView
             noteIndex={fm.noteIndex}
             wikiKind={fm.activeWikiKind}
+            wikiFiles={fm.wikiFiles}
+            wikiMetas={fm.wikiMetas}
             onOpenWiki={(wikiId) => { fm.setActiveWikiKind(null); fm.handleOpenWikiFile(wikiId); }}
             onBack={() => fm.setActiveWikiKind(null)}
             onDeleteWiki={fm.handleDeleteWikiFile}

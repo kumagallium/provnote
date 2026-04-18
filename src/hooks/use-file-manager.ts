@@ -113,6 +113,8 @@ export function useFileManager(authenticated: boolean) {
   // Wiki 関連の状態
   const [wikiFiles, setWikiFiles] = useState<GraphiumFile[]>([]);
   const [activeWikiKind, setActiveWikiKind] = useState<WikiKind | null>(null);
+  // Wiki メタデータ（サイドバーカウント・リスト表示用、noteIndex とは独立）
+  const [wikiMetas, setWikiMetas] = useState<Map<string, { title: string; kind: WikiKind; status: string; headings: string[] }>>(new Map());
 
   // ファイル一覧を取得（ノートと Wiki を並列取得）
   const refreshFiles = useCallback(async () => {
@@ -122,8 +124,40 @@ export function useFileManager(authenticated: boolean) {
         listFiles(),
         listWikiFiles(),
       ]);
+      console.log(`[wiki-debug] refreshFiles: notes=${noteResult.length}, wikis=${wikiResult.length}`, wikiResult.map(f => f.id));
       setFiles(noteResult);
       setWikiFiles(wikiResult);
+      // Wiki メタデータをバックグラウンドで読み込み（サイドバーカウント・リスト表示用）
+      if (wikiResult.length > 0) {
+        Promise.allSettled(
+          wikiResult.map(async (f) => {
+            const doc = await loadWikiFile(f.id);
+            return { id: f.id, doc };
+          })
+        ).then((results) => {
+          const metas = new Map<string, { title: string; kind: WikiKind; status: string; headings: string[] }>();
+          for (const r of results) {
+            if (r.status === "fulfilled") {
+              const { id, doc } = r.value;
+              const headings = (doc.pages[0]?.blocks ?? [])
+                .filter((b: any) => b.type === "heading" && b.props?.level === 2)
+                .map((b: any) => {
+                  if (Array.isArray(b.content)) return b.content.map((c: any) => c.text ?? "").join("");
+                  return "";
+                })
+                .filter(Boolean);
+              metas.set(id, {
+                title: doc.title,
+                kind: doc.wikiMeta?.kind ?? "concept",
+                status: doc.wikiMeta?.status ?? "draft",
+                headings,
+              });
+              docCacheRef.current.set(`wiki:${id}`, doc);
+            }
+          }
+          setWikiMetas(metas);
+        });
+      }
     } catch (err) {
       console.error("ファイル一覧の取得に失敗:", err);
     } finally {
@@ -853,6 +887,7 @@ export function useFileManager(authenticated: boolean) {
           setEditorKey((k) => k + 1);
         }
         setWikiFiles((prev) => prev.filter((f) => f.id !== wikiId));
+        setWikiMetas((prev) => { const next = new Map(prev); next.delete(wikiId); return next; });
       } catch (err) {
         console.error("Wiki の削除に失敗:", err);
       }
@@ -864,7 +899,23 @@ export function useFileManager(authenticated: boolean) {
   const handleCreateWikiFile = useCallback(
     async (doc: GraphiumDocument): Promise<string> => {
       const newId = await createWikiFile(doc.title, doc);
+      console.log(`[wiki-debug] createWikiFile: id=${newId}, title=${doc.title}`);
       docCacheRef.current.set(`wiki:${newId}`, doc);
+      // wikiMetas を即座に更新（サイドバーに反映）
+      setWikiMetas((prev) => {
+        const next = new Map(prev);
+        const headings = (doc.pages[0]?.blocks ?? [])
+          .filter((b: any) => b.type === "heading" && b.props?.level === 2)
+          .map((b: any) => Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? "").join("") : "")
+          .filter(Boolean);
+        next.set(newId, {
+          title: doc.title,
+          kind: doc.wikiMeta?.kind ?? "concept",
+          status: doc.wikiMeta?.status ?? "draft",
+          headings,
+        });
+        return next;
+      });
       const now = new Date().toISOString();
       const newFile: GraphiumFile = {
         id: newId,
@@ -923,6 +974,7 @@ export function useFileManager(authenticated: boolean) {
     handleAddUrlBookmark,
     // Wiki
     wikiFiles,
+    wikiMetas,
     activeWikiKind,
     setActiveWikiKind,
     handleOpenWikiFile,
