@@ -265,11 +265,32 @@ const KNOWN_BLOCK_TYPES = new Set([
   "codeBlock", "pdf", "bookmark",
 ]);
 
+// インラインコンテンツから未知の型を除去（mention 等）
+const KNOWN_INLINE_TYPES = new Set(["text", "link"]);
+
+function sanitizeInlineContent(content: any): any {
+  if (!content) return content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((c: any) => !c.type || KNOWN_INLINE_TYPES.has(c.type))
+      .map((c: any) => {
+        // 未知の型をテキストにフォールバック
+        if (c.type && !KNOWN_INLINE_TYPES.has(c.type)) {
+          return { type: "text", text: c.props?.label ?? c.text ?? "", styles: {} };
+        }
+        return c;
+      });
+  }
+  return content;
+}
+
 function sanitizeBlocks(blocks: any[]): any[] {
   return blocks
     .filter((b) => KNOWN_BLOCK_TYPES.has(b.type))
     .map((b) => ({
       ...b,
+      content: sanitizeInlineContent(b.content),
       children: b.children?.length ? sanitizeBlocks(b.children) : b.children,
     }));
 }

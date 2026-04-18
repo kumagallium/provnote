@@ -209,52 +209,30 @@ function buildRelationBlocks(
     children: [],
   });
 
-  // 派生元ノートへのリンク
+  // 派生元ノートへのリンク（プレーンテキスト表記）
   const sourceLabel = sourceNoteTitle ?? sourceNoteId;
   blocks.push({
     id: crypto.randomUUID(),
     type: "bulletListItem",
     props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
     content: [
-      { type: "text", text: "Source: ", styles: { bold: true } },
-      {
-        type: "mention",
-        props: { noteId: sourceNoteId, label: sourceLabel },
-      },
+      { type: "text", text: `Source: @${sourceLabel}`, styles: {} },
     ],
     children: [],
   });
 
   // 関連 Concept へのリンク
-  if (relatedConcepts && relatedConcepts.length > 0 && existingWikiTitles) {
+  if (relatedConcepts && relatedConcepts.length > 0) {
     for (const conceptTitle of relatedConcepts) {
-      const wiki = existingWikiTitles.find((w) => w.title === conceptTitle);
-      if (wiki) {
-        blocks.push({
-          id: crypto.randomUUID(),
-          type: "bulletListItem",
-          props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
-          content: [
-            { type: "text", text: "Related: ", styles: { bold: true } },
-            {
-              type: "mention",
-              props: { noteId: wiki.id, label: `🤖 ${conceptTitle}` },
-            },
-          ],
-          children: [],
-        });
-      } else {
-        // Wiki が見つからない場合はテキストとして表示
-        blocks.push({
-          id: crypto.randomUUID(),
-          type: "bulletListItem",
-          props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
-          content: [
-            { type: "text", text: `Related: ${conceptTitle}`, styles: {} },
-          ],
-          children: [],
-        });
-      }
+      blocks.push({
+        id: crypto.randomUUID(),
+        type: "bulletListItem",
+        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+        content: [
+          { type: "text", text: `Related: 🤖 ${conceptTitle}`, styles: {} },
+        ],
+        children: [],
+      });
     }
   }
 
