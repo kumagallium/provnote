@@ -1047,23 +1047,35 @@ function NoteEditorInner({
       const text = el.textContent?.trim();
       return !!text && text.startsWith("@") && !text.startsWith("@#");
     };
-    const resolveMentionNoteId = (noteName: string): string | null => {
+    const resolveMentionNoteId = (noteName: string): { noteId: string; isWiki: boolean } | null => {
+      // ノートから検索
       const found = noteIndex?.notes.find((n) => n.title === noteName);
-      if (found) return found.noteId;
+      if (found) return { noteId: found.noteId, isWiki: found.source === "ai" };
       const file = files.find(
         (f) => f.name.replace(/\.(graphium|provnote)\.json$/, "") === noteName
       );
-      return file?.id ?? null;
+      if (file) return { noteId: file.id, isWiki: false };
+      // Wiki から検索（🤖 プレフィックスを除去して検索）
+      const cleanName = noteName.replace(/^🤖\s*/, "");
+      const wikiEntry = noteIndex?.notes.find(
+        (n) => n.source === "ai" && (n.title === noteName || n.title === cleanName)
+      );
+      if (wikiEntry) return { noteId: wikiEntry.noteId, isWiki: true };
+      return null;
     };
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!isMentionSpan(target)) return;
       const noteName = target.textContent!.trim().slice(1);
-      const noteId = resolveMentionNoteId(noteName);
-      if (noteId) {
+      const resolved = resolveMentionNoteId(noteName);
+      if (resolved) {
         e.preventDefault();
         e.stopPropagation();
-        setSidePeekNoteId(noteId);
+        if (resolved.isWiki) {
+          onNavigateNote(`wiki:${resolved.noteId}`);
+        } else {
+          setSidePeekNoteId(resolved.noteId);
+        }
       }
     };
     document.addEventListener("click", handleClick, true);
@@ -1828,7 +1840,13 @@ export function NoteApp() {
               : fm.handleSave}
             onDeriveNote={fm.handleDeriveNote}
             onAiDeriveNote={fm.handleAiDeriveNote}
-            onNavigateNote={fm.handleOpenFile}
+            onNavigateNote={(noteId: string, cachedDoc?: import("./lib/document-types").GraphiumDocument) => {
+              if (noteId.startsWith("wiki:")) {
+                fm.handleOpenWikiFile(noteId.replace("wiki:", ""));
+              } else {
+                fm.handleOpenFile(noteId, cachedDoc);
+              }
+            }}
             getCachedDoc={fm.getCachedDoc}
             onRefreshFiles={fm.refreshFiles}
             saving={fm.saving}
