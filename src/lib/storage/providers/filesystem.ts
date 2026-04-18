@@ -211,4 +211,37 @@ export class LocalFilesystemProvider implements StorageProvider {
     }
     mediaBlobCache.clear();
   }
+
+  // --- Wiki ドキュメント CRUD ---
+
+  async listWikiFiles(): Promise<GraphiumFile[]> {
+    const files = await invoke<RustFileInfo[]>("list_wiki_files");
+    return files.map((f) => ({
+      id: f.id,
+      name: f.name,
+      modifiedTime: f.modified_time,
+      createdTime: f.created_time,
+    }));
+  }
+
+  async loadWikiFile(fileId: string): Promise<GraphiumDocument> {
+    const json = await invoke<string>("read_wiki_file", { fileId });
+    return JSON.parse(json) as GraphiumDocument;
+  }
+
+  async createWikiFile(title: string, content: GraphiumDocument): Promise<string> {
+    const id = crypto.randomUUID();
+    const json = JSON.stringify(content);
+    await invoke("write_wiki_file", { fileId: id, content: json });
+    return id;
+  }
+
+  async saveWikiFile(fileId: string, content: GraphiumDocument): Promise<void> {
+    const json = JSON.stringify(content);
+    await invoke("write_wiki_file", { fileId, content: json });
+  }
+
+  async deleteWikiFile(fileId: string): Promise<void> {
+    await invoke("delete_wiki_file", { fileId });
+  }
 }

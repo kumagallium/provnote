@@ -63,16 +63,17 @@ export function getNoteSuggestions(
   currentFileId?: string,
   noteIndex?: GraphiumIndex | null,
 ): ReferenceSuggestion[] {
-  // インデックスがあればノート + 見出しの候補を返す
+  // インデックスがあればノート + Wiki の候補を返す
   if (noteIndex) {
     const suggestions: ReferenceSuggestion[] = [];
+
+    // 人間のノート
     const notes = noteIndex.notes
-      .filter((n) => n.noteId !== currentFileId)
+      .filter((n) => n.noteId !== currentFileId && n.source !== "ai")
       .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
-      .slice(0, 30);
+      .slice(0, 25);
 
     for (const note of notes) {
-      // ノート自体を候補に
       suggestions.push({
         type: "note",
         id: note.noteId,
@@ -80,6 +81,23 @@ export function getNoteSuggestions(
         group: "他のノート",
       });
     }
+
+    // Wiki ドキュメント（🤖 アイコンで区別）
+    const wikis = noteIndex.notes
+      .filter((n) => n.source === "ai")
+      .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+      .slice(0, 10);
+
+    for (const wiki of wikis) {
+      const kindPrefix = wiki.wikiKind === "summary" ? "Summary" : "Concept";
+      suggestions.push({
+        type: "note",
+        id: wiki.noteId,
+        label: `🤖 ${kindPrefix}: ${wiki.title}`,
+        group: "AI Knowledge",
+      });
+    }
+
     return suggestions;
   }
 

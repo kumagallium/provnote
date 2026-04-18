@@ -1,14 +1,15 @@
 // .graphium-index.json の型定義と Drive 読み書き
 // 全ノートのメタデータを1ファイルに集約し、一覧・検索・被参照計算を高速化する
 
-import type { GraphiumDocument, GraphiumFile } from "../../lib/document-types";
+import type { GraphiumDocument, GraphiumFile, WikiKind } from "../../lib/document-types";
 import { getActiveProvider } from "../../lib/storage/registry";
 
 // ── 型定義 ──
 
 // インデックスのスキーマバージョン
 // extractBlockText の改善等、インデックス構築ロジックが変わった場合にインクリメントする
-const INDEX_SCHEMA_VERSION = 3;
+// v4: source, wikiKind フィールドを追加（Wiki ドキュメント対応）
+const INDEX_SCHEMA_VERSION = 4;
 
 export type GraphiumIndex = {
   version: number;
@@ -36,6 +37,10 @@ export type NoteIndexEntry = {
     targetBlockId?: string;
     layer: "prov" | "knowledge";
   }[];
+  /** ドキュメントソース: "human" or "ai"（Wiki） */
+  source?: "human" | "ai";
+  /** Wiki ドキュメントの種類（source === "ai" の場合のみ） */
+  wikiKind?: WikiKind;
 };
 
 // ── Drive API ──
@@ -229,6 +234,8 @@ export function buildIndexEntry(
     headings,
     labels,
     outgoingLinks,
+    source: doc.source,
+    wikiKind: doc.wikiMeta?.kind,
   };
 }
 
@@ -313,7 +320,13 @@ export async function ensureIndex(
 
   // スキーマバージョンが異なる → 全件再構築が必要
   if (!existing || existing.version !== INDEX_SCHEMA_VERSION) {
-    return fullRebuild(files, docCache);
+    const rebuilt = await fullRebuild(files, docCache);
+    // 既存の Wiki エントリを保持（Wiki は別管理のため再構築対象外）
+    if (existing) {
+      const wikiEntries = existing.notes.filter((n) => n.source === "ai");
+      rebuilt.notes.push(...wikiEntries);
+    }
+    return rebuilt;
   }
 
   // 差分更新: 変更があったノートだけ再読み込み
@@ -328,9 +341,9 @@ export async function ensureIndex(
     }
   }
 
-  // 削除されたノートを除去
+  // 削除されたノートを除去（Wiki エントリは別管理なので除外）
   const deletedIds = existing.notes
-    .filter((n) => !fileIds.has(n.noteId))
+    .filter((n) => n.source !== "ai" && !fileIds.has(n.noteId))
     .map((n) => n.noteId);
 
   // 変更も削除もなければ既存インデックスを返す
@@ -355,8 +368,8 @@ export async function ensureIndex(
     });
   }
 
-  // 既存エントリをベースに差分適用
-  let notes = existing.notes.filter((n) => fileIds.has(n.noteId));
+  // 既存エントリをベースに差分適用（Wiki エントリは保持）
+  let notes = existing.notes.filter((n) => n.source === "ai" || fileIds.has(n.noteId));
   for (const file of staleFiles) {
     const doc = docCache.get(file.id);
     if (doc) {
@@ -412,11 +425,14 @@ async function fullRebuild(
 }
 
 // インデックスがファイル一覧に対して最新かチェック
+// Wiki エントリ（source === "ai"）はノートとは別管理なので除外して比較する
 function isIndexFresh(index: GraphiumIndex, files: GraphiumFile[]): boolean {
+  // ノートエントリのみ抽出（Wiki を除外）
+  const noteEntries = index.notes.filter((n) => n.source !== "ai");
   // ファイル数が一致しない → 古い
-  if (index.notes.length !== files.length) return false;
+  if (noteEntries.length !== files.length) return false;
 
-  const indexMap = new Map(index.notes.map((n) => [n.noteId, n.modifiedAt]));
+  const indexMap = new Map(noteEntries.map((n) => [n.noteId, n.modifiedAt]));
   for (const file of files) {
     const indexModified = indexMap.get(file.id);
     // インデックスに含まれていない or 更新日が古い → 再構築

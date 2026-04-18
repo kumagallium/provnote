@@ -1,7 +1,8 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot } from "lucide-react";
+import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
 import { useT, getDisplayLabelName } from "../i18n";
 import type { MediaIndex, MediaType } from "../features/asset-browser";
@@ -35,6 +36,12 @@ export type FileSidebarProps = {
   onShowMemos?: () => void;
   /** メモセクションがアクティブか */
   memosActive?: boolean;
+  /** Wiki カテゴリ別カウント */
+  wikiCounts?: { summary: number; concept: number };
+  /** Wiki リスト表示 */
+  onShowWikiList?: (kind: WikiKind) => void;
+  /** 現在アクティブな Wiki カテゴリ（ハイライト用） */
+  activeWikiKind?: WikiKind | null;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -76,6 +83,9 @@ export function FileSidebar({
   memoCount = 0,
   onShowMemos,
   memosActive = false,
+  wikiCounts,
+  onShowWikiList,
+  activeWikiKind,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -215,6 +225,37 @@ export function FileSidebar({
             </div>
           )}
         </div>
+
+        {/* AI Knowledge セクション */}
+        {onShowWikiList && (
+          <div className="px-4 pt-1 pb-2">
+            <h3 className="text-[10px] font-semibold text-sidebar-foreground/40 tracking-wider uppercase mb-1.5">
+              AI
+            </h3>
+            <div className="space-y-0.5">
+              {(["summary", "concept"] as const).map((kind) => {
+                const count = wikiCounts?.[kind] ?? 0;
+                return (
+                  <button
+                    key={kind}
+                    onClick={() => onShowWikiList(kind)}
+                    className={`w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${
+                      activeWikiKind === kind
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    }`}
+                  >
+                    <span className="text-muted-foreground shrink-0"><Bot size={14} /></span>
+                    <span className="flex-1 text-left capitalize">{kind === "summary" ? "Summary" : "Concept"}</span>
+                    {count > 0 && (
+                      <span className="text-[10px] text-muted-foreground">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* フッター */}

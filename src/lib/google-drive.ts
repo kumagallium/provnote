@@ -51,6 +51,7 @@ async function authedFetch(
 // フォルダ ID のキャッシュ
 let cachedFolderId: string | null = null;
 let cachedUploadFolderId: string | null = null;
+let cachedWikiFolderId: string | null = null;
 
 // Graphium 専用フォルダを取得 or 作成（旧名 ProvNote からの自動リネーム付き）
 export async function getOrCreateFolder(): Promise<string> {
@@ -401,10 +402,118 @@ export function extractDriveFileId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// ── Wiki ドキュメント用関数 ──
+
+const WIKI_FOLDER = "wiki";
+
+// Graphium/wiki サブフォルダを取得 or 作成
+async function getOrCreateWikiFolder(): Promise<string> {
+  if (cachedWikiFolderId) return cachedWikiFolderId;
+
+  const parentId = await getOrCreateFolder();
+
+  const query = `name='${WIKI_FOLDER}' and mimeType='${MIME_FOLDER}' and '${parentId}' in parents and trashed=false`;
+  const res = await authedFetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive`
+  );
+  const data = await res.json();
+
+  if (data.files && data.files.length > 0) {
+    cachedWikiFolderId = data.files[0].id;
+    return cachedWikiFolderId!;
+  }
+
+  const createRes = await authedFetch(`${DRIVE_API}/files`, {
+    method: "POST",
+    headers: { "Content-Type": MIME_JSON },
+    body: JSON.stringify({
+      name: WIKI_FOLDER,
+      parents: [parentId],
+      mimeType: MIME_FOLDER,
+    }),
+  });
+  const folder = await createRes.json();
+  cachedWikiFolderId = folder.id;
+  return cachedWikiFolderId!;
+}
+
+// Wiki ファイル一覧を取得
+export async function driveListWikiFiles(): Promise<GraphiumFile[]> {
+  const wikiFolderId = await getOrCreateWikiFolder();
+  const query = `'${wikiFolderId}' in parents and trashed=false and name contains '.graphium.json'`;
+  const fields = "files(id,name,modifiedTime,createdTime)";
+
+  const res = await authedFetch(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=${fields}&orderBy=modifiedTime desc&spaces=drive`
+  );
+  const data = await res.json();
+  return data.files || [];
+}
+
+// Wiki ファイルを読み込み
+export async function driveLoadWikiFile(fileId: string): Promise<GraphiumDocument> {
+  return loadFile(fileId);
+}
+
+// Wiki ファイルを新規作成
+export async function driveCreateWikiFile(
+  title: string,
+  content: GraphiumDocument
+): Promise<string> {
+  const wikiFolderId = await getOrCreateWikiFolder();
+  const fileName = `${title}.graphium.json`;
+
+  const metadata = {
+    name: fileName,
+    parents: [wikiFolderId],
+    mimeType: MIME_JSON,
+  };
+
+  const boundary = "graphium_wiki_boundary";
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    "Content-Type: application/json",
+    "",
+    JSON.stringify(content),
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  const res = await authedFetch(
+    `${UPLOAD_API}/files?uploadType=multipart&fields=id`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  );
+  const data = await res.json();
+  return data.id;
+}
+
+// Wiki ファイルを保存（既存の saveFile と同じロジック）
+export async function driveSaveWikiFile(
+  fileId: string,
+  content: GraphiumDocument
+): Promise<void> {
+  return saveFile(fileId, content);
+}
+
+// Wiki ファイルを削除（ゴミ箱に移動）
+export async function driveDeleteWikiFile(fileId: string): Promise<void> {
+  return deleteFile(fileId);
+}
+
 // フォルダIDキャッシュをクリア（サインアウト時に呼ぶ）
 export function clearCache(): void {
   cachedFolderId = null;
   cachedUploadFolderId = null;
+  cachedWikiFolderId = null;
   cachedUserEmail = null;
   // Blob URL を解放
   for (const url of blobUrlCache.values()) {

@@ -16,25 +16,33 @@ const NODE_COLORS = {
   current: "#4B7A52", // ブランドグリーン（現在のノート）
   hop1: "#5b8fb9",    // 落ち着いた青（1ホップ）
   hop2: "#b8c9be",    // 淡いグリーングレー（2ホップ）
+  wiki: "#9b6dcc",    // パープル（Wiki ドキュメント）
 } as const;
 
 const EDGE_COLOR = "#b8d4bb"; // 淡いグリーン
 const BG_COLOR = "#fafdf7";   // テーマ背景
 
-function getNodeColor(hop: number, isCurrent: boolean): string {
+function getNodeColor(hop: number, isCurrent: boolean, isWiki?: boolean): string {
   if (isCurrent) return NODE_COLORS.current;
+  if (isWiki) return NODE_COLORS.wiki;
   if (hop === 1) return NODE_COLORS.hop1;
   return NODE_COLORS.hop2;
 }
 
-function getBorderColor(hop: number, isCurrent: boolean): string {
+function getBorderColor(hop: number, isCurrent: boolean, isWiki?: boolean): string {
   if (isCurrent) return "#3d6844";
+  if (isWiki) return "#7b4fb0";
   if (hop === 1) return "#4a7da6";
   return "#9cb5a4";
 }
 
 function getNodeSize(isCurrent: boolean): number {
   return isCurrent ? 40 : 28;
+}
+
+function getNodeShape(isCurrent: boolean, isWiki?: boolean): string {
+  if (isCurrent) return "ellipse";
+  return isWiki ? "diamond" : "ellipse";
 }
 
 // ── Cytoscape スタイル ──
@@ -51,6 +59,7 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       "text-valign": "bottom",
       "text-margin-y": 6,
       "background-color": "data(color)",
+      shape: "data(shape)" as any,
       width: "data(size)",
       height: "data(size)",
       "border-width": 2,
@@ -160,14 +169,15 @@ export function NetworkGraphPanel({
     const elements: cytoscape.ElementDefinition[] = [];
 
     for (const node of data.nodes) {
-      const color = getNodeColor(node.hop, node.isCurrent);
+      const color = getNodeColor(node.hop, node.isCurrent, node.isWiki);
       elements.push({
         data: {
           id: node.id,
-          label: node.title,
+          label: node.isWiki ? `🤖 ${node.title}` : node.title,
           color,
-          borderColor: getBorderColor(node.hop, node.isCurrent),
+          borderColor: getBorderColor(node.hop, node.isCurrent, node.isWiki),
           size: getNodeSize(node.isCurrent),
+          shape: getNodeShape(node.isCurrent, node.isWiki),
           hop: node.hop,
           isCurrent: node.isCurrent,
         },
@@ -300,6 +310,13 @@ export function NetworkGraphPanel({
             style={{ backgroundColor: NODE_COLORS.hop2 }}
           />
           2ホップ
+        </span>
+        <span className="flex items-center gap-1">
+          <span
+            className="inline-block w-2.5 h-2.5 rotate-45"
+            style={{ backgroundColor: NODE_COLORS.wiki, width: 8, height: 8 }}
+          />
+          Wiki
         </span>
       </div>
       {/* グラフ */}

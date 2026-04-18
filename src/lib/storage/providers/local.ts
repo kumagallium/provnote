@@ -104,8 +104,8 @@ export class LocalStorageProvider implements StorageProvider {
   async listFiles(): Promise<GraphiumFile[]> {
     const records = await getAll<{ id: string; name: string; content: GraphiumDocument; modifiedTime: string; createdTime: string }>(STORE_FILES);
     return records
-      // アプリ内部データ（インデックス等）を除外
-      .filter((r) => !r.id.startsWith("__app__"))
+      // アプリ内部データ（インデックス等）と Wiki ドキュメントを除外
+      .filter((r) => !r.id.startsWith("__app__") && !r.id.startsWith("__wiki__"))
       .map((r) => ({
         id: r.id,
         name: r.name,
@@ -245,5 +245,63 @@ export class LocalStorageProvider implements StorageProvider {
 
   clearCache(): void {
     // ローカルにキャッシュ管理は不要
+  }
+
+  // --- Wiki ドキュメント CRUD ---
+
+  async listWikiFiles(): Promise<GraphiumFile[]> {
+    const records = await getAll<{ id: string; name: string; modifiedTime: string; createdTime: string }>(STORE_FILES);
+    const wikiRecords = records.filter((r) => r.id.startsWith("__wiki__"));
+    console.log(`[wiki-debug] LocalProvider.listWikiFiles: total records=${records.length}, wiki records=${wikiRecords.length}`, wikiRecords.map(r => r.id));
+    return wikiRecords
+      .map((r) => ({
+        id: r.id.replace("__wiki__", ""),
+        name: r.name,
+        modifiedTime: r.modifiedTime,
+        createdTime: r.createdTime,
+      }))
+      .sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime());
+  }
+
+  async loadWikiFile(fileId: string): Promise<GraphiumDocument> {
+    const record = await withStore<any>(STORE_FILES, "readonly", (store) =>
+      store.get(`__wiki__${fileId}`)
+    );
+    if (!record) throw new Error(`Wiki が見つかりません: ${fileId}`);
+    return record.content;
+  }
+
+  async createWikiFile(title: string, content: GraphiumDocument): Promise<string> {
+    const id = generateId();
+    const now = new Date().toISOString();
+    const name = `${title}.graphium.json`;
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.put({ id: `__wiki__${id}`, name, content, modifiedTime: now, createdTime: now })
+    );
+    return id;
+  }
+
+  async saveWikiFile(fileId: string, content: GraphiumDocument): Promise<void> {
+    const key = `__wiki__${fileId}`;
+    const existing = await withStore<any>(STORE_FILES, "readonly", (store) =>
+      store.get(key)
+    );
+    const now = new Date().toISOString();
+    const name = `${content.title}.graphium.json`;
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.put({
+        id: key,
+        name,
+        content,
+        modifiedTime: now,
+        createdTime: existing?.createdTime ?? now,
+      })
+    );
+  }
+
+  async deleteWikiFile(fileId: string): Promise<void> {
+    await withStore(STORE_FILES, "readwrite", (store) =>
+      store.delete(`__wiki__${fileId}`)
+    );
   }
 }

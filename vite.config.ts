@@ -110,7 +110,7 @@ export default defineConfig({
     proxy: {
       // /api/* をバックエンドサーバーに転送
       "/api": {
-        target: "http://localhost:3001",
+        target: `http://localhost:${process.env.PORT ?? 3001}`,
         changeOrigin: true,
       },
     },

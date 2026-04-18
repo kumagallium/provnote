@@ -206,11 +206,51 @@ function convertDocumentProvenance(bundle: DocumentProvenanceBundle): W3CProvNod
 /**
  * Graphium 内部形式を W3C PROV-JSON-LD 準拠ドキュメントに変換
  */
-function buildW3CProvJsonLd(provDoc: ProvJsonLd, title: string): W3CProvDocument {
+type WikiEntityInfo = {
+  title: string;
+  kind: string;
+  status: string;
+  generatedAt: string;
+  model: string;
+  derivedFromNotes: string[];
+};
+
+function buildW3CProvJsonLd(provDoc: ProvJsonLd, title: string, wikiEntities?: WikiEntityInfo[]): W3CProvDocument {
   const graph: W3CProvNode[] = [];
 
   // Content Provenance（実験手順のPROVグラフ）
   graph.push(...convertContentProvenance(provDoc));
+
+  // Wiki Knowledge Layer（AI 生成ドキュメント）を Entity として追加
+  if (wikiEntities) {
+    for (const wiki of wikiEntities) {
+      graph.push({
+        "@type": "Entity",
+        "@id": `graphium:wiki/${encodeURIComponent(wiki.title)}`,
+        label: toW3CLabel(wiki.title),
+        "graphium:wikiKind": wiki.kind,
+        "graphium:wikiStatus": wiki.status,
+        "graphium:generatedAt": wiki.generatedAt,
+        "graphium:generatedBy": wiki.model,
+      });
+      // Derivation: Wiki → 派生元ノート
+      for (const sourceNoteId of wiki.derivedFromNotes) {
+        graph.push({
+          "@type": "Derivation",
+          "@id": `_:wiki_deriv_${encodeURIComponent(wiki.title)}_${sourceNoteId}`,
+          generatedEntity: `graphium:wiki/${encodeURIComponent(wiki.title)}`,
+          usedEntity: `graphium:note/${sourceNoteId}`,
+        } as any);
+      }
+      // Attribution: Wiki → AI Agent
+      graph.push({
+        "@type": "Attribution",
+        "@id": `_:wiki_attr_${encodeURIComponent(wiki.title)}`,
+        entity: `graphium:wiki/${encodeURIComponent(wiki.title)}`,
+        agent: `graphium:agent/${encodeURIComponent(wiki.model)}`,
+      } as any);
+    }
+  }
 
   // Document Provenance（編集来歴）を Bundle として追加
   if (provDoc["graphium:documentProvenance"]) {
@@ -243,10 +283,11 @@ function buildW3CProvJsonLd(provDoc: ProvJsonLd, title: string): W3CProvDocument
 export function exportProvJsonLd(options: {
   title: string;
   provDoc: ProvJsonLd;
+  wikiEntities?: WikiEntityInfo[];
 }): void {
-  const { title, provDoc } = options;
+  const { title, provDoc, wikiEntities } = options;
 
-  const jsonLd = buildW3CProvJsonLd(provDoc, title);
+  const jsonLd = buildW3CProvJsonLd(provDoc, title, wikiEntities);
   const jsonStr = JSON.stringify(jsonLd, null, 2);
 
   const blob = new Blob([jsonStr], { type: "application/ld+json" });

@@ -23,6 +23,11 @@ import {
   getUserEmail as driveGetUserEmail,
   getLatestRevisionId,
   clearCache as driveClearCache,
+  driveListWikiFiles,
+  driveLoadWikiFile,
+  driveCreateWikiFile,
+  driveSaveWikiFile,
+  driveDeleteWikiFile,
 } from "../../google-drive";
 import { clearIndexCache } from "../../../features/navigation/index-file";
 import { clearMediaIndexCache } from "../../../features/asset-browser/media-index";
@@ -125,5 +130,26 @@ export class GoogleDriveProvider implements StorageProvider {
     clearIndexCache();
     clearMediaIndexCache();
     clearCaptureCache();
+  }
+
+  // --- Wiki ドキュメント CRUD ---
+  async listWikiFiles(): Promise<GraphiumFile[]> {
+    return driveListWikiFiles();
+  }
+
+  async loadWikiFile(fileId: string): Promise<GraphiumDocument> {
+    return driveLoadWikiFile(fileId);
+  }
+
+  async createWikiFile(title: string, content: GraphiumDocument): Promise<string> {
+    return driveCreateWikiFile(title, content);
+  }
+
+  async saveWikiFile(fileId: string, content: GraphiumDocument): Promise<void> {
+    return driveSaveWikiFile(fileId, content);
+  }
+
+  async deleteWikiFile(fileId: string): Promise<void> {
+    return driveDeleteWikiFile(fileId);
   }
 }
