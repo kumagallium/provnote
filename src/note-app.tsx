@@ -64,7 +64,7 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
-import { WikiListView, WikiBanner, IngestToast, type IngestToastState, type IngestToastItem, ingestNote, buildWikiDocument, mergeIntoWikiDocument, embedWikiSections } from "./features/wiki";
+import { WikiListView, WikiBanner, IngestToast, type IngestToastState, type IngestToastItem, ingestNote, ingestFromUrl, ingestFromChat, buildWikiDocument, mergeIntoWikiDocument, embedWikiSections } from "./features/wiki";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
@@ -117,6 +117,7 @@ function NoteHeaderMenu({
   onExportProvJsonLd,
   provExportDisabled,
   onIngestToWiki,
+  onIngestFromUrl,
   ingestDisabled,
   isWikiDoc,
   t,
@@ -128,6 +129,7 @@ function NoteHeaderMenu({
   onExportProvJsonLd: () => void;
   provExportDisabled: boolean;
   onIngestToWiki?: () => void;
+  onIngestFromUrl?: () => void;
   ingestDisabled?: boolean;
   isWikiDoc?: boolean;
   t: (key: string) => string;
@@ -196,6 +198,16 @@ function NoteHeaderMenu({
                 <span className="text-sm">🤖</span>
                 Add to Knowledge
               </button>
+              {onIngestFromUrl && (
+                <button
+                  className={itemClass}
+                  disabled={ingestDisabled}
+                  onClick={() => { onIngestFromUrl(); setOpen(false); }}
+                >
+                  <span className="text-sm">🌐</span>
+                  URL to Knowledge
+                </button>
+              )}
             </>
           )}
         </div>
@@ -239,6 +251,10 @@ type NoteEditorProps = {
   onEditorRef?: (editor: any) => void;
   /** Knowledge に追加コールバック */
   onIngestToWiki?: () => void;
+  /** URL から Knowledge コールバック */
+  onIngestFromUrl?: () => void;
+  /** チャットから Knowledge コールバック */
+  onIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
   /** Wiki ドキュメントかどうか */
   isWikiDoc?: boolean;
 };
@@ -318,6 +334,8 @@ function NoteEditorInner({
   captureIndex: captureIndexProp,
   onEditorRef,
   onIngestToWiki,
+  onIngestFromUrl,
+  onIngestChat,
   isWikiDoc,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
@@ -1295,6 +1313,7 @@ function NoteEditorInner({
           onExportProvJsonLd={handleExportProvJsonLd}
           provExportDisabled={!provDoc || provDoc["@graph"].length === 0}
           onIngestToWiki={onIngestToWiki}
+          onIngestFromUrl={onIngestFromUrl}
           ingestDisabled={!fileId || saving}
           isWikiDoc={isWikiDoc}
           t={t}
@@ -1475,6 +1494,7 @@ function NoteEditorInner({
                   onInsertToScope={handleInsertToScope}
                   onReplaceBlocks={handleReplaceBlocks}
                   onDeriveNote={handleAiDeriveFromChat}
+                  onIngestChat={onIngestChat}
                 />
               )}
               {rightTab === "history" && (
@@ -1879,6 +1899,71 @@ export function NoteApp() {
               if (!fm.activeFileId || !fm.activeDoc) return;
               enqueueIngest(fm.activeFileId, fm.activeDoc.title, fm.activeDoc);
             } : undefined}
+            onIngestFromUrl={() => {
+              const url = prompt("URL を入力してください:");
+              if (!url) return;
+              // URL Ingest をキューに追加
+              const jobId = `url:${Date.now()}`;
+              const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: url };
+              ingestQueueRef.current.push({ noteId: jobId, noteTitle: url, doc: null as any });
+              setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+              // キュー処理とは別に直接実行（doc が null なので通常のキュー処理は使えない）
+              (async () => {
+                setIngestToast((prev) => ({
+                  items: (prev?.items ?? []).map((i) => i.id === jobId ? { ...i, status: "generating" as const, detail: "Fetching URL..." } : i),
+                }));
+                try {
+                  const existingWikis = (fm.noteIndex?.notes ?? [])
+                    .filter((n) => n.source === "ai" && n.wikiKind)
+                    .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+                  const result = await ingestFromUrl(url, existingWikis, "ja");
+                  if (result.wikis.length === 0) {
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i) => i.id === jobId ? { ...i, status: "error" as const, result: "内容不足" } : i) }));
+                    ingestQueueRef.current = ingestQueueRef.current.filter((j) => j.noteId !== jobId);
+                    return;
+                  }
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i) => i.id === jobId ? { ...i, status: "saving" as const, detail: `${result.wikis.length} wiki(s)` } : i) }));
+                  for (const wiki of result.wikis) {
+                    const wikiDoc = buildWikiDocument(wiki, jobId, result.model, url);
+                    const newId = await fm.handleCreateWikiFile(wikiDoc);
+                    embedWikiSections(newId, wikiDoc).catch(() => {});
+                  }
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i) => i.id === jobId ? { ...i, status: "success" as const, detail: undefined, result: `${result.wikis.length} wiki(s)` } : i) }));
+                } catch (err) {
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i) => i.id === jobId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
+                }
+                ingestQueueRef.current = ingestQueueRef.current.filter((j) => j.noteId !== jobId);
+              })();
+            }}
+            onIngestChat={(chatMessages) => {
+              const jobId = `chat:${Date.now()}`;
+              const chatTitle = chatMessages[0]?.content.slice(0, 30) ?? "Chat";
+              const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: `Chat: ${chatTitle}` };
+              setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+              (async () => {
+                setIngestToast((prev) => ({
+                  items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "generating" as const, detail: "Extracting knowledge..." } : i),
+                }));
+                try {
+                  const existingWikis = (fm.noteIndex?.notes ?? [])
+                    .filter((n) => n.source === "ai" && n.wikiKind)
+                    .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+                  const result = await ingestFromChat(chatMessages, chatTitle, existingWikis, "ja");
+                  if (result.wikis.length === 0) {
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: "内容不足" } : i) }));
+                    return;
+                  }
+                  for (const wiki of result.wikis) {
+                    const wikiDoc = buildWikiDocument(wiki, jobId, result.model, chatTitle);
+                    const newId = await fm.handleCreateWikiFile(wikiDoc);
+                    embedWikiSections(newId, wikiDoc).catch(() => {});
+                  }
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "success" as const, result: `${result.wikis.length} wiki(s)` } : i) }));
+                } catch (err) {
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
+                }
+              })();
+            }}
           />
           </>
         )}
