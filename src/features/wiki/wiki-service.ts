@@ -70,6 +70,7 @@ export function buildWikiDocument(
     sourceNoteTitle,
     ingesterOutput.relatedConcepts,
     existingWikiTitles,
+    ingesterOutput.externalReferences,
   );
   blocks.push(...relations.blocks);
 
@@ -202,6 +203,7 @@ function buildRelationBlocks(
   sourceNoteTitle?: string,
   relatedConcepts?: string[],
   existingWikiTitles?: { id: string; title: string }[],
+  externalReferences?: { url: string; title: string }[],
 ): RelationBlocksResult {
   const blocks: any[] = [];
   const knowledgeLinks: any[] = [];
@@ -265,6 +267,26 @@ function buildRelationBlocks(
           createdBy: "ai",
         });
       }
+    }
+  }
+
+  // 外部参照リンク
+  if (externalReferences && externalReferences.length > 0) {
+    for (const ref of externalReferences) {
+      blocks.push({
+        id: crypto.randomUUID(),
+        type: "bulletListItem",
+        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+        content: [
+          { type: "text", text: "Evidence: ", styles: { bold: true } },
+          {
+            type: "link",
+            href: ref.url,
+            content: [{ type: "text", text: ref.title, styles: {} }],
+          },
+        ],
+        children: [],
+      });
     }
   }
 

@@ -17,6 +17,8 @@ export type IngesterOutput = {
   confidence: number;
   /** 関連する既存 Concept のタイトルリスト */
   relatedConcepts: string[];
+  /** 根拠となる外部参照 URL（LLM が提示） */
+  externalReferences: { url: string; title: string }[];
 };
 
 export type ExistingWikiInfo = {
@@ -60,7 +62,10 @@ Respond with valid JSON only (no markdown wrapper, no explanation outside JSON):
       "suggestedAction": "create" | "merge",
       "mergeTargetId": "string (only if merge)",
       "confidence": 0.0-1.0,
-      "relatedConcepts": ["existing concept title 1", "..."]
+      "relatedConcepts": ["existing concept title 1", "..."],
+      "externalReferences": [
+        { "url": "https://...", "title": "Reference description" }
+      ]
     }
   ]
 }
@@ -111,6 +116,7 @@ Output in: ${language === "ja" ? "Japanese" : "English"}
 - Section content: Be substantive (100-500 chars per section). Include reasoning, not just facts
 - relatedConcepts: List titles of existing Concepts that are related (empty array if none)
 - confidence: 0.9+ for clear, well-evidenced knowledge. 0.6-0.8 for tentative insights
+- externalReferences: Include URLs to authoritative sources (Wikipedia, academic papers, official docs) that support or contextualize the knowledge. Only include URLs you are confident exist. 0-3 per wiki. Leave empty if no relevant external source comes to mind
 - If the note is too short or trivial (e.g., just a title), generate only a minimal Summary with confidence 0.5`;
 }
 
@@ -144,6 +150,11 @@ export function parseIngesterOutput(text: string): IngesterOutput[] {
         mergeTargetId: w.mergeTargetId ? String(w.mergeTargetId) : undefined,
         confidence: typeof w.confidence === "number" ? w.confidence : 0.7,
         relatedConcepts: Array.isArray(w.relatedConcepts) ? w.relatedConcepts.map(String) : [],
+        externalReferences: Array.isArray(w.externalReferences)
+          ? w.externalReferences
+              .filter((r: any) => r.url && typeof r.url === "string")
+              .map((r: any) => ({ url: String(r.url), title: String(r.title ?? r.url) }))
+          : [],
       }));
   } catch (err) {
     console.error("Ingester 出力のパース失敗:", err);
