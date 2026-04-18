@@ -23,15 +23,15 @@ const EDGE_COLOR = "#b8d4bb"; // 淡いグリーン
 const BG_COLOR = "#fafdf7";   // テーマ背景
 
 function getNodeColor(hop: number, isCurrent: boolean, isWiki?: boolean): string {
-  if (isWiki) return NODE_COLORS.wiki;
   if (isCurrent) return NODE_COLORS.current;
+  if (isWiki) return NODE_COLORS.wiki;
   if (hop === 1) return NODE_COLORS.hop1;
   return NODE_COLORS.hop2;
 }
 
 function getBorderColor(hop: number, isCurrent: boolean, isWiki?: boolean): string {
-  if (isWiki) return "#7b4fb0";
   if (isCurrent) return "#3d6844";
+  if (isWiki) return "#7b4fb0";
   if (hop === 1) return "#4a7da6";
   return "#9cb5a4";
 }
@@ -40,7 +40,8 @@ function getNodeSize(isCurrent: boolean): number {
   return isCurrent ? 40 : 28;
 }
 
-function getNodeShape(isWiki?: boolean): string {
+function getNodeShape(isCurrent: boolean, isWiki?: boolean): string {
+  if (isCurrent) return "ellipse";
   return isWiki ? "diamond" : "ellipse";
 }
 
@@ -176,7 +177,7 @@ export function NetworkGraphPanel({
           color,
           borderColor: getBorderColor(node.hop, node.isCurrent, node.isWiki),
           size: getNodeSize(node.isCurrent),
-          shape: getNodeShape(node.isWiki),
+          shape: getNodeShape(node.isCurrent, node.isWiki),
           hop: node.hop,
           isCurrent: node.isCurrent,
         },
