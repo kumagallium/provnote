@@ -16,8 +16,8 @@ const MAX_CONTEXT_CHARS = 2000;
 export async function retrieveWikiContext(
   userMessage: string,
 ): Promise<string | null> {
+  // まず embedding ベースの検索を試みる
   try {
-    // ユーザーメッセージの embedding を取得
     const res = await fetch("/api/wiki/embed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,26 +26,26 @@ export async function retrieveWikiContext(
       }),
     });
 
-    if (!res.ok) return null;
+    if (res.ok) {
+      const data = await res.json() as {
+        embeddings: { vector: number[] }[];
+      };
 
-    const data = await res.json() as {
-      embeddings: { vector: number[] }[];
-    };
-
-    if (!data.embeddings?.[0]?.vector) return null;
-
-    const queryVector = data.embeddings[0].vector;
-    const results = await embeddingStore.searchByVector(queryVector, TOP_K);
-
-    // スコアが低すぎるものを除外
-    const relevant = results.filter((r) => r.score >= MIN_SCORE);
-    if (relevant.length === 0) return null;
-
-    return formatWikiContext(relevant);
-  } catch (err) {
-    console.warn("Wiki Retriever エラー:", err);
-    return null;
+      if (data.embeddings?.[0]?.vector) {
+        const queryVector = data.embeddings[0].vector;
+        const results = await embeddingStore.searchByVector(queryVector, TOP_K);
+        const relevant = results.filter((r) => r.score >= MIN_SCORE);
+        if (relevant.length > 0) {
+          return formatWikiContext(relevant);
+        }
+      }
+    }
+  } catch {
+    // embedding 失敗 → フォールバックへ
   }
+
+  // フォールバック: テキストマッチベースの検索
+  return retrieveWikiContextFallback(userMessage);
 }
 
 /**

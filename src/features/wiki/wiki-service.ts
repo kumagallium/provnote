@@ -327,33 +327,51 @@ export async function embedWikiSections(
   const sections = extractSectionsForEmbedding(wikiDocId, doc);
   if (sections.length === 0) return;
 
-  const res = await fetch(`${API_BASE}/embed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texts: sections }),
-  });
+  // 既存データを削除
+  await embeddingStore.deleteByDocument(wikiDocId);
 
-  if (!res.ok) {
-    console.warn("Embedding 生成に失敗:", await res.text().catch(() => ""));
-    return;
+  // Embedding API を試みる
+  let embeddingSuccess = false;
+  try {
+    const res = await fetch(`${API_BASE}/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts: sections }),
+    });
+
+    if (res.ok) {
+      const data = await res.json() as {
+        embeddings: { documentId: string; sectionId: string; vector: number[] }[];
+        modelVersion: string;
+      };
+
+      for (const emb of data.embeddings) {
+        const section = sections.find((s) => s.sectionId === emb.sectionId);
+        await embeddingStore.setEmbedding(
+          emb.documentId,
+          emb.sectionId,
+          emb.vector,
+          data.modelVersion,
+          section?.text ?? "",
+        );
+      }
+      embeddingSuccess = true;
+    }
+  } catch {
+    // Embedding API 失敗（プロバイダー非対応など）
   }
 
-  const data = await res.json() as {
-    embeddings: { documentId: string; sectionId: string; vector: number[] }[];
-    modelVersion: string;
-  };
-
-  // 既存の embedding を削除してから保存
-  await embeddingStore.deleteByDocument(wikiDocId);
-  for (const emb of data.embeddings) {
-    const section = sections.find((s) => s.sectionId === emb.sectionId);
-    await embeddingStore.setEmbedding(
-      emb.documentId,
-      emb.sectionId,
-      emb.vector,
-      data.modelVersion,
-      section?.text ?? "",
-    );
+  // Embedding が使えなくてもテキストだけ保存（フォールバック Retriever 用）
+  if (!embeddingSuccess) {
+    for (const section of sections) {
+      await embeddingStore.setEmbedding(
+        section.documentId,
+        section.sectionId,
+        [], // 空ベクトル（テキストマッチ用）
+        "text-only",
+        section.text,
+      );
+    }
   }
 }
 
