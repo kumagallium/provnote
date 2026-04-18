@@ -165,11 +165,13 @@ function MediaCard({
   onNavigateNote,
   onDelete,
   onOpenDetail,
+  onIngest,
 }: {
   entry: MediaIndexEntry;
   onNavigateNote: (noteId: string) => void;
   onDelete: (entry: MediaIndexEntry) => void;
   onOpenDetail: (entry: MediaIndexEntry) => void;
+  onIngest?: (entry: MediaIndexEntry) => void;
 }) {
   const t = useT();
 
@@ -205,14 +207,25 @@ function MediaCard({
 
   return (
     <div className="border border-border rounded-md bg-background hover:border-primary/40 transition-colors group relative">
-      {/* 削除ボタン */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDelete(entry); }}
-        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 bg-background/80 hover:bg-destructive hover:text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs transition-all z-10"
-        title={t("common.delete")}
-      >
-        ✕
-      </button>
+      {/* アクションボタン */}
+      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 flex items-center gap-1 z-10">
+        {onIngest && (entry.type === "url" || entry.type === "pdf") && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onIngest(entry); }}
+            className="bg-background/80 hover:bg-primary/20 hover:text-primary rounded-full w-5 h-5 flex items-center justify-center text-[10px] transition-all"
+            title="Add to Knowledge"
+          >
+            🤖
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(entry); }}
+          className="bg-background/80 hover:bg-destructive hover:text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs transition-all"
+          title={t("common.delete")}
+        >
+          ✕
+        </button>
+      </div>
 
       {/* サムネイル（クリックでモーダル表示） */}
       <button
@@ -282,6 +295,8 @@ export type AssetGalleryViewProps = {
   onRenameMedia: (entry: MediaIndexEntry, newName: string) => Promise<void>;
   /** URL ブックマーク登録コールバック（type === "url" のときのみ使用） */
   onAddUrlBookmark?: (entry: MediaIndexEntry) => void;
+  /** メディアから Knowledge を生成（URL/PDF 用） */
+  onIngestMedia?: (entry: MediaIndexEntry) => void;
 };
 
 export function AssetGalleryView({
@@ -292,6 +307,7 @@ export function AssetGalleryView({
   onDeleteMedia,
   onRenameMedia,
   onAddUrlBookmark,
+  onIngestMedia,
 }: AssetGalleryViewProps) {
   const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
@@ -430,6 +446,7 @@ export function AssetGalleryView({
                 onNavigateNote={onNavigateNote}
                 onDelete={setDeleteTarget}
                 onOpenDetail={setDetailEntry}
+                onIngest={onIngestMedia}
               />
             ))}
           </div>

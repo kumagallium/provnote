@@ -198,16 +198,6 @@ function NoteHeaderMenu({
                 <span className="text-sm">🤖</span>
                 Add to Knowledge
               </button>
-              {onIngestFromUrl && (
-                <button
-                  className={itemClass}
-                  disabled={ingestDisabled}
-                  onClick={() => { onIngestFromUrl(); setOpen(false); }}
-                >
-                  <span className="text-sm">🌐</span>
-                  URL to Knowledge
-                </button>
-              )}
             </>
           )}
         </div>
@@ -1749,6 +1739,32 @@ export function NoteApp() {
             onDeleteMedia={fm.handleDeleteMedia}
             onRenameMedia={handleRenameMediaWithBlockSync}
             onAddUrlBookmark={fm.handleAddUrlBookmark}
+            onIngestMedia={(entry) => {
+              if (entry.type === "url" && entry.url) {
+                const jobId = `url:${Date.now()}`;
+                const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: entry.name || entry.url };
+                setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+                (async () => {
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "generating" as const, detail: "Fetching URL..." } : i) }));
+                  try {
+                    const existingWikis = (fm.noteIndex?.notes ?? []).filter((n) => n.source === "ai" && n.wikiKind).map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+                    const result = await ingestFromUrl(entry.url, existingWikis, "ja");
+                    if (result.wikis.length === 0) {
+                      setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: "内容不足" } : i) }));
+                      return;
+                    }
+                    for (const wiki of result.wikis) {
+                      const wikiDoc = buildWikiDocument(wiki, jobId, result.model, entry.name || entry.url);
+                      const newId = await fm.handleCreateWikiFile(wikiDoc);
+                      embedWikiSections(newId, wikiDoc).catch(() => {});
+                    }
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "success" as const, result: `${result.wikis.length} wiki(s)` } : i) }));
+                  } catch (err) {
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
+                  }
+                })();
+              }
+            }}
           />
         ) : fm.activeLabel ? (
           <LabelGalleryView
