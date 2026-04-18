@@ -275,28 +275,34 @@ export function useFileManager(authenticated: boolean) {
         : { version: 4, updatedAt: new Date().toISOString(), notes: [] } as GraphiumIndex;
 
       // Wiki ファイルのインデックスエントリを追加
+      // 既存インデックスから古い Wiki エントリを除去し、最新の wikiFiles から再構築する
       if (wikiFiles.length > 0) {
-        // 既にインデックスに含まれている Wiki エントリを除外
-        const existingWikiIds = new Set(
-          index.notes.filter((n) => n.source === "ai").map((n) => n.noteId)
-        );
-        const newWikiFiles = wikiFiles.filter((f) => !existingWikiIds.has(f.id));
+        // まず既存の Wiki エントリを除去（ノートエントリだけ残す）
+        index.notes = index.notes.filter((n) => n.source !== "ai");
 
-        if (newWikiFiles.length > 0) {
-          const wikiDocs = await Promise.allSettled(
-            newWikiFiles.map(async (f) => {
-              const doc = await loadWikiFile(f.id);
-              return { file: f, doc };
-            })
-          );
-          for (const result of wikiDocs) {
-            if (result.status === "fulfilled") {
-              const { file, doc } = result.value;
-              const entry = buildIndexEntry(file.id, doc, file);
-              index.notes.push(entry);
-            }
+        const wikiDocs = await Promise.allSettled(
+          wikiFiles.map(async (f) => {
+            const doc = await loadWikiFile(f.id);
+            return { file: f, doc };
+          })
+        );
+        for (const result of wikiDocs) {
+          if (result.status === "fulfilled") {
+            const { file, doc } = result.value;
+            const entry = buildIndexEntry(file.id, doc, file);
+            index.notes.push(entry);
           }
+        }
+        index.updatedAt = new Date().toISOString();
+        // Wiki 込みのインデックスを永続化
+        saveIndexFile(index).catch((err) => console.warn("インデックス保存失敗:", err));
+      } else {
+        // Wiki が無い場合も、古い Wiki エントリが残っていたら除去
+        const hadWiki = index.notes.some((n) => n.source === "ai");
+        if (hadWiki) {
+          index.notes = index.notes.filter((n) => n.source !== "ai");
           index.updatedAt = new Date().toISOString();
+          saveIndexFile(index).catch((err) => console.warn("インデックス保存失敗:", err));
         }
       }
 

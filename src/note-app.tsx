@@ -64,7 +64,7 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
-import { WikiListView, WikiBanner, IngestToast, type IngestToastState, ingestNote, buildWikiDocument, mergeIntoWikiDocument, embedWikiSections } from "./features/wiki";
+import { WikiListView, WikiBanner, IngestToast, type IngestToastState, type IngestToastItem, ingestNote, buildWikiDocument, mergeIntoWikiDocument, embedWikiSections } from "./features/wiki";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
@@ -1514,12 +1514,103 @@ export function NoteApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showMemos, setShowMemos] = useState(false);
   const [ingestToast, setIngestToast] = useState<IngestToastState>(null);
+  const ingestQueueRef = useRef<{ noteId: string; noteTitle: string; doc: import("./lib/document-types").GraphiumDocument }[]>([]);
+  const ingestRunningRef = useRef(false);
   // メモ挿入リクエスト（メモギャラリー → エディタ）
   const [pendingMemoInsert, setPendingMemoInsert] = useState<{ captureId: string; text: string; deleteAfter: boolean } | null>(null);
 
   const isDesktop = useIsDesktop();
   const fm = useFileManager(authenticated);
   const capture = useCapture(authenticated);
+
+  // Ingest キューを処理する関数
+  const processIngestQueue = useCallback(async () => {
+    if (ingestRunningRef.current) return;
+    ingestRunningRef.current = true;
+
+    while (ingestQueueRef.current.length > 0) {
+      const job = ingestQueueRef.current[0];
+      const jobId = job.noteId;
+
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === jobId ? { ...i, status: "generating" as const, detail: "AI analyzing..." } : i
+        ),
+      }));
+
+      try {
+        const existingWikis = (fm.noteIndex?.notes ?? [])
+          .filter((n) => n.source === "ai" && n.wikiKind)
+          .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+
+        const result = await ingestNote(job.noteId, job.doc, existingWikis, "ja");
+
+        if (result.wikis.length === 0) {
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === jobId ? { ...i, status: "error" as const, detail: undefined, result: "内容不足" } : i
+            ),
+          }));
+          ingestQueueRef.current.shift();
+          continue;
+        }
+
+        setIngestToast((prev) => ({
+          items: (prev?.items ?? []).map((i) =>
+            i.id === jobId
+              ? { ...i, status: "saving" as const, detail: `${result.wikis.length} wiki(s) saving...` }
+              : i
+          ),
+        }));
+
+        for (const wiki of result.wikis) {
+          if (wiki.suggestedAction === "merge" && wiki.mergeTargetId) {
+            try {
+              const existingDoc = fm.getCachedDoc(`wiki:${wiki.mergeTargetId}`);
+              if (existingDoc) {
+                const mergedDoc = mergeIntoWikiDocument(existingDoc, wiki, job.noteId, result.model);
+                await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
+                embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
+                continue;
+              }
+            } catch { /* fallback to create */ }
+          }
+          const wikiTitleMap = existingWikis.map((w) => ({ id: w.id, title: w.title }));
+          const wikiDoc = buildWikiDocument(wiki, job.noteId, result.model, job.noteTitle, wikiTitleMap);
+          const newId = await fm.handleCreateWikiFile(wikiDoc);
+          embedWikiSections(newId, wikiDoc).catch(() => {});
+        }
+
+        setIngestToast((prev) => ({
+          items: (prev?.items ?? []).map((i) =>
+            i.id === jobId
+              ? { ...i, status: "success" as const, detail: undefined, result: `${result.wikis.length} wiki(s)` }
+              : i
+          ),
+        }));
+      } catch (err) {
+        setIngestToast((prev) => ({
+          items: (prev?.items ?? []).map((i) =>
+            i.id === jobId
+              ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Error" }
+              : i
+          ),
+        }));
+      }
+
+      ingestQueueRef.current.shift();
+    }
+
+    ingestRunningRef.current = false;
+  }, [fm]);
+
+  const enqueueIngest = useCallback((noteId: string, noteTitle: string, doc: import("./lib/document-types").GraphiumDocument) => {
+    if (ingestQueueRef.current.some((j) => j.noteId === noteId)) return;
+    const newItem: IngestToastItem = { id: noteId, status: "queued", noteTitle };
+    ingestQueueRef.current.push({ noteId, noteTitle, doc });
+    setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+    processIngestQueue();
+  }, [processIngestQueue]);
 
   const t = useT();
 
@@ -1762,56 +1853,9 @@ export function NoteApp() {
             captureIndex={capture.captureIndex}
             onEditorRef={(editor) => { noteEditorRef.current = editor; }}
             isWikiDoc={fm.activeDoc?.source === "ai"}
-            onIngestToWiki={fm.activeDoc?.source !== "ai" ? async () => {
+            onIngestToWiki={fm.activeDoc?.source !== "ai" ? () => {
               if (!fm.activeFileId || !fm.activeDoc) return;
-              setIngestToast({ status: "loading", message: "Knowledge を生成中..." });
-              try {
-                // 既存 Wiki 一覧を取得
-                const existingWikis = (fm.noteIndex?.notes ?? [])
-                  .filter((n) => n.source === "ai" && n.wikiKind)
-                  .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
-
-                const result = await ingestNote(fm.activeFileId, fm.activeDoc, existingWikis, "ja");
-                if (result.wikis.length === 0) {
-                  setIngestToast({ status: "error", message: "抽出に十分な内容がありませんでした" });
-                  return;
-                }
-
-                // 生成された Wiki を保存（merge or create）
-                const titles: string[] = [];
-                for (const wiki of result.wikis) {
-                  if (wiki.suggestedAction === "merge" && wiki.mergeTargetId) {
-                    // 既存 Wiki に追記
-                    try {
-                      const existingDoc = fm.getCachedDoc(`wiki:${wiki.mergeTargetId}`);
-                      if (existingDoc) {
-                        const mergedDoc = mergeIntoWikiDocument(existingDoc, wiki, fm.activeFileId, result.model);
-                        await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
-                        titles.push(`merged → ${wiki.title}`);
-                        embedWikiSections(wiki.mergeTargetId, mergedDoc).catch((err) =>
-                          console.warn("Embedding 生成失敗:", err)
-                        );
-                        continue;
-                      }
-                    } catch {
-                      // merge 失敗時は新規作成にフォールバック
-                    }
-                  }
-                  // 新規作成
-                  const wikiTitleMap = existingWikis.map((w) => ({ id: w.id, title: w.title }));
-                  const wikiDoc = buildWikiDocument(wiki, fm.activeFileId, result.model, fm.activeDoc.title, wikiTitleMap);
-                  const newId = await fm.handleCreateWikiFile(wikiDoc);
-                  titles.push(`${wiki.kind}: ${wiki.title}`);
-                  embedWikiSections(newId, wikiDoc).catch((err) =>
-                    console.warn("Embedding 生成失敗:", err)
-                  );
-                }
-
-                setIngestToast({ status: "success", message: `${titles.length} 件生成: ${titles.join(", ")}` });
-              } catch (err) {
-                console.error("Ingest 失敗:", err);
-                setIngestToast({ status: "error", message: err instanceof Error ? err.message : "不明なエラー" });
-              }
+              enqueueIngest(fm.activeFileId, fm.activeDoc.title, fm.activeDoc);
             } : undefined}
           />
           </>
