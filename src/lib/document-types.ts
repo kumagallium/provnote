@@ -4,7 +4,8 @@
 import type { DocumentProvenance } from "../features/document-provenance/types";
 
 // AI Wiki ドキュメントの種類
-export type WikiKind = "summary" | "concept";
+// synthesis: 複数の Concept を統合して新しい洞察を生むページ
+export type WikiKind = "summary" | "concept" | "synthesis";
 
 // AI Wiki ドキュメントのステータス
 // draft: 生成直後 or 品質が低い。Retriever のコンテキスト注入対象外

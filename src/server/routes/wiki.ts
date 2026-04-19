@@ -26,6 +26,12 @@ import {
   parseCrossUpdateOutput,
   type ExistingWikiDetail,
 } from "../services/wiki-cross-updater.js";
+import {
+  buildSynthesizerSystemPrompt,
+  buildSynthesizerUserMessage,
+  parseSynthesizerOutput,
+  type ConceptSnapshot,
+} from "../services/wiki-synthesizer.js";
 import { generateEmbeddings } from "../services/embedding.js";
 
 const app = new Hono();
@@ -305,6 +311,59 @@ app.post("/cross-update", async (c) => {
     const message = err instanceof Error ? err.message : "不明なエラー";
     console.error("Wiki cross-update error:", err);
     return c.json({ proposals: [], error: message });
+  }
+});
+
+// Synthesis（複数 Concept の統合ページ生成）
+app.post("/synthesize", async (c) => {
+  const body = await c.req.json<{
+    concepts: ConceptSnapshot[];
+    existingSynthesisTitles: string[];
+    language: string;
+    model?: string;
+  }>();
+
+  if (!body.concepts || body.concepts.length < 3) {
+    return c.json({ candidates: [] });
+  }
+
+  let modelConfig = getDefaultModel();
+  if (body.model) {
+    const models = listModels();
+    modelConfig = models.find((m) => m.name === body.model) ?? modelConfig;
+  }
+
+  if (!modelConfig) {
+    return c.json({ candidates: [] });
+  }
+
+  const systemPrompt = buildSynthesizerSystemPrompt(body.language || "en");
+  const userMessage = buildSynthesizerUserMessage(
+    body.concepts,
+    body.existingSynthesisTitles || [],
+  );
+
+  try {
+    const model = createModel(modelConfig);
+    const result = await runAgentLoop({
+      model,
+      modelId: modelConfig.modelId,
+      systemPrompt,
+      messages: [{ role: "user" as const, content: userMessage }],
+      maxSteps: 1,
+    });
+
+    const candidates = parseSynthesizerOutput(result.message);
+
+    return c.json({
+      candidates,
+      tokenUsage: result.tokenUsage,
+      model: result.model,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "不明なエラー";
+    console.error("Wiki synthesize error:", err);
+    return c.json({ candidates: [], error: message });
   }
 });
 

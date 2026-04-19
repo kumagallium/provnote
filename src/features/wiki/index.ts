@@ -13,6 +13,8 @@ export {
   // 構造化インデックス
   buildWikiIndex, formatWikiIndexForLLM,
   type WikiIndexEntry,
+  // Synthesis
+  fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
 } from "./wiki-service";
 export { retrieveWikiContext } from "./retriever";
 export { wikiLog } from "./wiki-log";
