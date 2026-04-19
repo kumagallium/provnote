@@ -258,8 +258,10 @@ type NoteEditorProps = {
   onIngestToWiki?: () => void;
   /** URL から Knowledge コールバック */
   onIngestFromUrl?: () => void;
-  /** チャットから Knowledge コールバック */
+  /** チャットから Knowledge コールバック（手動） */
   onIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
+  /** チャット応答の自動 Wiki 保存コールバック */
+  onAutoIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
   /** Wiki ドキュメントかどうか */
   isWikiDoc?: boolean;
   /** AI バックエンドが利用可能か（false なら Chat タブを非表示） */
@@ -343,6 +345,7 @@ function NoteEditorInner({
   onIngestToWiki,
   onIngestFromUrl,
   onIngestChat,
+  onAutoIngestChat,
   isWikiDoc,
   aiAvailable = true,
 }: NoteEditorProps) {
@@ -822,14 +825,32 @@ function NoteEditorInner({
         if (wikiContext) {
           assistantMessage += "\n\n---\n📎 *Knowledge referenced*";
         }
+        const assistantTimestamp = new Date().toISOString();
         aiAssistant.addMessage({
           role: "assistant",
           content: assistantMessage,
-          timestamp: new Date().toISOString(),
+          timestamp: assistantTimestamp,
         });
         aiAssistant.setSessionId(response.session_id);
         aiAssistant.setLoading(false);
         markDirty();
+
+        // Query → Wiki 自動保存: 応答の知識的価値を判定
+        if (onAutoIngestChat) {
+          try {
+            const { assessWikiWorthiness } = await import("./features/wiki/wiki-worthy");
+            const allMessages = [
+              ...aiAssistant.messages,
+              { role: "assistant" as const, content: assistantMessage, timestamp: assistantTimestamp },
+            ];
+            const assessment = assessWikiWorthiness(allMessages);
+            if (assessment.worthy) {
+              onAutoIngestChat(allMessages);
+            }
+          } catch {
+            // 判定失敗は無視
+          }
+        }
       } catch (err) {
         aiAssistant.setError(
           err instanceof Error ? err.message : "AI 実行に失敗しました",
@@ -2143,6 +2164,37 @@ export function NoteApp() {
                 }
               })();
             } : undefined}
+            onAutoIngestChat={(chatMessages) => {
+              // 自動 Wiki 保存: バックグラウンドで静かに実行
+              const jobId = `auto:${Date.now()}`;
+              const chatTitle = chatMessages[0]?.content.slice(0, 30) ?? "Chat";
+              (async () => {
+                try {
+                  const existingWikis = (fm.noteIndex?.notes ?? [])
+                    .filter((n) => n.source === "ai" && n.wikiKind)
+                    .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+                  const result = await ingestFromChat(chatMessages, chatTitle, existingWikis, "ja");
+                  if (result.wikis.length === 0) return;
+                  const savedTitles: string[] = [];
+                  for (const wiki of result.wikis) {
+                    const wikiDoc = buildWikiDocument(wiki, jobId, result.model, chatTitle);
+                    const newId = await fm.handleCreateWikiFile(wikiDoc);
+                    embedWikiSections(newId, wikiDoc).catch(() => {});
+                    savedTitles.push(wiki.title);
+                    wikiLog.append("ingest", [newId], `Auto-saved from chat: "${wiki.title}"`).catch(() => {});
+                  }
+                  // 控えめなトースト通知
+                  setIngestToast((prev) => ({
+                    items: [
+                      ...(prev?.items ?? []),
+                      { id: jobId, status: "success" as const, noteTitle: `💡 Auto-saved: ${savedTitles.join(", ")}` },
+                    ],
+                  }));
+                } catch {
+                  // 自動保存の失敗は静かに無視
+                }
+              })();
+            }}
           />
           </>
         )}
