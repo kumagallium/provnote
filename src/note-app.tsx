@@ -264,6 +264,8 @@ type NoteEditorProps = {
   onAutoIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
   /** Wiki ドキュメントかどうか */
   isWikiDoc?: boolean;
+  /** AI バックエンドが利用可能か（false なら Chat タブを非表示） */
+  aiAvailable?: boolean;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -271,7 +273,7 @@ function NoteEditor(props: NoteEditorProps) {
     <LabelStoreProvider>
       <LinkStoreProvider>
         <IndexTableStoreProvider>
-        <AiAssistantProvider>
+        <AiAssistantProvider aiAvailable={props.aiAvailable}>
           <NoteEditorInner {...props} />
         </AiAssistantProvider>
         </IndexTableStoreProvider>
@@ -345,6 +347,7 @@ function NoteEditorInner({
   onIngestChat,
   onAutoIngestChat,
   isWikiDoc,
+  aiAvailable = true,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -1540,7 +1543,7 @@ function NoteEditorInner({
             : "fixed bottom-0 left-0 right-0 z-[100] h-14 border-t justify-center px-2 bg-background/95 backdrop-blur-sm"
         )}>
           {([
-            { tab: "chat" as const, icon: <MessageSquare size={18} />, label: "Chat", show: true },
+            { tab: "chat" as const, icon: <MessageSquare size={18} />, label: "Chat", show: aiAvailable },
             { tab: "graph" as const, icon: <Network size={18} />, label: "Graph", show: noteGraphData.nodes.length > 1 },
             { tab: "prov" as const, icon: <GitBranch size={18} />, label: t("panel.prov"), show: labelStore.labels.size > 0 },
             { tab: "history" as const, icon: <History size={18} />, label: t("panel.history"), show: true },
@@ -1573,6 +1576,32 @@ export function NoteApp() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
+  // AI バックエンド接続チェック（GitHub Pages 等の静的サイトでは false）
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchModels } = await import("./features/ai-assistant/api");
+        await fetchModels();
+        if (!cancelled) setAiAvailable(true);
+      } catch {
+        // sidecar 復旧を試みる（Tauri 環境のみ）
+        try {
+          const { ensureSidecar } = await import("./lib/sidecar");
+          const recovered = await ensureSidecar();
+          if (recovered) {
+            const { fetchModels } = await import("./features/ai-assistant/api");
+            await fetchModels();
+            if (!cancelled) setAiAvailable(true);
+            return;
+          }
+        } catch { /* sidecar 復旧も失敗 */ }
+        if (!cancelled) setAiAvailable(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showMemos, setShowMemos] = useState(false);
   const [ingestToast, setIngestToast] = useState<IngestToastState>(null);
@@ -1853,6 +1882,7 @@ export function NoteApp() {
     })(),
     onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); },
     activeWikiKind: fm.activeWikiKind,
+    aiAvailable: aiAvailable ?? false,
     onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); },
     activeWikiView,
   };
@@ -1883,7 +1913,7 @@ export function NoteApp() {
             onDeleteMedia={fm.handleDeleteMedia}
             onRenameMedia={handleRenameMediaWithBlockSync}
             onAddUrlBookmark={fm.handleAddUrlBookmark}
-            onIngestMedia={(entry) => {
+            onIngestMedia={aiAvailable ? (entry) => {
               if (entry.type === "url" && entry.url) {
                 const jobId = `url:${Date.now()}`;
                 const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: entry.name || entry.url };
@@ -1908,7 +1938,7 @@ export function NoteApp() {
                   }
                 })();
               }
-            }}
+            } : undefined}
           />
         ) : fm.activeLabel ? (
           <LabelGalleryView
@@ -2064,11 +2094,12 @@ export function NoteApp() {
             captureIndex={capture.captureIndex}
             onEditorRef={(editor) => { noteEditorRef.current = editor; }}
             isWikiDoc={fm.activeDoc?.source === "ai"}
-            onIngestToWiki={fm.activeDoc?.source !== "ai" ? () => {
+            aiAvailable={aiAvailable ?? false}
+            onIngestToWiki={aiAvailable && fm.activeDoc?.source !== "ai" ? () => {
               if (!fm.activeFileId || !fm.activeDoc) return;
               enqueueIngest(fm.activeFileId, fm.activeDoc.title, fm.activeDoc);
             } : undefined}
-            onIngestFromUrl={() => {
+            onIngestFromUrl={aiAvailable ? () => {
               const url = prompt("URL を入力してください:");
               if (!url) return;
               // URL Ingest をキューに追加
@@ -2103,8 +2134,8 @@ export function NoteApp() {
                 }
                 ingestQueueRef.current = ingestQueueRef.current.filter((j) => j.noteId !== jobId);
               })();
-            }}
-            onIngestChat={(chatMessages) => {
+            } : undefined}
+            onIngestChat={aiAvailable ? (chatMessages) => {
               const jobId = `chat:${Date.now()}`;
               const chatTitle = chatMessages[0]?.content.slice(0, 30) ?? "Chat";
               const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: `Chat: ${chatTitle}` };
@@ -2132,7 +2163,7 @@ export function NoteApp() {
                   setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
                 }
               })();
-            }}
+            } : undefined}
             onAutoIngestChat={(chatMessages) => {
               // 自動 Wiki 保存: バックグラウンドで静かに実行
               const jobId = `auto:${Date.now()}`;
