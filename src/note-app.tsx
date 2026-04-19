@@ -2185,6 +2185,7 @@ export function NoteApp() {
           {fm.activeDoc?.source === "ai" && fm.activeDoc?.wikiMeta && (
             <WikiBanner
               wikiMeta={fm.activeDoc.wikiMeta}
+              loading={ingestToast?.items?.some((i) => i.id?.startsWith("regen:") && i.status === "generating")}
               onApprove={() => {
                 if (!fm.activeDoc?.wikiMeta || !fm.activeFileId) return;
                 const updatedDoc = {
@@ -2199,7 +2200,9 @@ export function NoteApp() {
               onRegenerate={async (options) => {
                 if (!fm.activeDoc?.wikiMeta) return;
                 const wikiId = fm.activeFileId!.replace("wiki:", "");
+                const wikiTitle = fm.activeDoc.title;
                 const selectedModel = options?.model || undefined;
+                const toastId = `regen:${wikiId}`;
 
                 // 全ての由来ノートを収集
                 const sourceNoteIds = fm.activeDoc.wikiMeta.derivedFromNotes;
@@ -2213,6 +2216,14 @@ export function NoteApp() {
                 }
                 if (sourceDocs.length === 0) return;
 
+                // トースト: 開始
+                setIngestToast((prev) => ({
+                  items: [
+                    ...(prev?.items ?? []),
+                    { id: toastId, status: "generating" as const, noteTitle: `Regenerating "${wikiTitle}"`, detail: selectedModel ? `Model: ${selectedModel}` : undefined },
+                  ],
+                }));
+
                 try {
                   // 最初の由来ノートで Ingest（他のノートの情報は既存 Wiki に含まれている）
                   const primarySource = sourceDocs[0];
@@ -2225,6 +2236,13 @@ export function NoteApp() {
                   );
 
                   if (result.wikis.length > 0) {
+                    // トースト: 再構成中
+                    setIngestToast((prev) => ({
+                      items: (prev?.items ?? []).map((i) =>
+                        i.id === toastId ? { ...i, detail: "Rewriting..." } : i
+                      ),
+                    }));
+
                     // rewrite API で既存コンテンツと統合（editedSections 保護）
                     const rewritten = await rewriteAndMerge(
                       fm.activeDoc,
@@ -2243,10 +2261,30 @@ export function NoteApp() {
                     embedWikiSections(wikiId, rewritten).catch(() => {});
                     fm.handleOpenWikiFile(wikiId);
                     const modelLabel = result.model ?? selectedModel ?? "default";
-                    wikiLog.append("regenerate", [wikiId], `Regenerated "${fm.activeDoc.title}" with ${modelLabel}`).catch(() => {});
+                    wikiLog.append("regenerate", [wikiId], `Regenerated "${wikiTitle}" with ${modelLabel}`).catch(() => {});
+
+                    // トースト: 完了
+                    setIngestToast((prev) => ({
+                      items: (prev?.items ?? []).map((i) =>
+                        i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
+                      ),
+                    }));
+                  } else {
+                    // トースト: 内容不足
+                    setIngestToast((prev) => ({
+                      items: (prev?.items ?? []).map((i) =>
+                        i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No content generated" } : i
+                      ),
+                    }));
                   }
                 } catch (err) {
                   console.error("Wiki の再生成に失敗:", err);
+                  // トースト: エラー
+                  setIngestToast((prev) => ({
+                    items: (prev?.items ?? []).map((i) =>
+                      i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+                    ),
+                  }));
                 }
               }}
               onDelete={() => {
