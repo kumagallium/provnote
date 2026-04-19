@@ -74,6 +74,10 @@ app.post("/run", async (c) => {
     systemPrompt += `\n\n${body.wiki_context}`;
   }
 
+  // Wiki-worthy 自己評価指示
+  systemPrompt += `\n\nAt the very end of your response, append a hidden tag: <!-- wiki_worthy: true/false -->
+Set it to true ONLY if your response contains generalizable knowledge, insights, methodology, or principles that would be valuable to save in a knowledge base. Set it to false for task-specific help, simple answers, or conversational responses.`;
+
   // Skill をシステムプロンプトに注入
   const skills = filterSkills(allServers);
   const skillSection = buildSkillPromptSection(skills);

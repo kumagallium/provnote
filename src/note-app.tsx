@@ -68,7 +68,7 @@ import {
   WikiListView, WikiLogView, WikiBanner,
   IngestToast, type IngestToastState, type IngestToastItem,
   ingestNote, ingestFromUrl, ingestFromChat,
-  buildWikiDocument, mergeIntoWikiDocument, embedWikiSections,
+  buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge, embedWikiSections,
   // 横断更新
   fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
   // Lint（自動実行用）
@@ -80,7 +80,7 @@ import {
   // 操作ログ
   wikiLog,
 } from "./features/wiki";
-import { setWikiIndexForRetriever } from "./features/wiki/retriever";
+import { setWikiIndexForRetriever, setWikiTitleMap } from "./features/wiki/retriever";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
@@ -821,31 +821,59 @@ function NoteEditorInner({
           ...(wikiContext ? { wiki_context: wikiContext } : {}),
           options: { max_turns: 5, ...(selectedModel && { model: selectedModel }) },
         });
-        // Wiki コンテキストが使われた場合、応答にさりげなく参照情報を付与
+        // Wiki コンテキストが使われ���場合、引用情報を処理
         let assistantMessage = response.message;
         if (wikiContext) {
-          assistantMessage += "\n\n---\n📎 *Knowledge referenced*";
+          // [Source: "タイトル"] を抽出して引用リストを構築
+          const sourcePattern = /\[Source:\s*"([^"]+)"\]/g;
+          const sources = new Set<string>();
+          let match;
+          while ((match = sourcePattern.exec(assistantMessage)) !== null) {
+            sources.add(match[1]);
+          }
+          if (sources.size > 0) {
+            const sourceList = [...sources].map((s) => `  - *${s}*`).join("\n");
+            assistantMessage += `\n\n---\n📎 **Knowledge referenced:**\n${sourceList}`;
+          } else {
+            assistantMessage += "\n\n---\n📎 *Knowledge referenced*";
+          }
         }
+        // <!-- wiki_worthy: true/false --> タグをパースして除去
+        const wikiWorthyMatch = assistantMessage.match(/<!--\s*wiki_worthy:\s*(true|false)\s*-->/);
+        const llmWikiWorthy = wikiWorthyMatch ? wikiWorthyMatch[1] === "true" : null;
+        // 表示用メッセージからタグを除去
+        const cleanMessage = assistantMessage.replace(/\s*<!--\s*wiki_worthy:\s*(?:true|false)\s*-->\s*$/, "");
+
         const assistantTimestamp = new Date().toISOString();
         aiAssistant.addMessage({
           role: "assistant",
-          content: assistantMessage,
+          content: cleanMessage,
           timestamp: assistantTimestamp,
         });
         aiAssistant.setSessionId(response.session_id);
         aiAssistant.setLoading(false);
         markDirty();
 
-        // Query → Wiki 自動保存: 応答の知識的価値を判定
+        // Query → Wiki 自動保存: LLM 判定を優先、fallback でヒューリスティック
         if (onAutoIngestChat) {
           try {
-            const { assessWikiWorthiness } = await import("./features/wiki/wiki-worthy");
             const allMessages = [
               ...aiAssistant.messages,
-              { role: "assistant" as const, content: assistantMessage, timestamp: assistantTimestamp },
+              { role: "assistant" as const, content: cleanMessage, timestamp: assistantTimestamp },
             ];
-            const assessment = assessWikiWorthiness(allMessages);
-            if (assessment.worthy) {
+
+            let isWorthy: boolean;
+            if (llmWikiWorthy !== null) {
+              // LLM が自己評価した結果を使う
+              isWorthy = llmWikiWorthy;
+            } else {
+              // LLM タグがない場合はヒューリスティックで判定
+              const { assessWikiWorthiness } = await import("./features/wiki/wiki-worthy");
+              const assessment = assessWikiWorthiness(allMessages);
+              isWorthy = assessment.worthy;
+            }
+
+            if (isWorthy) {
               onAutoIngestChat(allMessages);
             }
           } catch {
@@ -1664,7 +1692,7 @@ export function NoteApp() {
             try {
               const existingDoc = fm.getCachedDoc(`wiki:${wiki.mergeTargetId}`);
               if (existingDoc) {
-                const mergedDoc = mergeIntoWikiDocument(existingDoc, wiki, job.noteId, result.model);
+                const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model);
                 await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
                 embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
                 createdWikiIds.push(wiki.mergeTargetId);
@@ -1715,7 +1743,7 @@ export function NoteApp() {
                 for (const proposal of crossResult.proposals) {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
-                  const updatedDoc = applyCrossUpdate(targetDoc, proposal, job.noteId, result.model);
+                  const updatedDoc = await applyCrossUpdate(targetDoc, proposal, job.noteId, result.model);
                   await fm.handleSaveWikiFile(proposal.targetWikiId, updatedDoc);
                   embedWikiSections(proposal.targetWikiId, updatedDoc).catch(() => {});
                   wikiLog.append(
@@ -1835,7 +1863,7 @@ export function NoteApp() {
                 for (const proposal of crossResult.proposals) {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
-                  const updated = applyCrossUpdate(targetDoc, proposal, wikiId, null);
+                  const updated = await applyCrossUpdate(targetDoc, proposal, wikiId, null);
                   await fm.handleSaveWikiFile(proposal.targetWikiId, updated);
                   wikiLog.append("cross-update", [proposal.targetWikiId, wikiId],
                     `Auto-fix orphan: linked "${doc.title}" → "${proposal.targetWikiTitle}"`).catch(() => {});
@@ -1894,9 +1922,67 @@ export function NoteApp() {
       const entries = buildWikiIndex(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
       const text = formatWikiIndexForLLM(entries);
       setWikiIndexForRetriever(text);
+      // タイトルマップを Retriever に設定（引用用）
+      const titleMap = new Map<string, string>();
+      for (const wf of fm.wikiFiles) {
+        const doc = fm.getCachedDoc(`wiki:${wf.id}`);
+        if (doc) titleMap.set(wf.id, doc.title);
+      }
+      setWikiTitleMap(titleMap);
     } else {
       setWikiIndexForRetriever("");
+      setWikiTitleMap(new Map());
     }
+  }, [fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc]);
+
+  // 定期 Lint: アプリ起動時に前回 Lint から 24h 以上経過していれば自動実行
+  const startupLintDoneRef = useRef(false);
+  useEffect(() => {
+    if (startupLintDoneRef.current) return;
+    if (fm.wikiFiles.length < 2) return;
+
+    startupLintDoneRef.current = true;
+
+    (async () => {
+      try {
+        const lastLint = await wikiLog.getLastTimestamp("lint");
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+        if (lastLint && Date.now() - new Date(lastLint).getTime() < TWENTY_FOUR_HOURS) {
+          return; // 24h 未満 → スキップ
+        }
+
+        const snapshots = buildWikiSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
+        if (snapshots.length < 2) return;
+
+        // LLM Lint は 5 ページ以上かつ前回から 24h 以上のときのみ
+        const useLlm = snapshots.length >= 5;
+        const report = await lintWikis(snapshots, "ja", !useLlm);
+
+        if (report.issues.length > 0) {
+          // 問題があればトースト通知（バックグラウンドで静かに）
+          const important = report.issues.filter((i) =>
+            i.type === "contradiction" || i.type === "gap",
+          );
+          if (important.length > 0) {
+            setIngestToast((prev) => ({
+              items: [
+                ...(prev?.items ?? []),
+                ...important.slice(0, 3).map((issue) => ({
+                  id: `auto-lint:${crypto.randomUUID()}`,
+                  status: (issue.type === "contradiction" ? "error" : "success") as "error" | "success",
+                  noteTitle: `${issue.type === "contradiction" ? "\u26a0" : "\ud83d\udca1"} ${issue.title}`,
+                  result: issue.suggestion,
+                })),
+              ],
+            }));
+          }
+        }
+
+        wikiLog.append("lint", [], `Startup auto-lint: ${report.issues.length} issue(s)`).catch(() => {});
+      } catch {
+        // 起動時 Lint 失敗は静かに無視
+      }
+    })();
   }, [fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc]);
 
   const t = useT();
