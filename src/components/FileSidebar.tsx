@@ -42,6 +42,8 @@ export type FileSidebarProps = {
   onShowWikiList?: (kind: WikiKind) => void;
   /** 現在アクティブな Wiki カテゴリ（ハイライト用） */
   activeWikiKind?: WikiKind | null;
+  /** AI バックエンドが利用可能か（false なら AI セクション非表示） */
+  aiAvailable?: boolean;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -86,6 +88,7 @@ export function FileSidebar({
   wikiCounts,
   onShowWikiList,
   activeWikiKind,
+  aiAvailable = true,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -226,8 +229,8 @@ export function FileSidebar({
           )}
         </div>
 
-        {/* AI Knowledge セクション */}
-        {onShowWikiList && (
+        {/* AI Knowledge セクション（バックエンド不在時は非表示） */}
+        {onShowWikiList && aiAvailable && (
           <div className="px-4 pt-1 pb-2">
             <h3 className="text-[10px] font-semibold text-sidebar-foreground/40 tracking-wider uppercase mb-1.5">
               AI
@@ -265,11 +268,11 @@ export function FileSidebar({
           className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
         >
           {t("common.settings")}
-          {agentConfigured ? (
+          {aiAvailable && (agentConfigured ? (
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" title={t("sidebar.aiConnected")} />
           ) : (
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" title={t("sidebar.aiNotConfigured")} />
-          )}
+          ))}
         </button>
         <button
           onClick={onShowReleaseNotes}

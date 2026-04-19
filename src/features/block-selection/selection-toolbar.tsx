@@ -168,14 +168,16 @@ export function SelectionToolbar({ selectedBlockIds, onClear }: SelectionToolbar
         )}
       </div>
 
-      {/* AI アシスタント */}
-      <button
-        onClick={handleAi}
-        title={t("editor.askAi")}
-        className="inline-flex items-center justify-center rounded p-1.5 hover:bg-violet-50 text-muted-foreground hover:text-violet-500 transition-colors"
-      >
-        <Bot size={16} />
-      </button>
+      {/* AI アシスタント（バックエンド不在時は非表示） */}
+      {aiAssistant.aiAvailable && (
+        <button
+          onClick={handleAi}
+          title={t("editor.askAi")}
+          className="inline-flex items-center justify-center rounded p-1.5 hover:bg-violet-50 text-muted-foreground hover:text-violet-500 transition-colors"
+        >
+          <Bot size={16} />
+        </button>
+      )}
     </div>
   );
 }
