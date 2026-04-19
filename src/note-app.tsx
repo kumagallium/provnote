@@ -64,7 +64,15 @@ import { recordRevision, detectActivityType } from "./features/document-provenan
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
-import { WikiListView, WikiBanner, IngestToast, type IngestToastState, type IngestToastItem, ingestNote, ingestFromUrl, ingestFromChat, buildWikiDocument, mergeIntoWikiDocument, embedWikiSections } from "./features/wiki";
+import {
+  WikiListView, WikiBanner, IngestToast, type IngestToastState, type IngestToastItem,
+  ingestNote, ingestFromUrl, ingestFromChat,
+  buildWikiDocument, mergeIntoWikiDocument, embedWikiSections,
+  // 横断更新
+  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
+  // 操作ログ
+  wikiLog,
+} from "./features/wiki";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
@@ -1589,6 +1597,8 @@ export function NoteApp() {
           ),
         }));
 
+        const createdWikiIds: string[] = [];
+        const createdWikiTitles: string[] = [];
         for (const wiki of result.wikis) {
           if (wiki.suggestedAction === "merge" && wiki.mergeTargetId) {
             try {
@@ -1597,6 +1607,9 @@ export function NoteApp() {
                 const mergedDoc = mergeIntoWikiDocument(existingDoc, wiki, job.noteId, result.model);
                 await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
                 embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
+                createdWikiIds.push(wiki.mergeTargetId);
+                createdWikiTitles.push(wiki.title);
+                wikiLog.append("merge", [wiki.mergeTargetId], `Merged into "${wiki.title}" from "${job.noteTitle}"`).catch(() => {});
                 continue;
               }
             } catch { /* fallback to create */ }
@@ -1605,6 +1618,57 @@ export function NoteApp() {
           const wikiDoc = buildWikiDocument(wiki, job.noteId, result.model, job.noteTitle, wikiTitleMap);
           const newId = await fm.handleCreateWikiFile(wikiDoc);
           embedWikiSections(newId, wikiDoc).catch(() => {});
+          createdWikiIds.push(newId);
+          createdWikiTitles.push(wiki.title);
+          wikiLog.append("ingest", [newId], `Created "${wiki.title}" from "${job.noteTitle}"`).catch(() => {});
+        }
+
+        // 横断更新: 既存 Concept ページの自動更新
+        if (existingWikis.length > 0 && job.doc) {
+          (async () => {
+            try {
+              const existingDetails = existingWikis
+                .filter((w) => w.kind === "concept" && !createdWikiIds.includes(w.id))
+                .map((w) => {
+                  const doc = fm.getCachedDoc(`wiki:${w.id}`);
+                  return doc ? extractWikiDetail(w.id, doc) : null;
+                })
+                .filter((d): d is NonNullable<typeof d> => d !== null);
+
+              if (existingDetails.length > 0) {
+                const noteContent = job.doc.pages[0]?.blocks
+                  ?.map((b: any) => {
+                    if (Array.isArray(b.content)) return b.content.map((c: any) => c.text ?? "").join("");
+                    return "";
+                  })
+                  .filter(Boolean)
+                  .join("\n") ?? "";
+
+                const crossResult = await fetchCrossUpdateProposals({
+                  newNoteTitle: job.noteTitle,
+                  newNoteContent: noteContent,
+                  newWikiTitles: createdWikiTitles,
+                  existingWikis: existingDetails,
+                  language: "ja",
+                });
+
+                for (const proposal of crossResult.proposals) {
+                  const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
+                  if (!targetDoc) continue;
+                  const updatedDoc = applyCrossUpdate(targetDoc, proposal, job.noteId, result.model);
+                  await fm.handleSaveWikiFile(proposal.targetWikiId, updatedDoc);
+                  embedWikiSections(proposal.targetWikiId, updatedDoc).catch(() => {});
+                  wikiLog.append(
+                    "cross-update",
+                    [proposal.targetWikiId],
+                    `Updated "${proposal.targetWikiTitle}" (${proposal.updateType}): ${proposal.reason}`,
+                  ).catch(() => {});
+                }
+              }
+            } catch (err) {
+              console.error("Cross-update failed:", err);
+            }
+          })();
         }
 
         setIngestToast((prev) => ({
