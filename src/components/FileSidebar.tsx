@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History } from "lucide-react";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
 import { useT, getDisplayLabelName } from "../i18n";
@@ -44,6 +44,10 @@ export type FileSidebarProps = {
   activeWikiKind?: WikiKind | null;
   /** AI バックエンドが利用可能か（false なら AI セクション非表示） */
   aiAvailable?: boolean;
+  /** Wiki ログ表示 */
+  onShowWikiLog?: () => void;
+  /** Log がアクティブか */
+  activeWikiView?: "log" | null;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -89,6 +93,8 @@ export function FileSidebar({
   onShowWikiList,
   activeWikiKind,
   aiAvailable = true,
+  onShowWikiLog,
+  activeWikiView,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -256,6 +262,19 @@ export function FileSidebar({
                   </button>
                 );
               })}
+              {onShowWikiLog && (
+                <button
+                  onClick={onShowWikiLog}
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${
+                    activeWikiView === "log"
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <span className="text-muted-foreground shrink-0"><History size={14} /></span>
+                  <span className="flex-1 text-left">Activity Log</span>
+                </button>
+              )}
             </div>
           </div>
         )}
