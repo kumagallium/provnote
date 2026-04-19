@@ -31,14 +31,16 @@ export function NoteFormattingToolbar(props: FormattingToolbarProps) {
   return (
     <FormattingToolbar {...props}>
       {getFormattingToolbarItems(props.blockTypeSelectItems)}
-      <button
-        onClick={handleAiClick}
-        title={t("editor.askAi")}
-        className="bn-button inline-flex items-center justify-center rounded hover:bg-violet-100 text-violet-500 transition-colors"
-        data-test="aiButton"
-      >
-        <Bot size={18} />
-      </button>
+      {aiAssistant.aiAvailable && (
+        <button
+          onClick={handleAiClick}
+          title={t("editor.askAi")}
+          className="bn-button inline-flex items-center justify-center rounded hover:bg-violet-100 text-violet-500 transition-colors"
+          data-test="aiButton"
+        >
+          <Bot size={18} />
+        </button>
+      )}
     </FormattingToolbar>
   );
 }

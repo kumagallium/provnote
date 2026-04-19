@@ -48,7 +48,10 @@ export type AiAssistantActions = {
   parkChat: () => void;
 };
 
-export type AiAssistantStore = AiAssistantState & AiAssistantActions;
+export type AiAssistantStore = AiAssistantState & AiAssistantActions & {
+  /** AI バックエンドが利用可能か */
+  aiAvailable: boolean;
+};
 
 const AiAssistantContext = createContext<AiAssistantStore | null>(null);
 
@@ -82,7 +85,7 @@ function buildGeneratedBy(
   };
 }
 
-export function AiAssistantProvider({ children }: { children: ReactNode }) {
+export function AiAssistantProvider({ children, aiAvailable = true }: { children: ReactNode; aiAvailable?: boolean }) {
   const [state, setState] = useState<AiAssistantState>(INITIAL_STATE);
 
   const openChat = useCallback(
@@ -256,6 +259,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     <AiAssistantContext.Provider
       value={{
         ...state,
+        aiAvailable,
         openChat,
         setLoading,
         setError,

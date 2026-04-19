@@ -134,7 +134,7 @@ function AiAssistantMenuItem() {
   });
   const aiAssistant = useAiAssistant();
 
-  if (!block) return null;
+  if (!block || !aiAssistant.aiAvailable) return null;
 
   return (
     <Components.Generic.Menu.Item
