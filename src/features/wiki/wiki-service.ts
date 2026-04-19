@@ -29,6 +29,8 @@ export async function ingestNote(
   doc: GraphiumDocument,
   existingWikis: ExistingWikiInfo[],
   language: string,
+  /** 使用するモデル名（省略時はサーバーデフォルト） */
+  model?: string,
 ): Promise<IngestResult> {
   const noteContent = extractPlainTextFromDoc(doc);
 
@@ -41,6 +43,7 @@ export async function ingestNote(
       noteTitle: doc.title,
       existingWikiTitles: existingWikis,
       language,
+      ...(model ? { model } : {}),
     }),
   });
 

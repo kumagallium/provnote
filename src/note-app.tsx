@@ -2196,21 +2196,54 @@ export function NoteApp() {
                 fm.handleSaveWikiFile(wikiId, updatedDoc);
                 wikiLog.append("approve", [wikiId], `Approved "${fm.activeDoc.title}" (Draft → Published)`).catch(() => {});
               }}
-              onRegenerate={async () => {
+              onRegenerate={async (options) => {
                 if (!fm.activeDoc?.wikiMeta) return;
-                // 由来ノートから再生成（簡易版: 最初の由来ノートのみ）
-                const sourceNoteId = fm.activeDoc.wikiMeta.derivedFromNotes[0];
-                if (!sourceNoteId) return;
-                const sourceDoc = fm.getCachedDoc(sourceNoteId);
-                if (!sourceDoc) return;
+                const wikiId = fm.activeFileId!.replace("wiki:", "");
+                const selectedModel = options?.model || undefined;
+
+                // 全ての由来ノートを収集
+                const sourceNoteIds = fm.activeDoc.wikiMeta.derivedFromNotes;
+                if (sourceNoteIds.length === 0) return;
+
+                // 由来ノートのコンテンツを結合
+                const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
+                for (const noteId of sourceNoteIds) {
+                  const doc = fm.getCachedDoc(noteId);
+                  if (doc) sourceDocs.push({ noteId, doc });
+                }
+                if (sourceDocs.length === 0) return;
+
                 try {
-                  const result = await ingestNote(sourceNoteId, sourceDoc, [], "ja");
+                  // 最初の由来ノートで Ingest（他のノートの情報は既存 Wiki に含まれている）
+                  const primarySource = sourceDocs[0];
+                  const result = await ingestNote(
+                    primarySource.noteId,
+                    primarySource.doc,
+                    [],
+                    "ja",
+                    selectedModel,
+                  );
+
                   if (result.wikis.length > 0) {
-                    const newDoc = buildWikiDocument(result.wikis[0], sourceNoteId, result.model);
-                    const wikiId = fm.activeFileId!.replace("wiki:", "");
-                    await fm.handleSaveWikiFile(wikiId, newDoc);
+                    // rewrite API で既存コンテンツと統合（editedSections 保護）
+                    const rewritten = await rewriteAndMerge(
+                      fm.activeDoc,
+                      result.wikis[0],
+                      primarySource.noteId,
+                      result.model,
+                    );
+                    // モデル情報を更新
+                    if (rewritten.wikiMeta) {
+                      rewritten.wikiMeta.generatedBy = {
+                        model: result.model ?? selectedModel ?? "unknown",
+                        version: "1.0.0",
+                      };
+                    }
+                    await fm.handleSaveWikiFile(wikiId, rewritten);
+                    embedWikiSections(wikiId, rewritten).catch(() => {});
                     fm.handleOpenWikiFile(wikiId);
-                    wikiLog.append("regenerate", [wikiId], `Regenerated "${result.wikis[0].title}"`).catch(() => {});
+                    const modelLabel = result.model ?? selectedModel ?? "default";
+                    wikiLog.append("regenerate", [wikiId], `Regenerated "${fm.activeDoc.title}" with ${modelLabel}`).catch(() => {});
                   }
                 } catch (err) {
                   console.error("Wiki の再生成に失敗:", err);
