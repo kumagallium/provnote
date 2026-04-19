@@ -116,7 +116,7 @@ Output in: ${language === "ja" ? "Japanese" : "English"}
 - Section content: Be thorough. Include reasoning, evidence, and concrete examples — not just facts. Write as much as needed to fully develop the insight
 - relatedConcepts: List titles of existing Concepts that are related (empty array if none)
 - confidence: 0.9+ for clear, well-evidenced knowledge. 0.6-0.8 for tentative insights
-- externalReferences: Only include URLs that appear in the source note. Do NOT generate or guess URLs. Leave as empty array if the note contains no URLs
+- externalReferences: Include URLs to authoritative sources (Wikipedia, academic papers, official docs) that support or contextualize the knowledge. Prioritize well-known, stable URLs. 0-5 per wiki
 - If the note is too short or trivial (e.g., just a title), generate only a minimal Summary with confidence 0.5`;
 }
 

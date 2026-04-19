@@ -1792,30 +1792,79 @@ export function NoteApp() {
         const issues = report.issues;
 
         if (issues.length > 0) {
-          // contradiction / gap はトーストで通知（人間が判断）
-          const humanNeeded = issues.filter((i) => i.type === "contradiction" || i.type === "gap");
-          if (humanNeeded.length > 0) {
+          // contradiction はトーストで通知（人間が判断、自動修正不可）
+          const contradictions = issues.filter((i) => i.type === "contradiction");
+          if (contradictions.length > 0) {
             setIngestToast((prev) => ({
               items: [
                 ...(prev?.items ?? []),
-                ...humanNeeded.map((c) => ({
+                ...contradictions.map((c) => ({
                   id: `lint:${crypto.randomUUID()}`,
-                  status: (c.type === "contradiction" ? "error" : "success") as "error" | "success",
-                  noteTitle: `${c.type === "contradiction" ? "⚠" : "💡"} ${c.title}`,
+                  status: "error" as const,
+                  noteTitle: `⚠ ${c.title}`,
                   result: c.suggestion,
                 })),
               ],
             }));
           }
 
-          // orphan/stale はログに記録
-          const autoFixable = issues.filter((i) => i.type === "orphan" || i.type === "stale");
-          if (autoFixable.length > 0) {
-            wikiLog.append(
-              "lint",
-              autoFixable.flatMap((i) => i.affectedWikiIds),
-              `Auto-detected ${autoFixable.length} issue(s): ${autoFixable.map((i) => `${i.type}:"${i.title}"`).join(", ")}`,
-            ).catch(() => {});
+          // orphan: cross-update で接続先を探して自動リンク
+          const orphans = issues.filter((i) => i.type === "orphan");
+          for (const orphan of orphans) {
+            for (const wikiId of orphan.affectedWikiIds) {
+              try {
+                const doc = fm.getCachedDoc(`wiki:${wikiId}`);
+                if (!doc) continue;
+                const detail = extractWikiDetail(wikiId, doc);
+                if (!detail) continue;
+                const otherConcepts = snapshots
+                  .filter((s) => s.kind === "concept" && s.id !== wikiId)
+                  .map((s) => {
+                    const d = fm.getCachedDoc(`wiki:${s.id}`);
+                    return d ? extractWikiDetail(s.id, d) : null;
+                  })
+                  .filter((d): d is NonNullable<typeof d> => d !== null);
+                if (otherConcepts.length === 0) continue;
+                const crossResult = await fetchCrossUpdateProposals({
+                  newNoteTitle: doc.title,
+                  newNoteContent: detail.sectionPreviews.join("\n"),
+                  newWikiTitles: [doc.title],
+                  existingWikis: otherConcepts,
+                  language: "ja",
+                });
+                for (const proposal of crossResult.proposals) {
+                  const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
+                  if (!targetDoc) continue;
+                  const updated = applyCrossUpdate(targetDoc, proposal, wikiId, null);
+                  await fm.handleSaveWikiFile(proposal.targetWikiId, updated);
+                  wikiLog.append("cross-update", [proposal.targetWikiId, wikiId],
+                    `Auto-fix orphan: linked "${doc.title}" → "${proposal.targetWikiTitle}"`).catch(() => {});
+                }
+              } catch { /* orphan 修正失敗は無視 */ }
+            }
+          }
+
+          // gap はトーストで通知（次回 Ingest の参考に）
+          const gaps = issues.filter((i) => i.type === "gap");
+          if (gaps.length > 0) {
+            setIngestToast((prev) => ({
+              items: [
+                ...(prev?.items ?? []),
+                ...gaps.map((g) => ({
+                  id: `lint:${crypto.randomUUID()}`,
+                  status: "success" as const,
+                  noteTitle: `💡 ${g.title}`,
+                  result: g.suggestion,
+                })),
+              ],
+            }));
+          }
+
+          // stale はログに記録
+          const stale = issues.filter((i) => i.type === "stale");
+          if (stale.length > 0) {
+            wikiLog.append("lint", stale.flatMap((i) => i.affectedWikiIds),
+              `Stale pages: ${stale.map((i) => `"${i.title}"`).join(", ")}`).catch(() => {});
           }
 
           // 全体のログ
