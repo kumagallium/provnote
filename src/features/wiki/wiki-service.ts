@@ -907,6 +907,151 @@ export function formatWikiIndexForLLM(entries: WikiIndexEntry[]): string {
   return text;
 }
 
+// ── Synthesis（複数 Concept の統合） ──
+
+import type { SynthesisCandidate, ConceptSnapshot } from "../../server/services/wiki-synthesizer";
+
+type SynthesisResult = {
+  candidates: SynthesisCandidate[];
+  model?: string | null;
+};
+
+/**
+ * Synthesis の候補を取得する
+ */
+export async function fetchSynthesisCandidates(
+  concepts: ConceptSnapshot[],
+  existingSynthesisTitles: string[],
+  language: string,
+): Promise<SynthesisResult> {
+  if (concepts.length < 3) return { candidates: [] };
+
+  const res = await fetch(`${API_BASE}/synthesize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ concepts, existingSynthesisTitles, language }),
+  });
+
+  if (!res.ok) {
+    console.error("Synthesis API failed:", res.status);
+    return { candidates: [] };
+  }
+
+  return res.json();
+}
+
+/**
+ * SynthesisCandidate から GraphiumDocument を構築する
+ */
+export function buildSynthesisDocument(
+  candidate: SynthesisCandidate,
+  model: string | null,
+): GraphiumDocument {
+  const now = new Date().toISOString();
+  const blocks = convertSectionsToBlocks(candidate.sections);
+
+  // ソース Concept への参照セクション
+  const refBlocks: any[] = [];
+  const knowledgeLinks: any[] = [];
+
+  refBlocks.push({
+    id: crypto.randomUUID(),
+    type: "heading",
+    props: { textColor: "default", backgroundColor: "default", textAlignment: "left", level: 2 },
+    content: [{ type: "text", text: "Source Concepts", styles: {} }],
+    children: [],
+  });
+
+  for (let i = 0; i < candidate.sourceConceptIds.length; i++) {
+    const blockId = crypto.randomUUID();
+    const title = candidate.sourceConceptTitles[i] ?? candidate.sourceConceptIds[i];
+    refBlocks.push({
+      id: blockId,
+      type: "bulletListItem",
+      props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+      content: [
+        { type: "text", text: `@🤖 ${title}`, styles: { textColor: "blue" } },
+      ],
+      children: [],
+    });
+    knowledgeLinks.push({
+      id: crypto.randomUUID(),
+      sourceBlockId: blockId,
+      targetBlockId: "",
+      targetNoteId: candidate.sourceConceptIds[i],
+      type: "reference",
+      layer: "knowledge",
+      createdBy: "ai",
+    });
+  }
+
+  blocks.push(...refBlocks);
+
+  const wikiMeta: WikiMeta = {
+    kind: "synthesis",
+    derivedFromNotes: candidate.sourceConceptIds,
+    derivedFromChats: [],
+    generatedAt: now,
+    generatedBy: {
+      model: model ?? "unknown",
+      version: "1.0.0",
+    },
+    status: "draft",
+    lastIngestedAt: now,
+    language: undefined,
+  };
+
+  return {
+    version: 2,
+    title: candidate.title,
+    pages: [{
+      id: "main",
+      title: candidate.title,
+      blocks,
+      labels: {},
+      provLinks: [],
+      knowledgeLinks,
+    }],
+    source: "ai",
+    wikiMeta,
+    createdAt: now,
+    modifiedAt: now,
+  };
+}
+
+/**
+ * 既存の Concept ページからスナップショットを構築する（Synthesis 入力用）
+ */
+export function buildConceptSnapshots(
+  wikiFiles: { id: string; modifiedTime: string }[],
+  wikiMetas: Map<string, { title: string; kind: WikiKind; status: string; headings: string[] }>,
+  getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
+): ConceptSnapshot[] {
+  const snapshots: ConceptSnapshot[] = [];
+
+  for (const file of wikiFiles) {
+    const meta = wikiMetas.get(file.id);
+    if (!meta || meta.kind !== "concept") continue;
+
+    const doc = getCachedDoc(`wiki:${file.id}`);
+    const detail = doc ? extractWikiDetail(file.id, doc) : null;
+
+    snapshots.push({
+      id: file.id,
+      title: meta.title,
+      sections: detail
+        ? detail.sectionHeadings.map((h, i) => ({
+            heading: h,
+            preview: detail.sectionPreviews[i] ?? "",
+          }))
+        : meta.headings.map((h) => ({ heading: h, preview: "" })),
+      relatedConcepts: doc ? extractRelatedConcepts(doc).map(String) : [],
+    });
+  }
+
+  return snapshots;
+}
+
 function extractInlineText(content: any): string {
   if (!content) return "";
   if (typeof content === "string") return content;

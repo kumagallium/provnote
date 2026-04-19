@@ -140,7 +140,7 @@ export function parseIngesterOutput(text: string): IngesterOutput[] {
     return wikis
       .filter((w: any) => w.title && w.sections && Array.isArray(w.sections))
       .map((w: any) => ({
-        kind: (w.kind === "summary" || w.kind === "concept") ? w.kind : "concept" as WikiKind,
+        kind: (w.kind === "summary" || w.kind === "concept" || w.kind === "synthesis") ? w.kind : "concept" as WikiKind,
         title: String(w.title),
         sections: w.sections.map((s: any) => ({
           heading: String(s.heading ?? ""),

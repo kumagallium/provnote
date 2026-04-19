@@ -34,7 +34,7 @@ export type LintReport = {
 export type WikiSnapshot = {
   id: string;
   title: string;
-  kind: "summary" | "concept";
+  kind: "summary" | "concept" | "synthesis";
   status: "draft" | "published";
   derivedFromNotes: string[];
   relatedConcepts: string[];

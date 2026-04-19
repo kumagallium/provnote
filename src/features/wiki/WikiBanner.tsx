@@ -31,7 +31,7 @@ export function WikiBanner({
   loading = false,
 }: Props) {
   const isDraft = wikiMeta.status === "draft";
-  const kindLabel = wikiMeta.kind === "summary" ? "Summary" : "Concept";
+  const kindLabel = wikiMeta.kind === "summary" ? "Summary" : wikiMeta.kind === "synthesis" ? "Synthesis" : "Concept";
 
   return (
     <div className="mx-4 mt-2 mb-1 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">

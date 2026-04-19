@@ -75,6 +75,8 @@ import {
   buildWikiSnapshots,
   // 構造化インデックス
   buildWikiIndex, formatWikiIndexForLLM,
+  // Synthesis
+  fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
   // 操作ログ
   wikiLog,
 } from "./features/wiki";
@@ -1750,6 +1752,37 @@ export function NoteApp() {
       ingestQueueRef.current.shift();
     }
 
+    // 自動 Synthesis: Concept が 3 つ以上あれば統合ページ生成を試みる
+    try {
+      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
+      if (conceptSnapshots.length >= 3) {
+        const existingSynthesisTitles = [...fm.wikiMetas.entries()]
+          .filter(([, m]) => m.kind === "synthesis")
+          .map(([, m]) => m.title);
+
+        const synthResult = await fetchSynthesisCandidates(conceptSnapshots, existingSynthesisTitles, "ja");
+        for (const candidate of synthResult.candidates) {
+          const synthDoc = buildSynthesisDocument(candidate, synthResult.model ?? null);
+          const newId = await fm.handleCreateWikiFile(synthDoc);
+          embedWikiSections(newId, synthDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Synthesis: "${candidate.title}" (from ${candidate.sourceConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          // 控えめなトースト通知
+          setIngestToast((prev) => ({
+            items: [
+              ...(prev?.items ?? []),
+              { id: `synth:${newId}`, status: "success" as const, noteTitle: `🔗 Synthesis: ${candidate.title}` },
+            ],
+          }));
+        }
+      }
+    } catch {
+      // Synthesis 失敗は無視
+    }
+
     // 自動 Lint: Ingest 完了後にローカル検出 → 自動修正 → 修正不能はトースト通知
     try {
       const snapshots = buildWikiSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
@@ -1874,11 +1907,13 @@ export function NoteApp() {
     wikiCounts: (() => {
       let summary = 0;
       let concept = 0;
+      let synthesis = 0;
       for (const meta of fm.wikiMetas.values()) {
         if (meta.kind === "summary") summary++;
         else if (meta.kind === "concept") concept++;
+        else if (meta.kind === "synthesis") synthesis++;
       }
-      return { summary, concept };
+      return { summary, concept, synthesis };
     })(),
     onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); },
     activeWikiKind: fm.activeWikiKind,

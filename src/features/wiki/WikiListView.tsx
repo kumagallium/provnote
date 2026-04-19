@@ -78,7 +78,7 @@ export function WikiListView({
     }
   };
 
-  const kindLabel = wikiKind === "summary" ? "Summary" : "Concept";
+  const kindLabel = wikiKind === "summary" ? "Summary" : wikiKind === "synthesis" ? "Synthesis" : "Concept";
 
   return (
     <div className="flex flex-col h-full">

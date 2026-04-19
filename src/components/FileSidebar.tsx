@@ -37,7 +37,7 @@ export type FileSidebarProps = {
   /** メモセクションがアクティブか */
   memosActive?: boolean;
   /** Wiki カテゴリ別カウント */
-  wikiCounts?: { summary: number; concept: number };
+  wikiCounts?: { summary: number; concept: number; synthesis: number };
   /** Wiki リスト表示 */
   onShowWikiList?: (kind: WikiKind) => void;
   /** 現在アクティブな Wiki カテゴリ（ハイライト用） */
@@ -242,7 +242,7 @@ export function FileSidebar({
               AI
             </h3>
             <div className="space-y-0.5">
-              {(["summary", "concept"] as const).map((kind) => {
+              {(["summary", "concept", "synthesis"] as const).map((kind) => {
                 const count = wikiCounts?.[kind] ?? 0;
                 return (
                   <button
@@ -255,7 +255,7 @@ export function FileSidebar({
                     }`}
                   >
                     <span className="text-muted-foreground shrink-0"><Bot size={14} /></span>
-                    <span className="flex-1 text-left capitalize">{kind === "summary" ? "Summary" : "Concept"}</span>
+                    <span className="flex-1 text-left capitalize">{kind === "summary" ? "Summary" : kind === "concept" ? "Concept" : "Synthesis"}</span>
                     {count > 0 && (
                       <span className="text-[10px] text-muted-foreground">{count}</span>
                     )}
