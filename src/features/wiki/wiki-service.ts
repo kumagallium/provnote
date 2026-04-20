@@ -335,9 +335,9 @@ type RelationBlocksResult = {
 function buildRelationBlocks(
   sourceNoteId: string,
   sourceNoteTitle?: string,
-  relatedConcepts?: string[],
+  relatedConcepts?: { title: string; citation: string }[],
   existingWikiTitles?: { id: string; title: string }[],
-  externalReferences?: { url: string; title: string }[],
+  externalReferences?: { url: string; title: string; citation: string }[],
 ): RelationBlocksResult {
   const blocks: any[] = [];
   const knowledgeLinks: any[] = [];
@@ -374,12 +374,13 @@ function buildRelationBlocks(
     createdBy: "ai",
   });
 
-  // 関連 Concept への @リンク
+  // 関連 Concept への @リンク（引用付き）
   if (relatedConcepts && relatedConcepts.length > 0 && existingWikiTitles) {
-    for (const conceptTitle of relatedConcepts) {
-      const wiki = existingWikiTitles.find((w) => w.title === conceptTitle);
+    for (const concept of relatedConcepts) {
+      const wiki = existingWikiTitles.find((w) => w.title === concept.title);
       const blockId = crypto.randomUUID();
-      const label = wiki ? `🤖 ${conceptTitle}` : conceptTitle;
+      const label = wiki ? `🤖 ${concept.title}` : concept.title;
+      const citationText = concept.citation ? ` — ${concept.citation}` : "";
       blocks.push({
         id: blockId,
         type: "bulletListItem",
@@ -387,6 +388,7 @@ function buildRelationBlocks(
         content: [
           { type: "text", text: "Related: ", styles: { bold: true } },
           { type: "text", text: `@${label}`, styles: { textColor: "blue" } },
+          ...(citationText ? [{ type: "text", text: citationText, styles: { italic: true } as any }] : []),
         ],
         children: [],
       });
@@ -404,9 +406,10 @@ function buildRelationBlocks(
     }
   }
 
-  // 外部参照リンク
+  // 外部参照リンク（引用付き）
   if (externalReferences && externalReferences.length > 0) {
     for (const ref of externalReferences) {
+      const citationText = ref.citation ? ` — ${ref.citation}` : "";
       blocks.push({
         id: crypto.randomUUID(),
         type: "bulletListItem",
@@ -418,6 +421,7 @@ function buildRelationBlocks(
             href: ref.url,
             content: [{ type: "text", text: ref.title, styles: {} }],
           },
+          ...(citationText ? [{ type: "text", text: citationText, styles: { italic: true } as any }] : []),
         ],
         children: [],
       });

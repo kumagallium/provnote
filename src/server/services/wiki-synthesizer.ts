@@ -78,7 +78,12 @@ Respond with valid JSON only (no markdown wrapper):
 - Only propose with confidence >= 0.75
 - Each candidate must combine 2-4 existing Concepts
 - Section content should be thorough — include reasoning, evidence, and implications without length constraints
-- Include sections like: Overview, Key Insight, Implications, Open Questions
+- Use these section headings (in this order, skip any that don't apply):
+  - **Overview**: What this synthesis brings together and why (2-3 sentences)
+  - **Key Insight**: The new understanding that emerges from connecting these concepts
+  - **Cross-Concept Analysis**: How the source concepts interact — cite each source concept inline: "According to [Concept Title], ..."
+  - **Implications**: What follows from this combined understanding
+  - **Open Questions**: What's still unknown at the intersection of these concepts
 - The rationale must explain what NEW understanding emerges
 - Return empty candidates array if no meaningful synthesis is possible
 - Do NOT synthesize if there are fewer than 3 Concept pages

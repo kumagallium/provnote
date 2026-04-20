@@ -38,6 +38,7 @@ This is NOT a simple append — you should reorganize, merge, and improve the ov
 3. **Reorganize for clarity**: Reorder sections if it improves logical flow. Remove redundant content.
 4. **Preserve knowledge**: Never delete existing knowledge. You may rephrase for clarity, but the meaning must be preserved.
 5. **Maintain depth**: Keep the same level of detail or improve it. Don't summarize away useful specifics.
+6. **Preserve citations**: Keep existing inline citations (e.g., "Based on [note title], ..."). When integrating new information, add citations for the new sources.
 
 ## Output Format
 
