@@ -2387,7 +2387,7 @@ export function NoteApp() {
                     const sourceConceptIds = fm.activeDoc.wikiMeta.derivedFromNotes;
                     const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
                     for (const cId of sourceConceptIds) {
-                      const doc = fm.getCachedDoc(`wiki:${cId}`);
+                      const doc = await fm.loadDoc(`wiki:${cId}`);
                       if (!doc) continue;
                       const detail = extractWikiDetail(cId, doc);
                       if (!detail) continue;
@@ -2466,7 +2466,7 @@ export function NoteApp() {
 
                     const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
                     for (const noteId of sourceNoteIds) {
-                      const doc = fm.getCachedDoc(noteId);
+                      const doc = await fm.loadDoc(noteId);
                       if (doc) sourceDocs.push({ noteId, doc });
                     }
                     if (sourceDocs.length === 0) {
