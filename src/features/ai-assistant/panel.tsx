@@ -52,6 +52,15 @@ export function AiAssistantPanel({
   // バックエンド接続 + モデル登録状態をチェック（sidecar 死亡時は自動復旧を試みる）
   useEffect(() => {
     const check = async () => {
+      // Web モード: localStorage のモデルを確認（サーバーに保存されないため）
+      const { isTauri } = await import("../../lib/platform");
+      if (!isTauri()) {
+        const { getLLMModels } = await import("../settings/store");
+        const localModels = getLLMModels();
+        setAiStatus(localModels.length > 0 ? "connected" : "no-models");
+        return;
+      }
+
       try {
         const res = await fetchModels();
         setAiStatus(res.models.length > 0 ? "connected" : "no-models");

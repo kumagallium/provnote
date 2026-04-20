@@ -264,11 +264,7 @@ app.post("/rewrite", async (c) => {
     return c.json({ error: "existingSections と newSections は必須です" }, 400);
   }
 
-  let modelConfig = getDefaultModel();
-  if (body.model) {
-    const models = listModels();
-    modelConfig = models.find((m) => m.name === body.model) ?? modelConfig;
-  }
+  const modelConfig = resolveModelConfig(c, { modelName: body.model });
 
   if (!modelConfig) {
     return c.json(
