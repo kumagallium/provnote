@@ -106,7 +106,7 @@ Respond with valid JSON only (no markdown wrapper):
 - For gaps: suggest what kind of Concept page could be created
 - For contradictions: quote the conflicting claims
 - For stale: compare lastIngestedAt dates with related pages
-- For redundant: compare section headings and content themes between Concept pages. If two Concepts cover >70% of the same ground, flag them. Suggest which one to keep (prefer the one with more recent updates or more sources) and which to delete or merge
+- For redundant: compare section headings and content themes between Concept pages. If two Concepts cover >70% of the same ground, flag them. IMPORTANT: in affectedWikiIds, put the page to KEEP first, and the page to MERGE INTO IT second. Prefer keeping the one with more recent updates, more sources, or better quality. The suggestion should clearly state which page absorbs which
 - Return an empty issues array if no issues are found
 
 ## Language

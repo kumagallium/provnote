@@ -1888,6 +1888,79 @@ export function NoteApp() {
             }));
           }
 
+          // redundant: 重複 Concept を自動マージ（知識を統合、削除はしない）
+          const redundants = issues.filter((i) => i.type === "redundant");
+          for (const redundant of redundants) {
+            if (redundant.affectedWikiIds.length < 2) continue;
+            const [keepId, mergeId] = redundant.affectedWikiIds;
+            try {
+              const keepDoc = fm.getCachedDoc(`wiki:${keepId}`);
+              const mergeDoc = fm.getCachedDoc(`wiki:${mergeId}`);
+              if (!keepDoc || !mergeDoc) continue;
+
+              // mergeDoc のセクションを抽出して keepDoc に rewrite で統合
+              const mergeDetail = extractWikiDetail(mergeId, mergeDoc);
+              if (!mergeDetail) continue;
+
+              // mergeDoc の全セクション内容を IngesterOutput 形式に変換
+              const mergeSections = mergeDetail.sectionHeadings.map((h, i) => ({
+                heading: h,
+                content: mergeDetail.sectionPreviews[i] ?? "",
+              })).filter((s) => s.content);
+
+              if (mergeSections.length > 0) {
+                const mergedResult = await rewriteAndMerge(
+                  keepDoc,
+                  {
+                    kind: "concept",
+                    title: keepDoc.title,
+                    sections: mergeSections,
+                    suggestedAction: "merge" as const,
+                    mergeTargetId: keepId,
+                    confidence: 0.9,
+                    relatedConcepts: [],
+                    externalReferences: [],
+                  },
+                  mergeDoc.wikiMeta?.derivedFromNotes[0] ?? "",
+                  null,
+                );
+
+                // 統合先に mergeDoc の derivedFromNotes も追加
+                if (mergedResult.wikiMeta) {
+                  mergedResult.wikiMeta.derivedFromNotes = [
+                    ...new Set([
+                      ...(mergedResult.wikiMeta.derivedFromNotes ?? []),
+                      ...(mergeDoc.wikiMeta?.derivedFromNotes ?? []),
+                    ]),
+                  ];
+                }
+
+                await fm.handleSaveWikiFile(keepId, mergedResult);
+                embedWikiSections(keepId, mergedResult).catch(() => {});
+
+                // 統合元を削除
+                await fm.handleDeleteWikiFile(mergeId);
+
+                wikiLog.append("merge", [keepId, mergeId],
+                  `Auto-merge redundant: "${mergeDoc.title}" → "${keepDoc.title}"`).catch(() => {});
+
+                setIngestToast((prev) => ({
+                  items: [
+                    ...(prev?.items ?? []),
+                    {
+                      id: `merge:${crypto.randomUUID()}`,
+                      status: "success" as const,
+                      noteTitle: `\ud83d\udd04 Merged "${mergeDoc.title}" into "${keepDoc.title}"`,
+                      result: redundant.suggestion,
+                    },
+                  ],
+                }));
+              }
+            } catch {
+              // マージ失敗は無視（トースト通知はそのまま残る）
+            }
+          }
+
           // stale はログに記録
           const stale = issues.filter((i) => i.type === "stale");
           if (stale.length > 0) {
@@ -1959,20 +2032,19 @@ export function NoteApp() {
         const report = await lintWikis(snapshots, "ja", !useLlm);
 
         if (report.issues.length > 0) {
-          // 問題があればトースト通知（バックグラウンドで静かに）
-          const important = report.issues.filter((i) =>
-            i.type === "contradiction" || i.type === "gap" || i.type === "redundant",
+          // contradiction / gap はトースト通知のみ
+          const notifyOnly = report.issues.filter((i) =>
+            i.type === "contradiction" || i.type === "gap",
           );
-          if (important.length > 0) {
+          if (notifyOnly.length > 0) {
             const iconMap: Record<string, string> = {
               contradiction: "\u26a0",
               gap: "\ud83d\udca1",
-              redundant: "\ud83d\udd04",
             };
             setIngestToast((prev) => ({
               items: [
                 ...(prev?.items ?? []),
-                ...important.slice(0, 3).map((issue) => ({
+                ...notifyOnly.slice(0, 3).map((issue) => ({
                   id: `auto-lint:${crypto.randomUUID()}`,
                   status: (issue.type === "contradiction" ? "error" : "success") as "error" | "success",
                   noteTitle: `${iconMap[issue.type] ?? "\u26a0"} ${issue.title}`,
@@ -1980,6 +2052,74 @@ export function NoteApp() {
                 })),
               ],
             }));
+          }
+
+          // redundant: 自動マージ
+          const redundants = report.issues.filter((i) => i.type === "redundant");
+          for (const redundant of redundants) {
+            if (redundant.affectedWikiIds.length < 2) continue;
+            const [keepId, mergeId] = redundant.affectedWikiIds;
+            try {
+              const keepDoc = fm.getCachedDoc(`wiki:${keepId}`);
+              const mergeDoc = fm.getCachedDoc(`wiki:${mergeId}`);
+              if (!keepDoc || !mergeDoc) continue;
+
+              const mergeDetail = extractWikiDetail(mergeId, mergeDoc);
+              if (!mergeDetail) continue;
+
+              const mergeSections = mergeDetail.sectionHeadings.map((h, i) => ({
+                heading: h,
+                content: mergeDetail.sectionPreviews[i] ?? "",
+              })).filter((s) => s.content);
+
+              if (mergeSections.length > 0) {
+                const mergedResult = await rewriteAndMerge(
+                  keepDoc,
+                  {
+                    kind: "concept",
+                    title: keepDoc.title,
+                    sections: mergeSections,
+                    suggestedAction: "merge" as const,
+                    mergeTargetId: keepId,
+                    confidence: 0.9,
+                    relatedConcepts: [],
+                    externalReferences: [],
+                  },
+                  mergeDoc.wikiMeta?.derivedFromNotes[0] ?? "",
+                  null,
+                );
+
+                if (mergedResult.wikiMeta) {
+                  mergedResult.wikiMeta.derivedFromNotes = [
+                    ...new Set([
+                      ...(mergedResult.wikiMeta.derivedFromNotes ?? []),
+                      ...(mergeDoc.wikiMeta?.derivedFromNotes ?? []),
+                    ]),
+                  ];
+                }
+
+                await fm.handleSaveWikiFile(keepId, mergedResult);
+                embedWikiSections(keepId, mergedResult).catch(() => {});
+                await fm.handleDeleteWikiFile(mergeId);
+
+                wikiLog.append("merge", [keepId, mergeId],
+                  `Startup auto-merge: "${mergeDoc.title}" → "${keepDoc.title}"`).catch(() => {});
+
+                setIngestToast((prev) => ({
+                  items: [
+                    ...(prev?.items ?? []),
+                    {
+                      id: `merge:${crypto.randomUUID()}`,
+                      status: "success" as const,
+                      noteTitle: `\ud83d\udd04 Merged "${mergeDoc.title}" into "${keepDoc.title}"`,
+                      result: redundant.suggestion,
+                    },
+                  ],
+                }));
+              }
+            } catch {
+              // マージ失敗は無視
+            }
           }
         }
 
