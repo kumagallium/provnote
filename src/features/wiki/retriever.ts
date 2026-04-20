@@ -3,7 +3,8 @@
 // システムプロンプトに注入するコンテキスト文字列として返す
 
 import { embeddingStore, type SearchResult } from "../../lib/embedding-store";
-import { getEmbeddingModel } from "../settings/store";
+import { getEmbeddingModel, getDefaultLLMModel } from "../settings/store";
+import { isTauri } from "../../lib/platform";
 
 const TOP_K = 5;
 const MIN_SCORE = 0.3;
@@ -20,9 +21,19 @@ export async function retrieveWikiContext(
   // まず embedding ベースの検索を試みる
   try {
     const embModel = getEmbeddingModel();
+    const embedHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (!isTauri()) {
+      const model = getDefaultLLMModel();
+      if (model) {
+        embedHeaders["X-LLM-API-Key"] = JSON.stringify({
+          provider: model.provider, modelId: model.modelId,
+          apiKey: model.apiKey, apiBase: model.apiBase, name: model.name,
+        });
+      }
+    }
     const res = await fetch("/api/wiki/embed", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: embedHeaders,
       body: JSON.stringify({
         texts: [{ documentId: "_query", sectionId: "_query", text: userMessage }],
         ...(embModel ? { embedding_model: embModel } : {}),

@@ -56,7 +56,7 @@ import {
   generateTitle,
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -2419,9 +2419,19 @@ export function NoteApp() {
                     }
 
                     // Synthesis の再生成は直接 API を呼ぶ（fetchSynthesisCandidates は concepts >= 3 ガードあり）
+                    const synthHeaders: Record<string, string> = { "Content-Type": "application/json" };
+                    if (!isTauri()) {
+                      const llmModel = getDefaultLLMModel();
+                      if (llmModel) {
+                        synthHeaders["X-LLM-API-Key"] = JSON.stringify({
+                          provider: llmModel.provider, modelId: llmModel.modelId,
+                          apiKey: llmModel.apiKey, apiBase: llmModel.apiBase, name: llmModel.name,
+                        });
+                      }
+                    }
                     const synthRes = await fetch("/api/wiki/synthesize", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: synthHeaders,
                       body: JSON.stringify({
                         concepts,
                         existingSynthesisTitles: [],

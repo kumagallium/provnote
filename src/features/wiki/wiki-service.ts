@@ -4,7 +4,8 @@
 import type { GraphiumDocument, WikiKind, WikiMeta } from "../../lib/document-types";
 import { embeddingStore } from "../../lib/embedding-store";
 import type { IngesterOutput } from "../../server/services/wiki-ingester";
-import { getEmbeddingModel } from "../settings/store";
+import { getEmbeddingModel, getDefaultLLMModel } from "../settings/store";
+import { isTauri } from "../../lib/platform";
 
 import type { GraphiumIndex } from "../navigation";
 
@@ -21,6 +22,24 @@ export function buildNoteIndex(index: GraphiumIndex | null | undefined): NoteInd
     title: n.title,
     isWiki: n.source === "ai",
   }));
+}
+
+/** Web モード用: X-LLM-API-Key ヘッダーを含む共通ヘッダー */
+function wikiHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (!isTauri()) {
+    const model = getDefaultLLMModel();
+    if (model) {
+      h["X-LLM-API-Key"] = JSON.stringify({
+        provider: model.provider,
+        modelId: model.modelId,
+        apiKey: model.apiKey,
+        apiBase: model.apiBase,
+        name: model.name,
+      });
+    }
+  }
+  return h;
 }
 
 type ExistingWikiInfo = {
@@ -50,7 +69,7 @@ export async function ingestNote(
 
   const res = await fetch(`${API_BASE}/ingest`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({
       noteId,
       noteContent,
@@ -204,7 +223,7 @@ export async function rewriteAndMerge(
   try {
     const res = await fetch(`${API_BASE}/rewrite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: wikiHeaders(),
       body: JSON.stringify({
         existingSections,
         newSections,
@@ -629,7 +648,7 @@ export async function embedWikiSections(
     const embModel = getEmbeddingModel();
     const res = await fetch(`${API_BASE}/embed`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: wikiHeaders(),
       body: JSON.stringify({
         texts: sections,
         ...(embModel ? { embedding_model: embModel } : {}),
@@ -764,7 +783,7 @@ export async function ingestFromUrl(
   // サーバーサイドで HTML 取得・パース
   const fetchRes = await fetch(`${API_BASE}/fetch-url`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({ url }),
   });
 
@@ -788,7 +807,7 @@ export async function ingestFromUrl(
 
   const res = await fetch(`${API_BASE}/ingest`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({
       noteId: `url:${url}`,
       noteContent,
@@ -822,7 +841,7 @@ export async function ingestFromChat(
 
   const res = await fetch(`${API_BASE}/ingest`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({
       noteId: `chat:${Date.now()}`,
       noteContent: chatContent,
@@ -864,7 +883,7 @@ export async function fetchCrossUpdateProposals(
 ): Promise<CrossUpdateResult> {
   const res = await fetch(`${API_BASE}/cross-update`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify(input),
   });
 
@@ -932,7 +951,7 @@ export async function applyCrossUpdate(
       try {
         const res = await fetch(`${API_BASE}/rewrite`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: wikiHeaders(),
           body: JSON.stringify({
             existingSections: [{ heading: proposal.section.heading, content: existingContent }],
             newSections: [{ heading: proposal.section.heading, content: proposal.section.content }],
@@ -1108,7 +1127,7 @@ export async function lintWikis(
 ): Promise<LintReport> {
   const res = await fetch(`${API_BASE}/lint`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({ wikis, language, localOnly }),
   });
 
@@ -1265,7 +1284,7 @@ export async function fetchSynthesisCandidates(
 
   const res = await fetch(`${API_BASE}/synthesize`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: wikiHeaders(),
     body: JSON.stringify({ concepts, existingSynthesisTitles, language }),
   });
 
