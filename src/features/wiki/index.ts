@@ -1,5 +1,6 @@
 export { WikiListView } from "./WikiListView";
 export { WikiLogView } from "./WikiLogView";
+export { WikiLintView } from "./WikiLintView";
 export { WikiBanner } from "./WikiBanner";
 export { IngestToast, type IngestToastState, type IngestToastItem } from "./IngestToast";
 export {

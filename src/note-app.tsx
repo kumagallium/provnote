@@ -65,7 +65,7 @@ import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, type GraphiumIndex } from "./features/navigation";
 import {
-  WikiListView, WikiLogView, WikiBanner,
+  WikiListView, WikiLogView, WikiLintView, WikiBanner,
   IngestToast, type IngestToastState, type IngestToastItem,
   ingestNote, ingestFromUrl, ingestFromChat,
   buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge, embedWikiSections,
@@ -1637,7 +1637,9 @@ export function NoteApp() {
   const ingestQueueRef = useRef<{ noteId: string; noteTitle: string; doc: import("./lib/document-types").GraphiumDocument }[]>([]);
   const ingestRunningRef = useRef(false);
   // Wiki Log 表示状態
-  const [activeWikiView, setActiveWikiView] = useState<"log" | null>(null);
+  const [activeWikiView, setActiveWikiView] = useState<"log" | "lint" | null>(null);
+  const [lintReport, setLintReport] = useState<import("./server/services/wiki-linter").LintReport | null>(null);
+  const [lintLoading, setLintLoading] = useState(false);
   // メモ挿入リクエスト（メモギャラリー → エディタ）
   const [pendingMemoInsert, setPendingMemoInsert] = useState<{ captureId: string; text: string; deleteAfter: boolean } | null>(null);
 
@@ -2207,6 +2209,7 @@ export function NoteApp() {
     activeWikiKind: fm.activeWikiKind,
     aiAvailable: aiAvailable ?? false,
     onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); },
+    onShowWikiLint: () => { setActiveWikiView("lint"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); },
     activeWikiView,
   };
 
@@ -2298,6 +2301,25 @@ export function NoteApp() {
             onBack={() => setActiveWikiView(null)}
             onOpenWiki={(wikiId) => { setActiveWikiView(null); fm.handleOpenWikiFile(wikiId); }}
           />
+        ) : activeWikiView === "lint" ? (
+          <WikiLintView
+            report={lintReport}
+            loading={lintLoading}
+            onRunLint={async (localOnly) => {
+              setLintLoading(true);
+              try {
+                const snapshots = buildWikiSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
+                const report = await lintWikis(snapshots, "ja", localOnly);
+                setLintReport(report);
+              } catch (err) {
+                console.error("Lint failed:", err);
+              } finally {
+                setLintLoading(false);
+              }
+            }}
+            onOpenWiki={(wikiId) => { setActiveWikiView(null); fm.handleOpenWikiFile(wikiId); }}
+            onBack={() => setActiveWikiView(null)}
+          />
         ) : fm.activeWikiKind ? (
           <WikiListView
             noteIndex={fm.noteIndex}
@@ -2349,17 +2371,7 @@ export function NoteApp() {
                 const selectedModel = options?.model || undefined;
                 const toastId = `regen:${wikiId}`;
 
-                // 全ての由来ノートを収集
-                const sourceNoteIds = fm.activeDoc.wikiMeta.derivedFromNotes;
-                if (sourceNoteIds.length === 0) return;
-
-                // 由来ノートのコンテンツを結合
-                const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
-                for (const noteId of sourceNoteIds) {
-                  const doc = fm.getCachedDoc(noteId);
-                  if (doc) sourceDocs.push({ noteId, doc });
-                }
-                if (sourceDocs.length === 0) return;
+                const isSynthesis = fm.activeDoc.wikiMeta.kind === "synthesis";
 
                 // トースト: 開始
                 setIngestToast((prev) => ({
@@ -2370,57 +2382,148 @@ export function NoteApp() {
                 }));
 
                 try {
-                  // 最初の由来ノートで Ingest（他のノートの情報は既存 Wiki に含まれている）
-                  const primarySource = sourceDocs[0];
-                  const result = await ingestNote(
-                    primarySource.noteId,
-                    primarySource.doc,
-                    [],
-                    "ja",
-                    selectedModel,
-                  );
-
-                  if (result.wikis.length > 0) {
-                    // トースト: 再構成中
-                    setIngestToast((prev) => ({
-                      items: (prev?.items ?? []).map((i) =>
-                        i.id === toastId ? { ...i, detail: "Rewriting..." } : i
-                      ),
-                    }));
-
-                    // rewrite API で既存コンテンツと統合（editedSections 保護）
-                    const rewritten = await rewriteAndMerge(
-                      fm.activeDoc,
-                      result.wikis[0],
-                      primarySource.noteId,
-                      result.model,
-                    );
-                    // モデル情報を更新
-                    if (rewritten.wikiMeta) {
-                      rewritten.wikiMeta.generatedBy = {
-                        model: result.model ?? selectedModel ?? "unknown",
-                        version: "1.0.0",
-                      };
+                  if (isSynthesis) {
+                    // Synthesis: 元の Concept から再合成
+                    const sourceConceptIds = fm.activeDoc.wikiMeta.derivedFromNotes;
+                    const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
+                    for (const cId of sourceConceptIds) {
+                      const doc = fm.getCachedDoc(`wiki:${cId}`);
+                      if (!doc) continue;
+                      const detail = extractWikiDetail(cId, doc);
+                      if (!detail) continue;
+                      concepts.push({
+                        id: cId,
+                        title: doc.title,
+                        sections: detail.sectionHeadings.map((h, i) => ({
+                          heading: h,
+                          preview: detail.sectionPreviews[i] ?? "",
+                        })),
+                        relatedConcepts: [],
+                      });
                     }
-                    await fm.handleSaveWikiFile(wikiId, rewritten);
-                    embedWikiSections(wikiId, rewritten).catch(() => {});
-                    fm.handleOpenWikiFile(wikiId);
-                    const modelLabel = result.model ?? selectedModel ?? "default";
-                    wikiLog.append("regenerate", [wikiId], `Regenerated "${wikiTitle}" with ${modelLabel}`).catch(() => {});
 
-                    // トースト: 完了
-                    setIngestToast((prev) => ({
-                      items: (prev?.items ?? []).map((i) =>
-                        i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
-                      ),
-                    }));
+                    if (concepts.length < 2) {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "Source concepts not found" } : i
+                        ),
+                      }));
+                      return;
+                    }
+
+                    // Synthesis の再生成は直接 API を呼ぶ（fetchSynthesisCandidates は concepts >= 3 ガードあり）
+                    const synthRes = await fetch("/api/wiki/synthesize", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        concepts,
+                        existingSynthesisTitles: [],
+                        language: "ja",
+                        ...(selectedModel ? { model: selectedModel } : {}),
+                      }),
+                    });
+                    const synthResult = synthRes.ok
+                      ? await synthRes.json() as { candidates: any[]; model?: string }
+                      : { candidates: [] };
+                    if (synthResult.candidates && synthResult.candidates.length > 0) {
+                      const candidate = synthResult.candidates[0];
+                      const newDoc = buildSynthesisDocument(candidate, synthResult.model ?? null);
+                      if (newDoc.wikiMeta) {
+                        newDoc.wikiMeta.generatedBy = {
+                          model: synthResult.model ?? selectedModel ?? "unknown",
+                          version: "1.0.0",
+                        };
+                      }
+                      await fm.handleSaveWikiFile(wikiId, newDoc);
+                      embedWikiSections(wikiId, newDoc).catch(() => {});
+                      fm.handleOpenWikiFile(wikiId);
+                      const modelLabel = synthResult.model ?? selectedModel ?? "default";
+                      wikiLog.append("regenerate", [wikiId], `Regenerated synthesis "${wikiTitle}" with ${modelLabel}`).catch(() => {});
+
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
+                        ),
+                      }));
+                    } else {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No synthesis generated" } : i
+                        ),
+                      }));
+                    }
                   } else {
-                    // トースト: 内容不足
-                    setIngestToast((prev) => ({
-                      items: (prev?.items ?? []).map((i) =>
-                        i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No content generated" } : i
-                      ),
-                    }));
+                    // Summary / Concept: 由来ノートから再生成
+                    const sourceNoteIds = fm.activeDoc.wikiMeta.derivedFromNotes;
+                    if (sourceNoteIds.length === 0) {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No source notes" } : i
+                        ),
+                      }));
+                      return;
+                    }
+
+                    const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
+                    for (const noteId of sourceNoteIds) {
+                      const doc = fm.getCachedDoc(noteId);
+                      if (doc) sourceDocs.push({ noteId, doc });
+                    }
+                    if (sourceDocs.length === 0) {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "Source notes not found" } : i
+                        ),
+                      }));
+                      return;
+                    }
+
+                    const primarySource = sourceDocs[0];
+                    const result = await ingestNote(
+                      primarySource.noteId,
+                      primarySource.doc,
+                      [],
+                      "ja",
+                      selectedModel,
+                    );
+
+                    if (result.wikis.length > 0) {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, detail: "Rewriting..." } : i
+                        ),
+                      }));
+
+                      const rewritten = await rewriteAndMerge(
+                        fm.activeDoc,
+                        result.wikis[0],
+                        primarySource.noteId,
+                        result.model,
+                      );
+                      if (rewritten.wikiMeta) {
+                        rewritten.wikiMeta.generatedBy = {
+                          model: result.model ?? selectedModel ?? "unknown",
+                          version: "1.0.0",
+                        };
+                      }
+                      await fm.handleSaveWikiFile(wikiId, rewritten);
+                      embedWikiSections(wikiId, rewritten).catch(() => {});
+                      fm.handleOpenWikiFile(wikiId);
+                      const modelLabel = result.model ?? selectedModel ?? "default";
+                      wikiLog.append("regenerate", [wikiId], `Regenerated "${wikiTitle}" with ${modelLabel}`).catch(() => {});
+
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
+                        ),
+                      }));
+                    } else {
+                      setIngestToast((prev) => ({
+                        items: (prev?.items ?? []).map((i) =>
+                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No content generated" } : i
+                        ),
+                      }));
+                    }
                   }
                 } catch (err) {
                   console.error("Wiki の再生成に失敗:", err);

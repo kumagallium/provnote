@@ -388,7 +388,7 @@ app.post("/synthesize", async (c) => {
     model?: string;
   }>();
 
-  if (!body.concepts || body.concepts.length < 3) {
+  if (!body.concepts || body.concepts.length < 2) {
     return c.json({ candidates: [] });
   }
 

@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck } from "lucide-react";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
 import { useT, getDisplayLabelName } from "../i18n";
@@ -46,8 +46,10 @@ export type FileSidebarProps = {
   aiAvailable?: boolean;
   /** Wiki ログ表示 */
   onShowWikiLog?: () => void;
-  /** Log がアクティブか */
-  activeWikiView?: "log" | null;
+  /** Wiki ヘルスチェック表示 */
+  onShowWikiLint?: () => void;
+  /** Log/Lint がアクティブか */
+  activeWikiView?: "log" | "lint" | null;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -94,6 +96,7 @@ export function FileSidebar({
   activeWikiKind,
   aiAvailable = true,
   onShowWikiLog,
+  onShowWikiLint,
   activeWikiView,
 }: FileSidebarProps) {
   const t = useT();
@@ -273,6 +276,19 @@ export function FileSidebar({
                 >
                   <span className="text-muted-foreground shrink-0"><History size={14} /></span>
                   <span className="flex-1 text-left">Activity Log</span>
+                </button>
+              )}
+              {onShowWikiLint && (
+                <button
+                  onClick={onShowWikiLint}
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${
+                    activeWikiView === "lint"
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <span className="text-muted-foreground shrink-0"><ShieldCheck size={14} /></span>
+                  <span className="flex-1 text-left">Health Check</span>
                 </button>
               )}
             </div>
