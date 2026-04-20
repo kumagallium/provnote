@@ -76,7 +76,7 @@ app.post("/ingest", async (c) => {
     body.existingWikiTitles || [],
   );
 
-  const userMessage = `# ${body.noteTitle}\n\n${body.noteContent}`;
+  const userMessage = `Source note title: "${body.noteTitle}"\nUse this exact title for inline citations (e.g., "Based on [${body.noteTitle}], ...").\n\n# ${body.noteTitle}\n\n${body.noteContent}`;
 
   try {
     const model = createModel(modelConfig);
