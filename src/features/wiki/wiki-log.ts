@@ -113,7 +113,33 @@ export const wikiLog = {
     });
   },
 
-  /** LLM 向けのログテキストにフォーマット（直近の操作履歴） */
+  /** 指定タイプの最新ログの timestamp を取得 */
+  async getLastTimestamp(type: WikiLogEventType): Promise<string | null> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const index = store.index("type");
+      const req = index.openCursor(IDBKeyRange.only(type), "prev");
+      // type インデックスは timestamp 順ではないので全件走査して最新を取る
+      let latest: string | null = null;
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          const entry = cursor.value as WikiLogEntry;
+          if (!latest || entry.timestamp > latest) {
+            latest = entry.timestamp;
+          }
+          cursor.continue();
+        } else {
+          resolve(latest);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  /** LLM 向けのログテキストに��ォーマット（直近の操作履歴） */
   async formatForLLM(limit: number = 20): Promise<string> {
     const entries = await this.getRecent(limit);
     if (entries.length === 0) return "";

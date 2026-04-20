@@ -1,10 +1,11 @@
 export { WikiListView } from "./WikiListView";
 export { WikiLogView } from "./WikiLogView";
+export { WikiLintView } from "./WikiLintView";
 export { WikiBanner } from "./WikiBanner";
 export { IngestToast, type IngestToastState, type IngestToastItem } from "./IngestToast";
 export {
   ingestNote, ingestFromUrl, ingestFromChat,
-  buildWikiDocument, mergeIntoWikiDocument,
+  buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge,
   embedWikiSections, markEditedSections,
   // 横断更新
   fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
@@ -16,6 +17,6 @@ export {
   // Synthesis
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
 } from "./wiki-service";
-export { retrieveWikiContext } from "./retriever";
+export { retrieveWikiContext, setWikiTitleMap } from "./retriever";
 export { wikiLog } from "./wiki-log";
 export type { WikiLogEntry, WikiLogEventType } from "./wiki-log";

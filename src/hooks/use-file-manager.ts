@@ -708,6 +708,22 @@ export function useFileManager(authenticated: boolean) {
     []
   );
 
+  /** キャッシュ優先でドキュメントを取得、なければストレージから読み込む */
+  const loadDoc = useCallback(
+    async (noteId: string): Promise<GraphiumDocument | null> => {
+      const cached = docCacheRef.current.get(noteId);
+      if (cached) return cached;
+      try {
+        const doc = await loadFile(noteId);
+        if (doc) docCacheRef.current.set(noteId, doc);
+        return doc;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
   // メディアアップロード（インデックス自動登録付き）
   const handleUploadMedia = useCallback(async (file: File): Promise<string> => {
     const result = await uploadMediaFileWithMeta(file);
@@ -968,6 +984,7 @@ export function useFileManager(authenticated: boolean) {
     handleAiDeriveNote,
     handleDelete,
     getCachedDoc,
+    loadDoc,
     handleUploadMedia,
     handleDeleteMedia,
     handleRenameMedia,

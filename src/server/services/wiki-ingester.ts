@@ -8,6 +8,19 @@ export type WikiSection = {
   content: string;
 };
 
+export type RelatedConceptRef = {
+  title: string;
+  /** この Concept との関連を説明する一�� */
+  citation: string;
+};
+
+export type ExternalRef = {
+  url: string;
+  title: string;
+  /** この参照が何を裏付けるかの一文 */
+  citation: string;
+};
+
 export type IngesterOutput = {
   kind: WikiKind;
   title: string;
@@ -15,10 +28,10 @@ export type IngesterOutput = {
   suggestedAction: "create" | "merge";
   mergeTargetId?: string;
   confidence: number;
-  /** 関連する既存 Concept のタイトルリスト */
-  relatedConcepts: string[];
-  /** 根拠となる外部参照 URL（LLM が提示） */
-  externalReferences: { url: string; title: string }[];
+  /** 関連する���存 Concept（引用付き） */
+  relatedConcepts: RelatedConceptRef[];
+  /** 根拠となる外部参照 URL（引用付き） */
+  externalReferences: ExternalRef[];
 };
 
 export type ExistingWikiInfo = {
@@ -62,9 +75,11 @@ Respond with valid JSON only (no markdown wrapper, no explanation outside JSON):
       "suggestedAction": "create" | "merge",
       "mergeTargetId": "string (only if merge)",
       "confidence": 0.0-1.0,
-      "relatedConcepts": ["existing concept title 1", "..."],
+      "relatedConcepts": [
+        { "title": "existing concept title", "citation": "one-sentence summary of what this concept contributes" }
+      ],
       "externalReferences": [
-        { "url": "https://...", "title": "Reference description" }
+        { "url": "https://...", "title": "Reference description", "citation": "what this reference supports or evidences" }
       ]
     }
   ]
@@ -73,23 +88,40 @@ Respond with valid JSON only (no markdown wrapper, no explanation outside JSON):
 ## Two Wiki Types
 
 ### Summary (1 per note, always generated)
-A structured analysis of the note — NOT a copy-paste summary. Include:
-- **Overview**: What was done and why (2-3 sentences)
-- **Key findings**: Specific results, measurements, observations
-- **Insights**: What can be learned from this that wasn't explicitly stated
-- **Open questions**: What remains unclear or should be investigated next
-- **Connections**: How this relates to other work (reference existing Concepts if any)
+A structured analysis of the note — NOT a copy-paste summary.
+Use these section headings (in this order, skip any that don't apply):
+${language === "ja" ? `- **概要**: 何をなぜ行ったか（2-3文）
+- **主な発見**: 具体的な結果・測定値・観察
+- **洞察**: ノートに明示されていない学びや気づき
+- **未解決の問い**: 不明点・次に調べるべきこと
+- **関連性**: 他の研究やConceptとの関係` : `- **Overview**: What was done and why (2-3 sentences)
+- **Key Findings**: Specific results, measurements, observations with concrete data
+- **Insights**: What can be learned that wasn't explicitly stated in the note
+- **Open Questions**: What remains unclear or should be investigated next
+- **Connections**: How this relates to other work (reference existing Concepts if any)`}
 
 ### Concept (0-3 per note, knowledge development)
-Cross-cutting knowledge pages that **go beyond what the note explicitly says**. A good Concept:
-- Synthesizes knowledge that would be useful in OTHER contexts
-- Draws connections the researcher might not have made explicit
-- Includes reasoning, not just facts (e.g., "X works because Y, which implies Z")
-- References the source note as evidence ("Based on [note title]...")
-- Suggests related topics or next steps for investigation
+Cross-cutting knowledge pages that **go beyond what the note explicitly says**.
+Use these section headings (in this order, skip any that don't apply):
+${language === "ja" ? `- **定義**: この概念が何であるか、1段落で明確に
+- **メカニズム**: どう機能するか — 推論・因果関係・原理（最重要セクション）
+- **根拠**: ソースノートからの具体的な知見。インライン引用を使う: 「[ノートタイトル] によると...」
+- **示唆**: この知識が他の研究に何を意味するか
+- **未解決の問い**: まだ分からないこと、次に調べるべきこと` : `- **Definition**: What this concept is, in one clear paragraph
+- **Mechanism**: How it works — reasoning, cause-effect, principles (the most important section)
+- **Evidence**: Concrete findings from the source note that support this concept. Use inline citations: "According to [note title], ..." or "Based on [note title], ..."
+- **Implications**: What this means for other work, what follows from this knowledge
+- **Open Questions**: What's still unknown, what to investigate next`}
+
+**Inline citation rule**: When referencing knowledge from a specific source, cite it inline:
+${language === "ja" ? `- 「[ノートタイトル] によると、pH > 10 で還元速度が増加する。」
+- 「[ノートタイトル] に基づくと、酸化膜は温度依存的な導電性を示す。」` : `- "The reduction rate increases at pH > 10 (from [note title])."
+- "Based on [note title], oxide films show temperature-dependent conductivity."`}
+This helps readers trace each claim back to its origin.
+**IMPORTANT**: Use the EXACT source note title provided in the user message. Do NOT write generic phrases like "Based on the new source" or "According to the note" — always use the specific title in brackets.
 
 **Bad Concept** (avoid): A concept that just repeats what the note says in different words.
-**Good Concept**: Takes a specific finding and develops it into broader, reusable knowledge with reasoning.
+**Good Concept**: Takes a specific finding and develops it into broader, reusable knowledge with reasoning and citations.
 
 ## Merge vs Create (Critical)
 
@@ -114,9 +146,9 @@ Output in: ${language === "ja" ? "Japanese" : "English"}
 - Summary: Always generate exactly 1 per note
 - Concepts: Generate 0-3. Quality over quantity — only create if there's genuine insight to develop
 - Section content: Be thorough. Include reasoning, evidence, and concrete examples — not just facts. Write as much as needed to fully develop the insight
-- relatedConcepts: List titles of existing Concepts that are related (empty array if none)
+- relatedConcepts: Array of {title, citation} for existing Concepts that are related. The citation should explain WHY this concept is related (e.g., "provides pH-dependency context"). Empty array if none
 - confidence: 0.9+ for clear, well-evidenced knowledge. 0.6-0.8 for tentative insights
-- externalReferences: Include URLs to authoritative sources (Wikipedia, academic papers, official docs) that support or contextualize the knowledge. Prioritize well-known, stable URLs. 0-5 per wiki
+- externalReferences: Array of {url, title, citation}. The citation explains what this reference supports (e.g., "general framework for reaction kinetics"). Prioritize well-known, stable URLs. 0-5 per wiki
 - If the note is too short or trivial (e.g., just a title), generate only a minimal Summary with confidence 0.5`;
 }
 
@@ -149,11 +181,21 @@ export function parseIngesterOutput(text: string): IngesterOutput[] {
         suggestedAction: w.suggestedAction === "merge" ? "merge" as const : "create" as const,
         mergeTargetId: w.mergeTargetId ? String(w.mergeTargetId) : undefined,
         confidence: typeof w.confidence === "number" ? w.confidence : 0.7,
-        relatedConcepts: Array.isArray(w.relatedConcepts) ? w.relatedConcepts.map(String) : [],
+        relatedConcepts: Array.isArray(w.relatedConcepts)
+          ? w.relatedConcepts.map((rc: any) =>
+              typeof rc === "string"
+                ? { title: rc, citation: "" }  // 後方互換: 旧形式の文字列
+                : { title: String(rc.title ?? ""), citation: String(rc.citation ?? "") }
+            )
+          : [],
         externalReferences: Array.isArray(w.externalReferences)
           ? w.externalReferences
               .filter((r: any) => r.url && typeof r.url === "string")
-              .map((r: any) => ({ url: String(r.url), title: String(r.title ?? r.url) }))
+              .map((r: any) => ({
+                url: String(r.url),
+                title: String(r.title ?? r.url),
+                citation: String(r.citation ?? ""),
+              }))
           : [],
       }));
   } catch (err) {

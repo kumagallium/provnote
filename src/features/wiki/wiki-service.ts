@@ -29,6 +29,8 @@ export async function ingestNote(
   doc: GraphiumDocument,
   existingWikis: ExistingWikiInfo[],
   language: string,
+  /** 使用するモデル名（省略時はサーバーデフォルト） */
+  model?: string,
 ): Promise<IngestResult> {
   const noteContent = extractPlainTextFromDoc(doc);
 
@@ -41,6 +43,7 @@ export async function ingestNote(
       noteTitle: doc.title,
       existingWikiTitles: existingWikis,
       language,
+      ...(model ? { model } : {}),
     }),
   });
 
@@ -61,6 +64,7 @@ export function buildWikiDocument(
   model: string | null,
   sourceNoteTitle?: string,
   existingWikiTitles?: { id: string; title: string }[],
+  language?: string,
 ): GraphiumDocument {
   const now = new Date().toISOString();
   const blocks = convertSectionsToBlocks(ingesterOutput.sections);
@@ -86,7 +90,7 @@ export function buildWikiDocument(
     },
     status: "draft",
     lastIngestedAt: now,
-    language: undefined,
+    language: language ?? undefined,
   };
 
   return {
@@ -148,6 +152,138 @@ export function mergeIntoWikiDocument(
 }
 
 /**
+ * 既存 Wiki に新情報を統合して再構成する（LLM rewrite 版）
+ * editedSections はユーザーの手動編集を保護する
+ * rewrite API が失敗した場合は従来の mergeIntoWikiDocument にフォールバック
+ */
+export async function rewriteAndMerge(
+  existingDoc: GraphiumDocument,
+  ingesterOutput: IngesterOutput,
+  sourceNoteId: string,
+  model: string | null,
+  /** 言語オーバーライド（既存 Wiki の wikiMeta.language が未設定の場合に使う） */
+  language?: string,
+): Promise<GraphiumDocument> {
+  const page = existingDoc.pages[0];
+  if (!page) return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
+
+  // 既存ページのセクションをテキストとして抽出
+  const existingSections = extractSectionsFromBlocks(page.blocks);
+  const editedSectionHeadings = existingDoc.wikiMeta?.editedSections ?? [];
+
+  // 新しいセクション
+  const newSections = ingesterOutput.sections.map((s) => ({
+    heading: s.heading,
+    content: s.content,
+  }));
+
+  // セクションが少なすぎる場合は rewrite 不要（従来のマージ）
+  if (existingSections.length === 0) {
+    return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/rewrite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        existingSections,
+        newSections,
+        editedSectionHeadings,
+        language: existingDoc.wikiMeta?.language ?? language ?? "en",
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn("Rewrite API failed, falling back to append merge");
+      return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
+    }
+
+    const data = await res.json() as {
+      sections: { heading: string; content: string }[];
+    };
+
+    if (!data.sections || data.sections.length === 0) {
+      return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
+    }
+
+    // 再構成されたセクションをブロックに変換
+    const rewrittenBlocks = convertSectionsToBlocks(data.sections);
+
+    // References セクションは既存のものを保持
+    const refIndex = page.blocks.findIndex(
+      (b: any) => b.type === "heading" && extractInlineText(b.content).toLowerCase().includes("reference"),
+    );
+    const refBlocks = refIndex >= 0 ? page.blocks.slice(refIndex) : [];
+
+    const finalBlocks = [...rewrittenBlocks, ...refBlocks];
+
+    const now = new Date().toISOString();
+    const derivedFromNotes = [
+      ...new Set([...(existingDoc.wikiMeta?.derivedFromNotes ?? []), sourceNoteId]),
+    ];
+
+    return {
+      ...existingDoc,
+      pages: [{
+        ...page,
+        blocks: finalBlocks,
+      }],
+      wikiMeta: {
+        ...existingDoc.wikiMeta!,
+        derivedFromNotes,
+        lastIngestedAt: now,
+        generatedBy: {
+          model: model ?? existingDoc.wikiMeta?.generatedBy?.model ?? "unknown",
+          version: "1.0.0",
+        },
+      },
+      modifiedAt: now,
+    };
+  } catch (err) {
+    console.warn("Rewrite failed:", err);
+    return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
+  }
+}
+
+/**
+ * BlockNote ブロック配列から H2 セクション単位でテキストを抽出する
+ */
+function extractSectionsFromBlocks(
+  blocks: any[],
+): { heading: string; content: string }[] {
+  const sections: { heading: string; content: string }[] = [];
+  let currentHeading = "";
+  let currentContent: string[] = [];
+
+  for (const block of blocks) {
+    if (block.type === "heading" && block.props?.level === 2) {
+      // 前のセクションを保存
+      if (currentHeading) {
+        sections.push({ heading: currentHeading, content: currentContent.join("\n") });
+      }
+      currentHeading = extractInlineText(block.content);
+      currentContent = [];
+      // References セクション以降はスキップ
+      if (currentHeading.toLowerCase().includes("reference")) {
+        currentHeading = "";
+        break;
+      }
+    } else if (currentHeading) {
+      const text = extractInlineText(block.content);
+      if (text) currentContent.push(text);
+    }
+  }
+
+  // 最後のセクション
+  if (currentHeading) {
+    sections.push({ heading: currentHeading, content: currentContent.join("\n") });
+  }
+
+  return sections;
+}
+
+/**
  * Ingester のセクション出力を BlockNote ブロック配列に変換する
  */
 function convertSectionsToBlocks(
@@ -202,9 +338,9 @@ type RelationBlocksResult = {
 function buildRelationBlocks(
   sourceNoteId: string,
   sourceNoteTitle?: string,
-  relatedConcepts?: string[],
+  relatedConcepts?: { title: string; citation: string }[],
   existingWikiTitles?: { id: string; title: string }[],
-  externalReferences?: { url: string; title: string }[],
+  externalReferences?: { url: string; title: string; citation: string }[],
 ): RelationBlocksResult {
   const blocks: any[] = [];
   const knowledgeLinks: any[] = [];
@@ -241,12 +377,13 @@ function buildRelationBlocks(
     createdBy: "ai",
   });
 
-  // 関連 Concept への @リンク
+  // 関連 Concept への @リンク（引用付き）
   if (relatedConcepts && relatedConcepts.length > 0 && existingWikiTitles) {
-    for (const conceptTitle of relatedConcepts) {
-      const wiki = existingWikiTitles.find((w) => w.title === conceptTitle);
+    for (const concept of relatedConcepts) {
+      const wiki = existingWikiTitles.find((w) => w.title === concept.title);
       const blockId = crypto.randomUUID();
-      const label = wiki ? `🤖 ${conceptTitle}` : conceptTitle;
+      const label = wiki ? `🤖 ${concept.title}` : concept.title;
+      const citationText = concept.citation ? ` — ${concept.citation}` : "";
       blocks.push({
         id: blockId,
         type: "bulletListItem",
@@ -254,6 +391,7 @@ function buildRelationBlocks(
         content: [
           { type: "text", text: "Related: ", styles: { bold: true } },
           { type: "text", text: `@${label}`, styles: { textColor: "blue" } },
+          ...(citationText ? [{ type: "text", text: citationText, styles: { italic: true } as any }] : []),
         ],
         children: [],
       });
@@ -271,9 +409,10 @@ function buildRelationBlocks(
     }
   }
 
-  // 外部参照リンク
+  // 外部参照リンク（引用付き）
   if (externalReferences && externalReferences.length > 0) {
     for (const ref of externalReferences) {
+      const citationText = ref.citation ? ` — ${ref.citation}` : "";
       blocks.push({
         id: crypto.randomUUID(),
         type: "bulletListItem",
@@ -285,6 +424,7 @@ function buildRelationBlocks(
             href: ref.url,
             content: [{ type: "text", text: ref.title, styles: {} }],
           },
+          ...(citationText ? [{ type: "text", text: citationText, styles: { italic: true } as any }] : []),
         ],
         children: [],
       });
@@ -586,13 +726,14 @@ export async function fetchCrossUpdateProposals(
 
 /**
  * CrossUpdateProposal を既存の Wiki ドキュメントに適用する
+ * revise_section は rewrite API で対象セクションを文脈に溶け込ませる
  */
-export function applyCrossUpdate(
+export async function applyCrossUpdate(
   existingDoc: GraphiumDocument,
   proposal: CrossUpdateProposal,
   sourceNoteId: string,
   model: string | null,
-): GraphiumDocument {
+): Promise<GraphiumDocument> {
   const now = new Date().toISOString();
   const page = existingDoc.pages[0];
   if (!page) return existingDoc;
@@ -616,29 +757,67 @@ export function applyCrossUpdate(
       updatedBlocks.push(...newBlocks);
     }
   } else if (proposal.updateType === "revise_section" && proposal.section) {
-    // 既存セクションの末尾にコンテンツを追加
+    // rewrite API で対象セクションを書き換え
     const headingIdx = updatedBlocks.findIndex(
       (b) => b.type === "heading" && extractInlineText(b.content) === proposal.section!.heading,
     );
     if (headingIdx >= 0) {
-      // 次の H2 見出しまでのブロックの末尾に追加
-      let insertIdx = headingIdx + 1;
-      while (insertIdx < updatedBlocks.length) {
-        if (updatedBlocks[insertIdx].type === "heading" && updatedBlocks[insertIdx].props?.level === 2) break;
-        insertIdx++;
+      // 対象セクションのテキストを抽出
+      let endIdx = headingIdx + 1;
+      while (endIdx < updatedBlocks.length) {
+        if (updatedBlocks[endIdx].type === "heading" && updatedBlocks[endIdx].props?.level === 2) break;
+        endIdx++;
       }
-      const updateParagraph = {
-        id: crypto.randomUUID(),
-        type: "paragraph",
-        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
-        content: [{ type: "text", text: proposal.section.content, styles: {} }],
-        children: [],
-      };
-      updatedBlocks = [
-        ...updatedBlocks.slice(0, insertIdx),
-        updateParagraph,
-        ...updatedBlocks.slice(insertIdx),
-      ];
+      const existingContent = updatedBlocks.slice(headingIdx + 1, endIdx)
+        .map((b: any) => extractInlineText(b.content))
+        .filter(Boolean)
+        .join("\n");
+
+      // rewrite API で統合
+      let rewrittenBlocks: any[] | null = null;
+      try {
+        const res = await fetch(`${API_BASE}/rewrite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            existingSections: [{ heading: proposal.section.heading, content: existingContent }],
+            newSections: [{ heading: proposal.section.heading, content: proposal.section.content }],
+            editedSectionHeadings: existingDoc.wikiMeta?.editedSections ?? [],
+            language: existingDoc.wikiMeta?.language ?? "ja",
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { sections: { heading: string; content: string }[] };
+          if (data.sections?.length > 0) {
+            rewrittenBlocks = convertSectionsToBlocks(data.sections);
+          }
+        }
+      } catch {
+        // rewrite 失敗 → 従来の追記にフォールバック
+      }
+
+      if (rewrittenBlocks) {
+        // 対象セクション全体を書き換え
+        updatedBlocks = [
+          ...updatedBlocks.slice(0, headingIdx),
+          ...rewrittenBlocks,
+          ...updatedBlocks.slice(endIdx),
+        ];
+      } else {
+        // フォールバック: 末尾に追記
+        const updateParagraph = {
+          id: crypto.randomUUID(),
+          type: "paragraph",
+          props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+          content: [{ type: "text", text: proposal.section.content, styles: {} }],
+          children: [],
+        };
+        updatedBlocks = [
+          ...updatedBlocks.slice(0, endIdx),
+          updateParagraph,
+          ...updatedBlocks.slice(endIdx),
+        ];
+      }
     } else {
       // セクション見出しが見つからない場合は add_section として処理
       const newBlocks = convertSectionsToBlocks([proposal.section]);
@@ -946,6 +1125,7 @@ export async function fetchSynthesisCandidates(
 export function buildSynthesisDocument(
   candidate: SynthesisCandidate,
   model: string | null,
+  language?: string,
 ): GraphiumDocument {
   const now = new Date().toISOString();
   const blocks = convertSectionsToBlocks(candidate.sections);
@@ -998,7 +1178,7 @@ export function buildSynthesisDocument(
     },
     status: "draft",
     lastIngestedAt: now,
-    language: undefined,
+    language: language ?? undefined,
   };
 
   return {

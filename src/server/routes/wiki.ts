@@ -32,6 +32,12 @@ import {
   parseSynthesizerOutput,
   type ConceptSnapshot,
 } from "../services/wiki-synthesizer.js";
+import {
+  buildRewriterSystemPrompt,
+  buildRewriterUserMessage,
+  parseRewriterOutput,
+  type RewriteSection,
+} from "../services/wiki-rewriter.js";
 import { generateEmbeddings } from "../services/embedding.js";
 
 const app = new Hono();
@@ -66,7 +72,7 @@ app.post("/ingest", async (c) => {
     body.existingWikiTitles || [],
   );
 
-  const userMessage = `# ${body.noteTitle}\n\n${body.noteContent}`;
+  const userMessage = `Source note title: "${body.noteTitle}"\nUse this exact title for inline citations (e.g., "Based on [${body.noteTitle}], ...").\n\n# ${body.noteTitle}\n\n${body.noteContent}`;
 
   try {
     const model = createModel(modelConfig);
@@ -223,6 +229,7 @@ function buildSummary(issues: { type: string }[]) {
     orphans: issues.filter((i) => i.type === "orphan").length,
     gaps: issues.filter((i) => i.type === "gap").length,
     stale: issues.filter((i) => i.type === "stale").length,
+    redundant: issues.filter((i) => i.type === "redundant").length,
   };
 }
 
@@ -242,6 +249,64 @@ function mergeIssues(
   }
   return merged;
 }
+
+// Wiki ページの再構成（既存 + 新情報を統合してページ全体を書き直す）
+app.post("/rewrite", async (c) => {
+  const body = await c.req.json<{
+    existingSections: RewriteSection[];
+    newSections: RewriteSection[];
+    editedSectionHeadings: string[];
+    language: string;
+    model?: string;
+  }>();
+
+  if (!body.existingSections || !body.newSections) {
+    return c.json({ error: "existingSections と newSections は必須です" }, 400);
+  }
+
+  let modelConfig = getDefaultModel();
+  if (body.model) {
+    const models = listModels();
+    modelConfig = models.find((m) => m.name === body.model) ?? modelConfig;
+  }
+
+  if (!modelConfig) {
+    return c.json(
+      { error: "モデルが登録されていません。" },
+      400,
+    );
+  }
+
+  const systemPrompt = buildRewriterSystemPrompt(body.language || "en");
+  const userMessage = buildRewriterUserMessage({
+    existingSections: body.existingSections,
+    newSections: body.newSections,
+    editedSectionHeadings: body.editedSectionHeadings || [],
+  });
+
+  try {
+    const model = createModel(modelConfig);
+    const result = await runAgentLoop({
+      model,
+      modelId: modelConfig.modelId,
+      systemPrompt,
+      messages: [{ role: "user" as const, content: userMessage }],
+      maxSteps: 1,
+    });
+
+    const rewritten = parseRewriterOutput(result.message);
+
+    return c.json({
+      sections: rewritten.sections,
+      tokenUsage: result.tokenUsage,
+      model: result.model,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "不明なエラー";
+    console.error("Wiki rewrite error:", err);
+    return c.json({ error: message }, 500);
+  }
+});
 
 // 横断更新（Ingest 後に既存 Wiki の更新提案を生成）
 app.post("/cross-update", async (c) => {
@@ -305,7 +370,7 @@ app.post("/synthesize", async (c) => {
     model?: string;
   }>();
 
-  if (!body.concepts || body.concepts.length < 3) {
+  if (!body.concepts || body.concepts.length < 2) {
     return c.json({ candidates: [] });
   }
 

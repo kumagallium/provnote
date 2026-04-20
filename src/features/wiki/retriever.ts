@@ -117,18 +117,27 @@ function calculateTextRelevance(query: string, text: string): number {
   return matched.length / words.length;
 }
 
+/** Wiki ドキュメントのタイトルマップを設定する（引用用） */
+let _wikiTitleMap: Map<string, string> = new Map();
+export function setWikiTitleMap(map: Map<string, string>): void {
+  _wikiTitleMap = map;
+}
+
 /** 検索結果をシステムプロンプト注入用フォーマットに変換 */
 function formatWikiContext(results: SearchResult[], wikiIndexText?: string): string {
   let context = "";
   for (const r of results) {
-    const entry = `[${r.text}]\n`;
+    // メタ情報付きで注入（引用元の特定に使う）
+    const title = _wikiTitleMap.get(r.documentId) ?? r.documentId;
+    const entry = `[id: ${r.documentId}, title: "${title}"]\n${r.text}\n\n`;
     if (context.length + entry.length > MAX_CONTEXT_CHARS) break;
     context += entry;
   }
 
   if (!context && !wikiIndexText) return null as any;
 
-  let output = `The following is the user's accumulated knowledge from their Wiki. Use it when relevant to provide informed responses.`;
+  let output = `The following is the user's accumulated knowledge from their Wiki. Use it when relevant to provide informed responses.
+When you use information from the knowledge sections below, cite the source using [Source: "page title"] format.`;
 
   if (wikiIndexText) {
     output += `\n\n<wiki-index>\n${wikiIndexText}\n</wiki-index>`;
