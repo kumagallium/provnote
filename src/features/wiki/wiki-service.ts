@@ -161,6 +161,8 @@ export async function rewriteAndMerge(
   ingesterOutput: IngesterOutput,
   sourceNoteId: string,
   model: string | null,
+  /** 言語オーバーライド（既存 Wiki の wikiMeta.language が未設定の場合に使う） */
+  language?: string,
 ): Promise<GraphiumDocument> {
   const page = existingDoc.pages[0];
   if (!page) return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model);
@@ -188,7 +190,7 @@ export async function rewriteAndMerge(
         existingSections,
         newSections,
         editedSectionHeadings,
-        language: existingDoc.wikiMeta?.language ?? "en",
+        language: existingDoc.wikiMeta?.language ?? language ?? "en",
       }),
     });
 
@@ -781,7 +783,7 @@ export async function applyCrossUpdate(
             existingSections: [{ heading: proposal.section.heading, content: existingContent }],
             newSections: [{ heading: proposal.section.heading, content: proposal.section.content }],
             editedSectionHeadings: existingDoc.wikiMeta?.editedSections ?? [],
-            language: existingDoc.wikiMeta?.language ?? "en",
+            language: existingDoc.wikiMeta?.language ?? "ja",
           }),
         });
         if (res.ok) {

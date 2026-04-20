@@ -1694,7 +1694,7 @@ export function NoteApp() {
             try {
               const existingDoc = fm.getCachedDoc(`wiki:${wiki.mergeTargetId}`);
               if (existingDoc) {
-                const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model);
+                const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model, "ja");
                 await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
                 embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
                 createdWikiIds.push(wiki.mergeTargetId);
@@ -1925,6 +1925,7 @@ export function NoteApp() {
                   },
                   mergeDoc.wikiMeta?.derivedFromNotes[0] ?? "",
                   null,
+                  "ja",
                 );
 
                 // 統合先に mergeDoc の derivedFromNotes も追加
@@ -2089,6 +2090,7 @@ export function NoteApp() {
                   },
                   mergeDoc.wikiMeta?.derivedFromNotes[0] ?? "",
                   null,
+                  "ja",
                 );
 
                 if (mergedResult.wikiMeta) {
@@ -2496,6 +2498,7 @@ export function NoteApp() {
                         result.wikis[0],
                         primarySource.noteId,
                         result.model,
+                        "ja",
                       );
                       if (rewritten.wikiMeta) {
                         rewritten.wikiMeta.generatedBy = {
