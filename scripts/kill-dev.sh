@@ -2,17 +2,37 @@
 # dev サーバー起動前の準備スクリプト（predev で自動実行）
 #
 # 1. 既存の dev サーバーを停止（デスクトップ sidecar は除外）
-# 2. data/models.json を本体 worktree と共有（シンボリックリンク）
+# 2. sidecar がポート 3001 を使用中なら dev 用ポートを 3002 に切替
+# 3. data/models.json を本体 worktree と共有（シンボリックリンク）
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+DEV_PORT_FILE="$PROJECT_DIR/.dev-port"
+
+# sidecar のプロセスかどうか判定（バンドル済み server.mjs を実行中）
+is_sidecar() {
+  local cmd="$1"
+  # sidecar は server.mjs を実行する（dev は src/server/index.ts を使う）
+  echo "$cmd" | grep -q "server\.mjs" && return 0
+  # Graphium.app の子プロセスも除外
+  echo "$cmd" | grep -q "Graphium.app" && return 0
+  return 1
+}
 
 # ── 1. 既存 dev サーバーの停止 ──
 killed=0
+sidecar_on_3001=false
 
 for port in 5174 3001; do
   pids=$(lsof -i :"$port" -t 2>/dev/null)
   for pid in $pids; do
     cmd=$(ps -p "$pid" -o command= 2>/dev/null)
     # デスクトップアプリの sidecar は除外
-    if echo "$cmd" | grep -q "Graphium.app"; then
+    if is_sidecar "$cmd"; then
+      if [ "$port" = "3001" ]; then
+        sidecar_on_3001=true
+        echo "[kill-dev] Sidecar detected on port 3001 (PID $pid) — skipping"
+      fi
       continue
     fi
     # node プロセスのみ対象
@@ -29,7 +49,15 @@ if [ "$killed" -eq 0 ]; then
   echo "[kill-dev] No existing dev servers found"
 fi
 
-# ── 2. data/models.json の共有 ──
+# ── 2. dev 用ポート決定 ──
+if [ "$sidecar_on_3001" = true ]; then
+  echo "3002" > "$DEV_PORT_FILE"
+  echo "[kill-dev] Dev server will use port 3002 (sidecar on 3001)"
+else
+  echo "3001" > "$DEV_PORT_FILE"
+fi
+
+# ── 3. data/models.json の共有 ──
 # worktree の場合、本体の data/models.json をシンボリックリンクで共有する
 # これにより AI モデル登録を全 worktree で共有できる
 

@@ -16,6 +16,9 @@ docs/screenshots/*.webm
 # AI backend data (models, profiles — user-specific)
 data/
 
+# dev サーバーのポート設定（predev で自動生成）
+.dev-port
+
 # Tauri build artifacts
 src-tauri/target/
 

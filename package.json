@@ -11,7 +11,7 @@
   },
   "scripts": {
     "predev": "bash scripts/kill-dev.sh",
-    "dev": "concurrently -n client,server -c blue,green \"vite\" \"tsx watch --env-file .env src/server/index.ts\"",
+    "dev": "bash -c 'export PORT=$(cat .dev-port 2>/dev/null || echo 3001); echo \"[dev] Server port: $PORT\"; concurrently -n client,server -c blue,green \"vite\" \"PORT=$PORT tsx watch --env-file .env src/server/index.ts\"'",
     "dev:client": "vite",
     "dev:server": "tsx watch --env-file .env src/server/index.ts",
     "build": "tsc && vite build",
