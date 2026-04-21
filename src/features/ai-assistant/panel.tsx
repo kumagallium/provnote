@@ -2,17 +2,25 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle } from "lucide-react";
+import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle, X, AtSign } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
 import { fetchModels } from "./api";
 import { useT } from "../../i18n";
 import type { ChatMessage, ScopeChat } from "../../lib/google-drive";
+import type { GraphiumIndex } from "../navigation/index-file";
+
+/** チャットに添付されたノート参照 */
+export type AttachedNote = {
+  id: string;
+  title: string;
+  isWiki?: boolean;
+};
 
 type AiAssistantPanelProps = {
   /** AI にメッセージを送信する */
-  onSubmit: (question: string) => void;
+  onSubmit: (question: string, attachedNotes?: AttachedNote[]) => void;
   /** AI 回答をスコープ内にブロックとして挿入する */
   onInsertToScope?: (markdown: string) => void;
   /** AI 回答で対象ブロックを置換する */
@@ -21,6 +29,8 @@ type AiAssistantPanelProps = {
   onDeriveNote?: (question: string, answer: string) => void;
   /** チャット内容を Knowledge に追加する */
   onIngestChat?: (messages: ChatMessage[]) => void;
+  /** ノート/Wiki インデックス（@ メンション候補用） */
+  noteIndex?: GraphiumIndex | null;
 };
 
 export function AiAssistantPanel({
@@ -29,6 +39,7 @@ export function AiAssistantPanel({
   onReplaceBlocks,
   onDeriveNote,
   onIngestChat,
+  noteIndex,
 }: AiAssistantPanelProps) {
   const {
     messages, loading, error, parkChat,
@@ -48,6 +59,51 @@ export function AiAssistantPanel({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @ メンション機能
+  const [attachedNotes, setAttachedNotes] = useState<AttachedNote[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCursorPos, setMentionCursorPos] = useState(0);
+  const [mentionSelectedIdx, setMentionSelectedIdx] = useState(0);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
+
+  // メンション候補を計算
+  const mentionSuggestions = (() => {
+    if (mentionQuery === null || !noteIndex) return [];
+    const q = mentionQuery.toLowerCase();
+    const attached = new Set(attachedNotes.map((n) => n.id));
+    return noteIndex.notes
+      .filter((n) => !attached.has(n.noteId))
+      .filter((n) => !q || n.title.toLowerCase().includes(q))
+      .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+      .slice(0, 8)
+      .map((n) => ({
+        id: n.noteId,
+        title: n.title,
+        isWiki: n.source === "ai",
+        kind: n.wikiKind,
+      }));
+  })();
+
+  // メンション選択を確定する
+  const confirmMention = useCallback((note: { id: string; title: string; isWiki?: boolean }) => {
+    // テキストから @query 部分を除去
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const before = input.slice(0, mentionCursorPos);
+      const atIdx = before.lastIndexOf("@");
+      const after = input.slice(textarea.selectionStart);
+      setInput(before.slice(0, atIdx) + after);
+      // カーソル位置を調整
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = atIdx;
+        textarea.focus();
+      }, 0);
+    }
+    setAttachedNotes((prev) => [...prev, { id: note.id, title: note.title, isWiki: note.isWiki }]);
+    setMentionQuery(null);
+    setMentionSelectedIdx(0);
+  }, [input, mentionCursorPos]);
 
   // バックエンド接続 + モデル登録状態をチェック（sidecar 死亡時は自動復旧を試みる）
   useEffect(() => {
@@ -90,17 +146,77 @@ export function AiAssistantPanel({
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     setInput("");
-    onSubmit(trimmed);
-  }, [input, loading, onSubmit]);
+    onSubmit(trimmed, attachedNotes.length > 0 ? attachedNotes : undefined);
+    setAttachedNotes([]);
+    setMentionQuery(null);
+  }, [input, loading, onSubmit, attachedNotes]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // メンションメニューが開いている場合
+      if (mentionQuery !== null && mentionSuggestions.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setMentionSelectedIdx((i) => (i + 1) % mentionSuggestions.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setMentionSelectedIdx((i) => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          confirmMention(mentionSuggestions[mentionSelectedIdx]);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setMentionQuery(null);
+          return;
+        }
+      }
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit],
+    [handleSubmit, mentionQuery, mentionSuggestions, mentionSelectedIdx, confirmMention],
+  );
+
+  // テキスト入力時の @ 検出
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      setInput(value);
+
+      if (!noteIndex) {
+        setMentionQuery(null);
+        return;
+      }
+
+      const cursorPos = e.target.selectionStart;
+      const textBefore = value.slice(0, cursorPos);
+
+      // カーソル前の最後の @ を探す
+      const atIdx = textBefore.lastIndexOf("@");
+      if (atIdx >= 0) {
+        // @ の直前が空白・行頭であること（単語途中の @ は無視）
+        const charBefore = atIdx > 0 ? textBefore[atIdx - 1] : " ";
+        if (/[\s]/.test(charBefore) || atIdx === 0) {
+          const query = textBefore.slice(atIdx + 1);
+          // クエリにスペースが2つ以上あるか、改行がある → メンション終了
+          if (!/\n/.test(query) && (query.match(/ /g) || []).length <= 1) {
+            setMentionQuery(query);
+            setMentionCursorPos(cursorPos);
+            setMentionSelectedIdx(0);
+            return;
+          }
+        }
+      }
+      setMentionQuery(null);
+    },
+    [noteIndex],
   );
 
   const handleSelectChat = useCallback(
@@ -229,13 +345,61 @@ export function AiAssistantPanel({
 
           {/* 入力エリア */}
           <div className="border-t border-border p-3">
+            {/* 添付ノートバッジ */}
+            {attachedNotes.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {attachedNotes.map((note) => (
+                  <span
+                    key={note.id}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-[10px] text-violet-700 dark:text-violet-300 max-w-[160px]"
+                  >
+                    <AtSign size={9} className="shrink-0" />
+                    <span className="truncate">{note.isWiki ? `🤖 ${note.title}` : note.title}</span>
+                    <button
+                      onClick={() => setAttachedNotes((prev) => prev.filter((n) => n.id !== note.id))}
+                      className="shrink-0 hover:text-destructive"
+                    >
+                      <X size={9} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* メンション候補メニュー */}
+            {mentionQuery !== null && mentionSuggestions.length > 0 && (
+              <div
+                ref={mentionMenuRef}
+                className="mb-2 border border-border rounded-lg bg-popover shadow-md overflow-hidden max-h-48 overflow-y-auto"
+              >
+                {mentionSuggestions.map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() => confirmMention(s)}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
+                      i === mentionSelectedIdx
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {s.isWiki ? (
+                      <Bot size={11} className="shrink-0 text-violet-500" />
+                    ) : (
+                      <AtSign size={11} className="shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate">
+                      {s.isWiki ? `${s.kind === "summary" ? "Summary" : "Concept"}: ${s.title}` : s.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
               <Textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={t("aiChat.placeholder")}
+                placeholder={noteIndex ? t("aiChat.placeholder") + "  (@でページ参照)" : t("aiChat.placeholder")}
                 disabled={loading}
                 rows={2}
                 className="flex-1 text-xs resize-none"

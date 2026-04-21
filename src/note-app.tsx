@@ -56,6 +56,7 @@ import {
   generateTitle,
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
+import type { AttachedNote } from "./features/ai-assistant/panel";
 import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
@@ -767,7 +768,7 @@ function NoteEditorInner({
 
   // AI チャットパネル用ハンドラー（継続対話）
   const handleAiChatSubmit = useCallback(
-    async (question: string) => {
+    async (question: string, attachedNotes?: AttachedNote[]) => {
       if (!fileId || !editorRef.current) return;
       if (!isAgentConfigured()) {
         aiAssistant.setError(
@@ -776,7 +777,11 @@ function NoteEditorInner({
         return;
       }
       const now = new Date().toISOString();
-      aiAssistant.addMessage({ role: "user", content: question, timestamp: now });
+      // 添付ノートがある場合はメッセージ表示に含める
+      const displayContent = attachedNotes && attachedNotes.length > 0
+        ? `${question}\n\n📎 ${attachedNotes.map((n) => n.isWiki ? `🤖 ${n.title}` : n.title).join(", ")}`
+        : question;
+      aiAssistant.addMessage({ role: "user", content: displayContent, timestamp: now });
       aiAssistant.setLoading(true);
       try {
         const isFirstMessage = aiAssistant.messages.length === 0;
@@ -810,6 +815,51 @@ function NoteEditorInner({
             }
           }
         }
+        // @ メンションで添付されたノートの内容をコンテキストに追加
+        if (attachedNotes && attachedNotes.length > 0) {
+          const noteContents: string[] = [];
+          for (const attached of attachedNotes) {
+            try {
+              const provider = getActiveProvider();
+              const doc = attached.isWiki && provider.loadWikiFile
+                ? await provider.loadWikiFile(attached.id)
+                : await provider.loadFile(attached.id);
+              if (doc) {
+                const page = doc.pages[0];
+                const blocks = page?.blocks ?? [];
+                // プレーンテキスト抽出（ブロック構造から確実にテキストを取得）
+                const content = blocks
+                  .map((b: any) => {
+                    const prefix = b.type === "heading" ? "#".repeat(b.props?.level ?? 2) + " " : "";
+                    const c = b.content;
+                    if (!c) return "";
+                    if (typeof c === "string") return prefix + c;
+                    if (Array.isArray(c)) return prefix + c.map((x: any) => x.text ?? "").join("");
+                    return "";
+                  })
+                  .filter(Boolean)
+                  .join("\n");
+                if (content.trim()) {
+                  noteContents.push(`## ${attached.title}\n${content.trim()}`);
+                }
+              }
+            } catch {
+              // ロード失敗は無視
+            }
+          }
+          if (noteContents.length > 0) {
+            userMessage = [
+              userMessage,
+              "",
+              "---",
+              "以下はユーザーが明示的に添付したノートの内容です。質問はこの内容に基づいて回答してください:",
+              "",
+              ...noteContents,
+              "---",
+            ].join("\n");
+          }
+        }
+
         const selectedModel = getSelectedModel();
         const disabledTools = getDisabledTools();
         // Wiki Retriever: 関連する Wiki コンテキストを検索
@@ -1561,6 +1611,7 @@ function NoteEditorInner({
                   onReplaceBlocks={handleReplaceBlocks}
                   onDeriveNote={handleAiDeriveFromChat}
                   onIngestChat={onIngestChat}
+                  noteIndex={noteIndex}
                 />
               )}
               {rightTab === "history" && (
