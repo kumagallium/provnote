@@ -97,6 +97,14 @@ export const en: Record<string, string> = {
   "panel.generate": "Generate",
   "panel.generateManual": "Regenerate manually",
   "panel.history": "History",
+  "panel.links": "Links",
+
+  // ── リンク一覧パネル ──
+  "links.empty": "No linked notes.",
+  "links.current": "Current",
+  "links.linked": "Linked",
+  "links.nearby": "Nearby",
+  "links.graphHint": "Switch to Graph view for a visual overview",
 
   // ── 編集履歴パネル ──
   "history.empty": "No edit history yet. History will be recorded on save.",
