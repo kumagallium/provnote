@@ -45,7 +45,7 @@ import {
   ProvGraphPanel,
 } from "./features/prov-generator";
 import {
-  NetworkGraphPanel,
+  GraphLinksPanel,
 } from "./features/network-graph";
 import { ReleaseNotesPanel } from "./features/release-notes";
 import {
@@ -1541,7 +1541,7 @@ function NoteEditorInner({
             </div>
             <div className="flex-1 overflow-auto">
               {rightTab === "graph" && (
-                <NetworkGraphPanel
+                <GraphLinksPanel
                   data={noteGraphData}
                   onNavigate={onNavigateNote}
                 />

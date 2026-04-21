@@ -97,6 +97,14 @@ export const ja: Record<string, string> = {
   "panel.generate": "生成",
   "panel.generateManual": "手動で再生成",
   "panel.history": "履歴",
+  "panel.links": "リンク",
+
+  // ── リンク一覧パネル ──
+  "links.empty": "リンクされたノートがありません。",
+  "links.current": "現在のノート",
+  "links.linked": "リンク先",
+  "links.nearby": "周辺",
+  "links.graphHint": "グラフビューに切り替えると全体像を確認できます",
 
   // ── 編集履歴パネル ──
   "history.empty": "編集履歴はまだありません。保存時に記録されます。",
