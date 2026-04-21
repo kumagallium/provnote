@@ -773,7 +773,11 @@ function NoteEditorInner({
         return;
       }
       const now = new Date().toISOString();
-      aiAssistant.addMessage({ role: "user", content: question, timestamp: now });
+      // 添付ノートがある場合はメッセージ表示に含める
+      const displayContent = attachedNotes && attachedNotes.length > 0
+        ? `${question}\n\n📎 ${attachedNotes.map((n) => n.isWiki ? `🤖 ${n.title}` : n.title).join(", ")}`
+        : question;
+      aiAssistant.addMessage({ role: "user", content: displayContent, timestamp: now });
       aiAssistant.setLoading(true);
       try {
         const isFirstMessage = aiAssistant.messages.length === 0;
@@ -816,23 +820,18 @@ function NoteEditorInner({
               if (doc) {
                 const page = doc.pages[0];
                 const blocks = page?.blocks ?? [];
-                // エディタが利用可能ならマークダウン変換、そうでなければプレーンテキスト
-                let content = "";
-                if (editorRef.current) {
-                  content = await editorRef.current.blocksToMarkdownLossy(blocks);
-                }
-                if (!content) {
-                  content = blocks
-                    .map((b: any) => {
-                      const c = b.content;
-                      if (!c) return "";
-                      if (typeof c === "string") return c;
-                      if (Array.isArray(c)) return c.map((x: any) => x.text ?? "").join("");
-                      return "";
-                    })
-                    .filter(Boolean)
-                    .join("\n");
-                }
+                // プレーンテキスト抽出（ブロック構造から確実にテキストを取得）
+                const content = blocks
+                  .map((b: any) => {
+                    const prefix = b.type === "heading" ? "#".repeat(b.props?.level ?? 2) + " " : "";
+                    const c = b.content;
+                    if (!c) return "";
+                    if (typeof c === "string") return prefix + c;
+                    if (Array.isArray(c)) return prefix + c.map((x: any) => x.text ?? "").join("");
+                    return "";
+                  })
+                  .filter(Boolean)
+                  .join("\n");
                 if (content.trim()) {
                   noteContents.push(`## ${attached.title}\n${content.trim()}`);
                 }
