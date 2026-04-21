@@ -84,7 +84,7 @@ import {
   wikiLog,
 } from "./features/wiki";
 import { setWikiIndexForRetriever, setWikiTitleMap } from "./features/wiki/retriever";
-import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt } from "./features/skill";
+import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt, buildSkillPromptSection } from "./features/skill";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import type { CaptureEntry } from "./features/mobile-capture";
@@ -271,6 +271,8 @@ type NoteEditorProps = {
   isWikiDoc?: boolean;
   /** AI バックエンドが利用可能か（false なら Chat タブを非表示） */
   aiAvailable?: boolean;
+  /** ローカル Skill のプロンプト（AI チャットに注入） */
+  skillPrompts?: string;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -353,6 +355,7 @@ function NoteEditorInner({
   onAutoIngestChat,
   isWikiDoc,
   aiAvailable = true,
+  skillPrompts,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -823,6 +826,7 @@ function NoteEditorInner({
           profile: getSelectedProfile(),
           ...(disabledTools.length > 0 ? { disabled_tools: disabledTools } : {}),
           ...(wikiContext ? { wiki_context: wikiContext } : {}),
+          ...(skillPrompts ? { custom_instructions: skillPrompts } : {}),
           options: { max_turns: 5, ...(selectedModel && { model: selectedModel }) },
         });
         // Wiki コンテキストが使われ���場合、引用情報を処理
@@ -2708,6 +2712,19 @@ export function NoteApp() {
             onEditorRef={(editor) => { noteEditorRef.current = editor; }}
             isWikiDoc={fm.activeDoc?.source === "ai"}
             aiAvailable={aiAvailable ?? false}
+            skillPrompts={(() => {
+              const skills: { title: string; prompt: string }[] = [];
+              for (const [skillId, meta] of fm.skillMetas.entries()) {
+                if (meta.availableForIngest) {
+                  const skillDoc = fm.getCachedDoc(`skill:${skillId}`);
+                  if (skillDoc) {
+                    skills.push({ title: meta.title, prompt: extractSkillPrompt(skillDoc) });
+                  }
+                }
+              }
+              if (skills.length === 0) return undefined;
+              return buildSkillPromptSection(skills);
+            })()}
             onIngestToWiki={aiAvailable && fm.activeDoc?.source !== "ai" ? () => {
               if (!fm.activeFileId || !fm.activeDoc) return;
               enqueueIngest(fm.activeFileId, fm.activeDoc.title, fm.activeDoc);
