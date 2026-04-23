@@ -138,14 +138,22 @@ export function useFileManager(authenticated: boolean) {
   const [skillMetas, setSkillMetas] = useState<Map<string, { title: string; description: string; availableForIngest: boolean }>>(new Map());
 
   // ファイル一覧を取得（ノートと Wiki と Skill を並列取得）
+  // allSettled を使うことで、古いビルドで一部のコマンド（例: list_skill_files）が
+  // 未実装でも他のリストは取得できるようにする
   const refreshFiles = useCallback(async () => {
     setFilesLoading(true);
     try {
-      const [noteResult, wikiResult, skillResult] = await Promise.all([
+      const [noteSettled, wikiSettled, skillSettled] = await Promise.allSettled([
         listFiles(),
         listWikiFiles(),
         listSkillFiles(),
       ]);
+      const noteResult = noteSettled.status === "fulfilled" ? noteSettled.value : [];
+      const wikiResult = wikiSettled.status === "fulfilled" ? wikiSettled.value : [];
+      const skillResult = skillSettled.status === "fulfilled" ? skillSettled.value : [];
+      if (noteSettled.status === "rejected") console.warn("listFiles failed:", noteSettled.reason);
+      if (wikiSettled.status === "rejected") console.warn("listWikiFiles failed:", wikiSettled.reason);
+      if (skillSettled.status === "rejected") console.warn("listSkillFiles failed:", skillSettled.reason);
       console.log(`[wiki-debug] refreshFiles: notes=${noteResult.length}, wikis=${wikiResult.length}`, wikiResult.map(f => f.id));
       setFiles(noteResult);
       setWikiFiles(wikiResult);
