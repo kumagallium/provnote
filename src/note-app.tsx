@@ -769,7 +769,12 @@ function NoteEditorInner({
   // AI チャットパネル用ハンドラー（継続対話）
   const handleAiChatSubmit = useCallback(
     async (question: string, attachedNotes?: AttachedNote[]) => {
-      if (!fileId || !editorRef.current) return;
+      // 新規ノート（fileId 未採番）でも AI チャットを許可する
+      // markDirty() 経由でオートセーブが走り、ファイルが作成される
+      if (!editorRef.current) {
+        aiAssistant.setError(tStatic("aiChat.editorNotReady"));
+        return;
+      }
       if (!isAgentConfigured()) {
         aiAssistant.setError(
           tStatic("settings.aiNotConfigured"),
