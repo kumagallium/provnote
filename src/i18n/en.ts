@@ -245,6 +245,12 @@ export const en: Record<string, string> = {
   "settings.health.title": "Connection Status",
   "settings.health.checking": "Checking...",
   "settings.health.unavailable": "Backend is not available. AI features require Docker or local development setup.",
+  "settings.health.restart": "Restart backend",
+  "settings.health.restarting": "Restarting...",
+  "settings.health.restartFailed": "Restart failed",
+  "settings.health.showLog": "Show log",
+  "settings.health.hideLog": "Hide log",
+  "settings.health.unknownError": "Unknown error occurred",
   // ── モデル管理 ──
   "settings.models.title": "Registered Models",
   "settings.models.add": "Add model",
