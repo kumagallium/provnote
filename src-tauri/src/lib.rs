@@ -393,6 +393,10 @@ pub fn run() {
                 .text("zoom-reset", "Actual Size")
                 .build()?;
 
+            let backend_menu = SubmenuBuilder::new(app, "Backend")
+                .text("restart-backend", "Restart Backend")
+                .build()?;
+
             let help_menu = SubmenuBuilder::new(app, "Help")
                 .text("about", "About Graphium")
                 .text("release-notes", "Release Notes")
@@ -402,6 +406,7 @@ pub fn run() {
                 .item(&file_menu)
                 .item(&edit_menu)
                 .item(&view_menu)
+                .item(&backend_menu)
                 .item(&help_menu)
                 .build()?;
 
@@ -413,7 +418,7 @@ pub fn run() {
                 let id = event.id().0.as_str();
                 match id {
                     "new-note" | "export-pdf" | "export-prov" | "toggle-graph"
-                    | "toggle-chat" | "about" | "release-notes" => {
+                    | "toggle-chat" | "about" | "release-notes" | "restart-backend" => {
                         // フロントエンドにイベントを送信
                         let _ = window.emit("menu-action", id);
                     }

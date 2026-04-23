@@ -245,6 +245,12 @@ export const ja: Record<string, string> = {
   "settings.health.title": "接続状態",
   "settings.health.checking": "確認中...",
   "settings.health.unavailable": "バックエンドに接続できません。AI 機能は Docker またはローカル開発環境が必要です。",
+  "settings.health.restart": "バックエンドを再起動",
+  "settings.health.restarting": "再起動中...",
+  "settings.health.restartFailed": "再起動に失敗しました",
+  "settings.health.showLog": "ログを表示",
+  "settings.health.hideLog": "ログを隠す",
+  "settings.health.unknownError": "原因不明のエラーが発生しました",
   // ── モデル管理 ──
   "settings.models.title": "登録済みモデル",
   "settings.models.add": "モデルを追加",

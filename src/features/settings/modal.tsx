@@ -108,6 +108,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [health, setHealth] = useState<HealthStatus>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
+  // sidecar 再起動（Tauri 環境のみ）
+  const [restartingSidecar, setRestartingSidecar] = useState(false);
+  const [sidecarError, setSidecarError] = useState<string | null>(null);
+  const [sidecarLog, setSidecarLog] = useState<string[]>([]);
+  const [showSidecarLog, setShowSidecarLog] = useState(false);
+
   // ツール
   const [toolsData, setToolsData] = useState<ToolsResponse | null>(null);
 
@@ -189,6 +195,40 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .finally(() => setModelsLoading(false));
   }, [isWebMode]);
 
+  const refreshHealth = useCallback((headers?: HeadersInit) => {
+    setHealthLoading(true);
+    fetch(`${apiBase()}/health`, { headers })
+      .then((r) => r.json())
+      .then((data) => setHealth(data))
+      .catch(() => setHealth(null))
+      .finally(() => setHealthLoading(false));
+  }, []);
+
+  const handleRestartSidecar = useCallback(async () => {
+    if (!isTauri()) return;
+    setRestartingSidecar(true);
+    setSidecarError(null);
+    setSidecarLog([]);
+    setShowSidecarLog(false);
+    try {
+      const { restartSidecar, getSidecarState, getRecentSidecarLog } = await import("../../lib/sidecar");
+      const ok = await restartSidecar();
+      if (ok) {
+        const regUrl = loadSettings().registryUrl ?? "";
+        const regHeaders: HeadersInit = regUrl ? { "X-Registry-URL": regUrl } : {};
+        refreshHealth(regHeaders);
+      } else {
+        const s = getSidecarState();
+        setSidecarError(s.lastError ?? t("settings.health.unknownError"));
+        setSidecarLog(getRecentSidecarLog());
+      }
+    } catch (e) {
+      setSidecarError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRestartingSidecar(false);
+    }
+  }, [refreshHealth, t]);
+
   useEffect(() => {
     if (!isOpen) return;
     const settings = loadSettings();
@@ -215,12 +255,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const regUrl = settings.registryUrl ?? "";
     const regHeaders: HeadersInit = regUrl ? { "X-Registry-URL": regUrl } : {};
 
-    setHealthLoading(true);
-    fetch(`${apiBase()}/health`, { headers: regHeaders })
-      .then((r) => r.json())
-      .then((data) => setHealth(data))
-      .catch(() => setHealth(null))
-      .finally(() => setHealthLoading(false));
+    refreshHealth(regHeaders);
 
     fetch(`${apiBase()}/tools`, { headers: regHeaders })
       .then((r) => r.json())
@@ -667,12 +702,49 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               )}
             </div>
 
-            {/* バックエンド未接続時は案内のみ表示 */}
+            {/* バックエンド未接続時は案内 + 再起動オプション */}
             {!healthLoading && !health ? (
-              <div className="rounded-lg border border-dashed border-border p-4 text-center">
-                <p className="text-xs text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
+                <p className="text-xs text-muted-foreground text-center">
                   {t("settings.health.unavailable")}
                 </p>
+                {isTauri() && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleRestartSidecar}
+                      disabled={restartingSidecar}
+                    >
+                      {restartingSidecar ? (
+                        <><Loader2 size={12} className="animate-spin mr-1.5" />{t("settings.health.restarting")}</>
+                      ) : (
+                        <><RotateCcw size={12} className="mr-1.5" />{t("settings.health.restart")}</>
+                      )}
+                    </Button>
+                    {sidecarError && (
+                      <div className="w-full rounded-md border border-red-500/30 bg-red-500/5 p-2 text-xs">
+                        <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
+                          <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium mb-0.5">{t("settings.health.restartFailed")}</div>
+                            <div className="text-foreground/80 break-words">{sidecarError}</div>
+                            {sidecarLog.length > 0 && (
+                              <button
+                                onClick={() => setShowSidecarLog((v) => !v)}
+                                className="mt-1 text-[11px] text-muted-foreground hover:text-foreground underline"
+                              >
+                                {showSidecarLog ? t("settings.health.hideLog") : t("settings.health.showLog")}
+                              </button>
+                            )}
+                            {showSidecarLog && sidecarLog.length > 0 && (
+                              <pre className="mt-1.5 text-[10px] bg-background/50 rounded p-1.5 overflow-auto max-h-32 font-mono whitespace-pre-wrap">{sidecarLog.join("\n")}</pre>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : <>
 
