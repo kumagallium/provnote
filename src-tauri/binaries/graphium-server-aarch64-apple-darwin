@@ -4,12 +4,27 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ビルド版: Contents/MacOS/ から Contents/Resources/sidecar/ を参照
-SERVER_FILE="$SCRIPT_DIR/../Resources/sidecar/server.mjs"
+# 起動候補（bundled .app / dev (target/debug) / 互換レイアウトの順）
+CANDIDATES=(
+  "$SCRIPT_DIR/../Resources/sidecar/server.mjs"   # bundled .app: Contents/MacOS → Contents/Resources/sidecar
+  "$SCRIPT_DIR/../../sidecar/server.mjs"          # dev: target/debug → src-tauri/sidecar
+  "$SCRIPT_DIR/../sidecar/server.mjs"             # 互換: 同階層に sidecar/ がある場合
+)
 
-# 開発時: Contents/sidecar/ を参照
-if [ ! -f "$SERVER_FILE" ]; then
-  SERVER_FILE="$SCRIPT_DIR/../sidecar/server.mjs"
+SERVER_FILE=""
+for candidate in "${CANDIDATES[@]}"; do
+  if [ -f "$candidate" ]; then
+    SERVER_FILE="$candidate"
+    break
+  fi
+done
+
+if [ -z "$SERVER_FILE" ]; then
+  echo "graphium-server: server.mjs not found in any candidate path:" >&2
+  for candidate in "${CANDIDATES[@]}"; do
+    echo "  - $candidate" >&2
+  done
+  exit 1
 fi
 
 exec node "$SERVER_FILE" "$@"
