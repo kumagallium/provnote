@@ -296,6 +296,7 @@ export const en: Record<string, string> = {
   "aiChat.insertToNote": "Insert into note",
   "aiChat.replaceInNote": "Replace in note",
   "aiChat.deriveAsNote": "Derive as note",
+  "aiChat.editorNotReady": "Editor is not ready yet. Please wait a moment and try again.",
 
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "Add labels to the editor, then run PROV generation",

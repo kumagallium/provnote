@@ -296,6 +296,7 @@ export const ja: Record<string, string> = {
   "aiChat.insertToNote": "ノートに反映",
   "aiChat.replaceInNote": "置換",
   "aiChat.deriveAsNote": "別ノートとして派生",
+  "aiChat.editorNotReady": "エディタの準備ができていません。少し待ってから再度お試しください。",
 
   // ── PROV パネル追加 ──
   "provPanel.noLabelsMessage": "エディタにラベルを付けてから「PROV生成」を実行してください",
