@@ -11,6 +11,10 @@ export type NoteListEntry = {
   labels: string[];
   incomingLinkCount: number;
   outgoingLinkCount: number;
+  /** 作者 (username)。LLM 経由で書き込まれたノートで値が入る */
+  author?: string;
+  /** 書記役 LLM のモデル ID (例: claude-opus-4-7) */
+  model?: string;
 };
 
 export interface NoteListSource {
@@ -49,6 +53,8 @@ export class IndexFileNoteListSource implements NoteListSource {
       labels: [...new Set(n.labels.map((l) => l.label))],
       incomingLinkCount: incomingMap.get(n.noteId)?.size ?? 0,
       outgoingLinkCount: outgoingMap.get(n.noteId) ?? 0,
+      author: n.author,
+      model: n.model,
     }));
   }
 

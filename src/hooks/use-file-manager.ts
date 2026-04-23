@@ -132,7 +132,7 @@ export function useFileManager(authenticated: boolean) {
   const [wikiFiles, setWikiFiles] = useState<GraphiumFile[]>([]);
   const [activeWikiKind, setActiveWikiKind] = useState<WikiKind | null>(null);
   // Wiki メタデータ（サイドバーカウント・リスト表示用、noteIndex とは独立）
-  const [wikiMetas, setWikiMetas] = useState<Map<string, { title: string; kind: WikiKind; headings: string[] }>>(new Map());
+  const [wikiMetas, setWikiMetas] = useState<Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>>(new Map());
   // Skill 関連の状態
   const [skillFiles, setSkillFiles] = useState<GraphiumFile[]>([]);
   const [skillMetas, setSkillMetas] = useState<Map<string, { title: string; description: string; availableForIngest: boolean }>>(new Map());
@@ -181,7 +181,7 @@ export function useFileManager(authenticated: boolean) {
             return { id: f.id, doc };
           })
         ).then((results) => {
-          const metas = new Map<string, { title: string; kind: WikiKind; headings: string[] }>();
+          const metas = new Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>();
           for (const r of results) {
             if (r.status === "fulfilled") {
               const { id, doc } = r.value;
@@ -196,6 +196,7 @@ export function useFileManager(authenticated: boolean) {
                 title: doc.title,
                 kind: doc.wikiMeta?.kind ?? "concept",
                 headings,
+                model: doc.wikiMeta?.generatedBy?.model,
               });
               docCacheRef.current.set(`wiki:${id}`, doc);
             }

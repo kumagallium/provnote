@@ -316,6 +316,8 @@ export const ja: Record<string, string> = {
   "nav.outgoing": "参照先",
   "nav.incoming": "被参照",
   "nav.labels": "ラベル",
+  "nav.author": "作者",
+  "nav.authorTooltip": "このノートを書いた人と LLM モデル",
   "nav.modifiedDate": "更新日",
   "nav.createdDate": "作成日",
   "nav.title": "タイトル",

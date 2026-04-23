@@ -20,6 +20,8 @@ type WikiMeta = {
   title: string;
   kind: WikiKind;
   headings: string[];
+  /** 書記役 LLM のモデル ID (例: claude-opus-4-7) */
+  model?: string;
 };
 
 type Props = {
@@ -59,6 +61,7 @@ export function WikiListView({
         title: wikiMetas.get(f.id)!.title,
         modifiedAt: f.modifiedTime,
         headings: wikiMetas.get(f.id)!.headings,
+        model: wikiMetas.get(f.id)!.model,
       }))
       .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
   }, [wikiFiles, wikiMetas, wikiKind]);
@@ -143,6 +146,14 @@ export function WikiListView({
                       <span className="text-[10px] text-muted-foreground">
                         {formatDate(entry.modifiedAt)}
                       </span>
+                      {entry.model && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] rounded px-1 py-0.5 bg-muted text-muted-foreground"
+                          title={entry.model}
+                        >
+                          🤖 {entry.model}
+                        </span>
+                      )}
                       {entry.headings.length > 0 && (
                         <span className="text-[10px] text-muted-foreground truncate">
                           {entry.headings.join(" / ")}

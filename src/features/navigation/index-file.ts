@@ -9,7 +9,8 @@ import { getActiveProvider } from "../../lib/storage/registry";
 // インデックスのスキーマバージョン
 // extractBlockText の改善等、インデックス構築ロジックが変わった場合にインクリメントする
 // v4: source, wikiKind フィールドを追加（Wiki ドキュメント対応）
-const INDEX_SCHEMA_VERSION = 4;
+// v5: author, model フィールドを追加（誰が / どのモデルが書いたかを一覧で表示）
+const INDEX_SCHEMA_VERSION = 5;
 
 export type GraphiumIndex = {
   version: number;
@@ -41,6 +42,10 @@ export type NoteIndexEntry = {
   source?: "human" | "ai" | "skill";
   /** Wiki ドキュメントの種類（source === "ai" の場合のみ） */
   wikiKind?: WikiKind;
+  /** 作者 (username)。Claude Code Skill 等で書かれたノートは指示者の OS ユーザー名が入る */
+  author?: string;
+  /** 書記役の LLM モデル ID (例: claude-opus-4-7)。人間が直接書いたノートでは未設定 */
+  model?: string;
 };
 
 // ── Drive API ──
@@ -226,6 +231,12 @@ export function buildIndexEntry(
     }
   }
 
+  // 作者 / モデルの抽出
+  // - 通常ノート (source !== "ai"): generatedBy.user.username と generatedBy.model を使う
+  // - Wiki (source === "ai"): wikiMeta.generatedBy.model を使う。作者は LLM 自身なので username は無し
+  const author = doc.generatedBy?.user?.username;
+  const model = doc.generatedBy?.model ?? doc.wikiMeta?.generatedBy?.model;
+
   return {
     noteId,
     title: doc.title,
@@ -236,6 +247,8 @@ export function buildIndexEntry(
     outgoingLinks,
     source: doc.source,
     wikiKind: doc.wikiMeta?.kind,
+    author,
+    model,
   };
 }
 

@@ -316,6 +316,8 @@ export const en: Record<string, string> = {
   "nav.outgoing": "Outgoing",
   "nav.incoming": "Incoming",
   "nav.labels": "Labels",
+  "nav.author": "Author",
+  "nav.authorTooltip": "Who wrote this note and which LLM assisted",
   "nav.modifiedDate": "Modified",
   "nav.createdDate": "Created",
   "nav.title": "Title",
