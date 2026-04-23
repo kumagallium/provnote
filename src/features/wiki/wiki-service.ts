@@ -1146,7 +1146,7 @@ export async function lintWikis(
  */
 export function buildWikiSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[] }>,
+  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): WikiSnapshot[] {
   const snapshots: WikiSnapshot[] = [];
@@ -1208,7 +1208,7 @@ export type WikiIndexEntry = {
  */
 export function buildWikiIndex(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[] }>,
+  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): WikiIndexEntry[] {
   const entries: WikiIndexEntry[] = [];
@@ -1380,7 +1380,7 @@ export function buildSynthesisDocument(
  */
 export function buildConceptSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[] }>,
+  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): ConceptSnapshot[] {
   const snapshots: ConceptSnapshot[] = [];

@@ -291,6 +291,7 @@ export function NoteListView({
                   {t("nav.incoming")}{sortKey === "incomingLinkCount" && (sortDir === "desc" ? " ↓" : " ↑")}
                 </th>
                 <th className="py-2 px-3 w-[140px]">{t("nav.labels")}</th>
+                <th className="py-2 px-2 w-[96px]" title={t("nav.authorTooltip")}>{t("nav.author")}</th>
                 <th
                   className="py-2 pl-3 w-[80px] cursor-pointer hover:text-foreground"
                   onClick={() => handleSort("modifiedAt")}
@@ -374,6 +375,26 @@ export function NoteListView({
                         );
                       })}
                     </div>
+                  </td>
+                  <td
+                    className="py-2 px-2 text-xs text-muted-foreground truncate"
+                    title={entry.model ? `${entry.author ?? ""} / ${entry.model}` : entry.author ?? ""}
+                  >
+                    {entry.author ? (
+                      <span className="inline-flex items-center gap-1">
+                        {entry.model && (
+                          <span
+                            className="inline-block text-[10px] font-medium rounded px-1 py-0.5 bg-muted text-muted-foreground"
+                            title={entry.model}
+                          >
+                            🤖
+                          </span>
+                        )}
+                        <span className="truncate">{entry.author}</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
                   </td>
                   <td className="py-2 pl-3 text-xs text-muted-foreground">
                     {formatRelativeTime(entry.modifiedAt)}

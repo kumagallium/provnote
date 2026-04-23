@@ -104,6 +104,11 @@ export type GraphiumDocument = {
     sessionId: string;
     model?: string;
     tokenUsage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+    /**
+     * 保存指示を出したユーザー。Claude Code Skill 等、外部エージェント経由で
+     * 書き込まれたノートで値が入る。プライバシー配慮のため email は opt-in。
+     */
+    user?: { username: string; email?: string };
   };
   /** スコープ別 AI チャット履歴 */
   chats?: ScopeChat[];
