@@ -39,6 +39,7 @@ import {
   type RewriteSection,
 } from "../services/wiki-rewriter.js";
 import { generateEmbeddings } from "../services/embedding.js";
+import { fetchPageAsText, type FetchPageError } from "../services/url-fetcher.js";
 
 const app = new Hono();
 
@@ -417,64 +418,18 @@ app.post("/fetch-url", async (c) => {
   }
 
   try {
-    const res = await fetch(body.url, {
-      headers: {
-        "User-Agent": "Graphium/1.0 (Knowledge Layer)",
-        "Accept": "text/html,application/xhtml+xml,text/plain,application/pdf",
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!res.ok) {
-      return c.json({ error: `Fetch failed: ${res.status} ${res.statusText}` }, 400);
-    }
-
-    const contentType = res.headers.get("content-type") ?? "";
-
-    if (contentType.includes("application/pdf")) {
-      // PDF: テキスト抽出は将来対応（現時点ではエラー）
-      return c.json({ error: "PDF URL の直接取得は未対応です。PDF ブロックとしてノートに貼り付けてから Ingest してください。" }, 400);
-    }
-
-    const html = await res.text();
-
-    // HTML からテキストを抽出（簡易パーサー）
-    const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
-    // OGP
-    const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i)?.[1] ?? "";
-    const ogDescription = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i)?.[1] ?? "";
-    // meta description
-    const metaDescription = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)?.[1] ?? "";
-
-    // 本文テキスト抽出: script/style/nav/header/footer タグを除去 → タグを除去 → 空行を整理
-    let bodyText = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-      .replace(/<header[\s\S]*?<\/header>/gi, "")
-      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-      .replace(/<[^>]+>/g, "\n")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
-    // 最大 5000 文字に制限（LLM のコンテキスト節約）
-    if (bodyText.length > 5000) {
-      bodyText = bodyText.slice(0, 5000) + "\n\n[... truncated]";
-    }
-
+    const page = await fetchPageAsText(body.url);
     return c.json({
-      title: ogTitle || title,
-      description: ogDescription || metaDescription,
-      text: bodyText,
-      url: body.url,
+      title: page.title,
+      description: page.description,
+      text: page.text,
+      url: page.url,
     });
   } catch (err) {
+    const e = err as FetchPageError;
+    if (typeof e?.status === "number" && typeof e?.message === "string") {
+      return c.json({ error: e.message }, e.status as 400 | 500);
+    }
     const message = err instanceof Error ? err.message : "不明なエラー";
     return c.json({ error: message }, 500);
   }

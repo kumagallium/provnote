@@ -284,6 +284,8 @@ export type AssetGalleryViewProps = {
   onAddUrlBookmark?: (entry: MediaIndexEntry) => void;
   /** メディアから Knowledge を生成（URL/PDF 用） */
   onIngestMedia?: (entry: MediaIndexEntry) => void;
+  /** URL から PROV ラベル付きノートを生成する（URL エントリー限定） */
+  onCreateProvNote?: (entry: MediaIndexEntry) => void;
 };
 
 export function AssetGalleryView({
@@ -295,6 +297,7 @@ export function AssetGalleryView({
   onRenameMedia,
   onAddUrlBookmark,
   onIngestMedia,
+  onCreateProvNote,
 }: AssetGalleryViewProps) {
   const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
@@ -461,6 +464,7 @@ export function AssetGalleryView({
             await onRenameMedia(entry, newName);
           }}
           onIngest={onIngestMedia}
+          onCreateProvNote={onCreateProvNote}
         />
       )}
 

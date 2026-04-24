@@ -124,6 +124,12 @@ export type GraphiumDocument = {
   wikiMeta?: WikiMeta;
   /** Skill メタデータ（source === "skill" の場合のみ） */
   skillMeta?: SkillMeta;
+  /** 外部 URL から生成した場合の元 URL */
+  sourceUrl?: string;
+  /** 外部 URL 取得日時（ISO 8601） */
+  sourceFetchedAt?: string;
+  /** 外部 URL のページタイトル（fetch 時点） */
+  sourceTitle?: string;
   createdAt: string;
   modifiedAt: string;
 };

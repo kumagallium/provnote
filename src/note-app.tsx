@@ -97,6 +97,7 @@ import {
   wikiLog,
 } from "./features/wiki";
 import { setWikiIndexForRetriever, setWikiTitleMap } from "./features/wiki/retriever";
+import { ingestUrlToProv, buildProvNoteDocument } from "./features/url-to-prov";
 import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt, buildSkillPromptSection } from "./features/skill";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
@@ -2724,6 +2725,35 @@ export function NoteApp() {
                   }
                 })();
               }
+            } : undefined}
+            onCreateProvNote={aiAvailable ? (entry) => {
+              if (entry.type !== "url" || !entry.url) return;
+              const jobId = `prov-url:${Date.now()}`;
+              const newItem: IngestToastItem = { id: jobId, status: "queued", noteTitle: entry.name || entry.url };
+              setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+              (async () => {
+                setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "generating" as const, detail: "Fetching & parsing URL..." } : i) }));
+                try {
+                  const result = await ingestUrlToProv(entry.url, "ja");
+                  if (!result.blocks || result.blocks.length === 0) {
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: "PROV 構造を生成できませんでした" } : i) }));
+                    return;
+                  }
+                  const provDoc = buildProvNoteDocument({
+                    title: result.title,
+                    blocks: result.blocks,
+                    sourceUrl: result.sourceUrl,
+                    sourceTitle: result.sourceTitle,
+                    sourceFetchedAt: result.sourceFetchedAt,
+                    model: result.model,
+                    tokenUsage: result.tokenUsage,
+                  });
+                  await fm.handleCreateNoteFromDocument(provDoc);
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "success" as const, result: `${result.blocks.length} blocks` } : i) }));
+                } catch (err) {
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === jobId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
+                }
+              })();
             } : undefined}
           />
         ) : fm.activeLabel ? (

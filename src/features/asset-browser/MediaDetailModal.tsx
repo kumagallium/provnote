@@ -288,6 +288,8 @@ export type MediaDetailModalProps = {
   onNavigateNote: (noteId: string) => void;
   onRename?: (entry: MediaIndexEntry, newName: string) => Promise<void>;
   onIngest?: (entry: MediaIndexEntry) => void;
+  /** URL から PROV ラベル付きノートを生成する（URL エントリー限定） */
+  onCreateProvNote?: (entry: MediaIndexEntry) => void;
 };
 
 export function MediaDetailModal({
@@ -296,6 +298,7 @@ export function MediaDetailModal({
   onNavigateNote,
   onRename,
   onIngest,
+  onCreateProvNote,
 }: MediaDetailModalProps) {
   const t = useT();
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -461,6 +464,14 @@ export function MediaDetailModal({
               className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
             >
               🤖 Add to Knowledge
+            </button>
+          )}
+          {onCreateProvNote && entry.type === "url" && (
+            <button
+              onClick={() => onCreateProvNote(entry)}
+              className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+            >
+              🧪 Create PROV Note
             </button>
           )}
           <button

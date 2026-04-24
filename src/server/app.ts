@@ -12,6 +12,7 @@ import agentRoutes from "./routes/agent.js";
 import toolsRoutes from "./routes/tools.js";
 import authRoutes from "./routes/auth.js";
 import wikiRoutes from "./routes/wiki.js";
+import provRoutes from "./routes/prov.js";
 
 export type AppMode = "node" | "vercel";
 
@@ -56,6 +57,7 @@ export function createApp(options: CreateAppOptions = { mode: "node" }): Hono {
   app.route("/api/tools", toolsRoutes);
   app.route("/api/auth", authRoutes);
   app.route("/api/wiki", wikiRoutes);
+  app.route("/api/prov", provRoutes);
 
   return app;
 }
