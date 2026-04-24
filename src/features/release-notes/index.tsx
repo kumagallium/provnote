@@ -99,7 +99,10 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
 }
 
 function renderBody(body: string): React.ReactNode[] {
-  const lines = body.split(/\r?\n/);
+  // GitHub の自動生成リリースノートが差し込む <!-- ... --> トラッカーを除去。
+  // 簡易パーサは HTML コメントを不可視化しないため、事前に剥がしておく。
+  const stripped = body.replace(/<!--[\s\S]*?-->/g, "");
+  const lines = stripped.split(/\r?\n/);
   const blocks: React.ReactNode[] = [];
   let listBuffer: string[] = [];
   let blockIdx = 0;
