@@ -127,6 +127,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { MobileHeader } from "./components/MobileHeader";
 import { Sheet } from "./ui/sheet";
 import { useIsDesktop } from "./hooks/use-media-query";
+import { Composer, useComposer, type ComposerSubmission, type DiscoveryCard } from "./features/composer";
 
 import type { GraphiumFile } from "./lib/document-types";
 import type { NoteGraphData } from "./features/network-graph";
@@ -1751,6 +1752,19 @@ export function NoteApp() {
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showMemos, setShowMemos] = useState(false);
+
+  // Cmd+K Composer（統一された AI 呼び出し口 / UX Audit #04）
+  // 実 AI 呼び出しは後続 PR で配線予定。現状は開閉と送信の記録だけ行う。
+  const composer = useComposer();
+  const [composerPrompt, setComposerPrompt] = useState("");
+  const handleComposerSubmit = useCallback((submission: ComposerSubmission) => {
+    console.info("[Composer] submit (not yet wired to AI):", submission);
+    setComposerPrompt("");
+    composer.closeComposer();
+  }, [composer]);
+  const handleComposerCardSelect = useCallback((card: DiscoveryCard) => {
+    console.info("[Composer] discovery card selected (not yet wired):", card);
+  }, []);
   // 一覧ビュー用サイドピーク（NoteEditorInner 外でも使えるグローバルな state）
   const [listSidePeekNoteId, setListSidePeekNoteId] = useState<string | null>(null);
   const [ingestToast, setIngestToast] = useState<IngestToastState>(null);
@@ -2934,6 +2948,16 @@ export function NoteApp() {
         setShowSettings(false);
         setAgentConfigured(isAgentConfigured());
       }} />
+      <Composer
+        open={composer.open}
+        mode={composer.mode}
+        onModeChange={composer.setMode}
+        prompt={composerPrompt}
+        onPromptChange={setComposerPrompt}
+        onSubmit={handleComposerSubmit}
+        onClose={composer.closeComposer}
+        onDiscoveryCardSelect={handleComposerCardSelect}
+      />
       {showNewSkillDialog && (
         <NewSkillDialog
           onClose={() => setShowNewSkillDialog(false)}

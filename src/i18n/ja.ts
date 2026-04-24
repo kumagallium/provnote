@@ -462,4 +462,13 @@ export const ja: Record<string, string> = {
   // ── PROV-JSON-LD エクスポート ──
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "エクスポートするプロヴェナンスデータがありません",
+
+  // ── Composer（Cmd+K） ──
+  "composer.placeholder": "質問・執筆・挿入...（Cmd+K で開閉）",
+  "composer.mode.ask": "質問",
+  "composer.mode.compose": "執筆",
+  "composer.mode.insertProv": "PROV を挿入",
+  "composer.mode.insertMedia": "メディアを挿入",
+  "composer.aria.dialog": "Composer",
+  "composer.aria.modes": "Composer モード",
 };

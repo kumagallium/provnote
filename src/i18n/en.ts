@@ -462,4 +462,13 @@ export const en: Record<string, string> = {
   // ── PROV-JSON-LD エクスポート ──
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "No provenance data to export",
+
+  // ── Composer（Cmd+K） ──
+  "composer.placeholder": "Ask, compose, or insert... (Cmd+K to toggle)",
+  "composer.mode.ask": "Ask",
+  "composer.mode.compose": "Compose",
+  "composer.mode.insertProv": "Insert PROV",
+  "composer.mode.insertMedia": "Insert Media",
+  "composer.aria.dialog": "Composer",
+  "composer.aria.modes": "Composer mode",
 };
