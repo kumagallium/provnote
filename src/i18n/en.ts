@@ -242,6 +242,17 @@ export const en: Record<string, string> = {
   "settings.modelLoading": "Loading models...",
   "settings.modelNone": "No models registered",
   "settings.modelHelp": "Select the AI model to use. If not specified, the server default is used.",
+  // ── ローカル保存先（デスクトップ版のみ） ──
+  "settings.saveDir.title": "Local save location",
+  "settings.saveDir.help": "Folder where notes, media, wiki, and appdata are stored. Point this at a Dropbox, Google Drive, or OneDrive sync folder to keep Graphium data in sync across devices without OAuth.",
+  "settings.saveDir.currentLabel": "Current",
+  "settings.saveDir.defaultLabel": "Default",
+  "settings.saveDir.change": "Change…",
+  "settings.saveDir.reset": "Reset to default",
+  "settings.saveDir.warning": "Existing notes are not moved automatically. If you want to keep them, copy the contents of the old folder into the new one before using Graphium.",
+  "settings.saveDir.restartNote": "Restart Graphium after changing this for the new location to take effect everywhere.",
+  "settings.saveDir.pickFailed": "Failed to select folder",
+  "settings.saveDir.saveFailed": "Failed to update save location",
   // ── 接続状態 ──
   "settings.health.title": "Connection Status",
   "settings.health.checking": "Checking...",

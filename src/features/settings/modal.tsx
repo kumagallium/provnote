@@ -14,6 +14,7 @@ import {
   Wrench,
   RotateCcw,
   Tag,
+  FolderOpen,
 } from "lucide-react";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
@@ -27,6 +28,12 @@ import {
 } from "../ai-assistant/api";
 import { apiBase, isTauri } from "../../lib/platform";
 import { restartSidecar, getSidecarState, getRecentSidecarLog } from "../../lib/sidecar";
+import {
+  getGraphiumRoot,
+  setGraphiumRoot,
+  pickGraphiumRoot,
+  type GraphiumRootInfo,
+} from "../../lib/graphium-root";
 import { useLocale, type Locale } from "../../i18n";
 import { CORE_LABELS, CORE_LABEL_PROV, type CoreLabel } from "../context-label/labels";
 
@@ -114,6 +121,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [sidecarError, setSidecarError] = useState<string | null>(null);
   const [sidecarLog, setSidecarLog] = useState<string[]>([]);
   const [showSidecarLog, setShowSidecarLog] = useState(false);
+
+  // ローカル保存先（Tauri 環境のみ）
+  const [graphiumRoot, setGraphiumRootState] = useState<GraphiumRootInfo | null>(null);
+  const [rootBusy, setRootBusy] = useState(false);
+  const [rootError, setRootError] = useState<string | null>(null);
 
   // ツール
   const [toolsData, setToolsData] = useState<ToolsResponse | null>(null);
@@ -261,7 +273,48 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .then((r) => r.json())
       .then((data) => setToolsData(data))
       .catch(() => setToolsData(null));
+
+    // Tauri 環境: ローカル保存先を取得
+    if (isTauri()) {
+      setRootError(null);
+      getGraphiumRoot()
+        .then((info) => setGraphiumRootState(info))
+        .catch((err) => {
+          setGraphiumRootState(null);
+          setRootError(err instanceof Error ? err.message : String(err));
+        });
+    } else {
+      setGraphiumRootState(null);
+    }
   }, [isOpen, refreshModels]);
+
+  const handlePickGraphiumRoot = useCallback(async () => {
+    setRootBusy(true);
+    setRootError(null);
+    try {
+      const picked = await pickGraphiumRoot(graphiumRoot?.current);
+      if (!picked) return;
+      const info = await setGraphiumRoot(picked);
+      setGraphiumRootState(info);
+    } catch (err) {
+      setRootError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRootBusy(false);
+    }
+  }, [graphiumRoot]);
+
+  const handleResetGraphiumRoot = useCallback(async () => {
+    setRootBusy(true);
+    setRootError(null);
+    try {
+      const info = await setGraphiumRoot(null);
+      setGraphiumRootState(info);
+    } catch (err) {
+      setRootError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRootBusy(false);
+    }
+  }, []);
 
   // ── モデル追加フロー ──
   const handleFetchAvailable = useCallback(async () => {
@@ -618,6 +671,85 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 Embedding requires OpenAI or OpenAI-compatible provider. Leave empty to use text-match fallback.
               </p>
             </div>
+
+            {/* ローカル保存先（デスクトップ版のみ） */}
+            {isTauri() && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FolderOpen size={14} className="text-muted-foreground" />
+                  <label className="text-xs font-semibold text-foreground">
+                    {t("settings.saveDir.title")}
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {t("settings.saveDir.help")}
+                </p>
+                {graphiumRoot ? (
+                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {t("settings.saveDir.currentLabel")}
+                        </div>
+                        <div className="text-xs font-mono text-foreground break-all">
+                          {graphiumRoot.current}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handlePickGraphiumRoot}
+                        disabled={rootBusy}
+                        className="shrink-0"
+                      >
+                        {rootBusy ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          t("settings.saveDir.change")
+                        )}
+                      </Button>
+                    </div>
+                    {graphiumRoot.isCustom && (
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {t("settings.saveDir.defaultLabel")}
+                          </div>
+                          <div className="text-xs font-mono text-muted-foreground break-all">
+                            {graphiumRoot.defaultRoot}
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleResetGraphiumRoot}
+                          disabled={rootBusy}
+                          className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <RotateCcw size={12} />
+                          {t("settings.saveDir.reset")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground py-1">
+                    <Loader2 size={12} className="inline animate-spin mr-1" />
+                    ...
+                  </div>
+                )}
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-start gap-1">
+                  <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                  <span>{t("settings.saveDir.warning")}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("settings.saveDir.restartNote")}
+                </p>
+                {rootError && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {rootError}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

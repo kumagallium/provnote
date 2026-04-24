@@ -18,56 +18,154 @@ fn shutdown_ack(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+// --- アプリ設定（Graphium ルート配下のパス解決用） ---
+
+/// アプリ識別子（Tauri の bundle identifier と一致させる）
+const APP_IDENTIFIER: &str = "com.graphium.app";
+/// アプリ設定ファイル名
+const CONFIG_FILE_NAME: &str = "config.json";
+
+/// アプリ設定。Obsidian 式に、Graphium ルート配下の場所だけをここに持つ。
+/// ルート以外の設定（AI モデル等）は従来どおり localStorage 側で管理する。
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AppConfig {
+    /// ユーザーが明示的に指定した Graphium ルート。未指定なら既定値を使う。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    graphium_root: Option<String>,
+}
+
+/// Graphium ルートの現在値と既定値をまとめて返すための構造体
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphiumRootInfo {
+    /// いま実際に使われているルートの絶対パス
+    pub current: String,
+    /// 設定未指定時の既定パス（~/Documents/Graphium/）
+    pub default_root: String,
+    /// ユーザーがカスタムルートを設定しているか
+    pub is_custom: bool,
+}
+
+/// アプリ設定ディレクトリ（`~/Library/Application Support/com.graphium.app/` 等）
+fn app_config_dir() -> Result<PathBuf, String> {
+    let dir = dirs::config_dir()
+        .ok_or("設定ディレクトリが見つかりません")?
+        .join(APP_IDENTIFIER);
+    fs::create_dir_all(&dir).map_err(|e| format!("設定ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
+/// 設定ファイルのパス
+fn config_file_path() -> Result<PathBuf, String> {
+    Ok(app_config_dir()?.join(CONFIG_FILE_NAME))
+}
+
+/// 設定ファイルを読み込む（存在しなければデフォルト）
+fn read_app_config() -> Result<AppConfig, String> {
+    let path = config_file_path()?;
+    if !path.exists() {
+        return Ok(AppConfig::default());
+    }
+    let content = fs::read_to_string(&path).map_err(|e| format!("設定読み取り失敗: {e}"))?;
+    if content.trim().is_empty() {
+        return Ok(AppConfig::default());
+    }
+    serde_json::from_str(&content).map_err(|e| format!("設定パース失敗: {e}"))
+}
+
+/// 設定ファイルを書き込む
+fn write_app_config(config: &AppConfig) -> Result<(), String> {
+    let path = config_file_path()?;
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("設定シリアライズ失敗: {e}"))?;
+    fs::write(&path, content).map_err(|e| format!("設定書き込み失敗: {e}"))
+}
+
+/// 既定の Graphium ルート（`~/Documents/Graphium/`）
+fn default_graphium_root() -> Result<PathBuf, String> {
+    Ok(dirs::document_dir()
+        .ok_or("ドキュメントフォルダが見つかりません")?
+        .join("Graphium"))
+}
+
+/// 現在の Graphium ルート（設定 > 既定）
+fn graphium_root() -> Result<PathBuf, String> {
+    let config = read_app_config()?;
+    match config.graphium_root {
+        Some(p) if !p.trim().is_empty() => Ok(PathBuf::from(p)),
+        _ => default_graphium_root(),
+    }
+}
+
 // --- ファイルシステムコマンド ---
 
-/// ノートの保存先ディレクトリを取得（~/Documents/Graphium/notes/）
+fn ensure_subdir(name: &str) -> Result<PathBuf, String> {
+    let dir = graphium_root()?.join(name);
+    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
+/// ノートの保存先ディレクトリ（`<root>/notes/`）
 fn notes_dir() -> Result<PathBuf, String> {
-    let dir = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが見つかりません")?
-        .join("Graphium")
-        .join("notes");
-    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
-    Ok(dir)
+    ensure_subdir("notes")
 }
 
-/// メディアの保存先ディレクトリを取得（~/Documents/Graphium/media/）
+/// メディアの保存先ディレクトリ（`<root>/media/`）
 fn media_dir() -> Result<PathBuf, String> {
-    let dir = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが見つかりません")?
-        .join("Graphium")
-        .join("media");
-    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
-    Ok(dir)
+    ensure_subdir("media")
 }
 
-/// Wiki ドキュメントの保存先ディレクトリを取得（~/Documents/Graphium/wiki/）
+/// Wiki ドキュメントの保存先ディレクトリ（`<root>/wiki/`）
 fn wiki_dir() -> Result<PathBuf, String> {
-    let dir = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが見つかりません")?
-        .join("Graphium")
-        .join("wiki");
-    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
-    Ok(dir)
+    ensure_subdir("wiki")
 }
 
-/// Skill ドキュメントの保存先ディレクトリを取得（~/Documents/Graphium/skills/）
+/// Skill ドキュメントの保存先ディレクトリ（`<root>/skills/`）
 fn skill_dir() -> Result<PathBuf, String> {
-    let dir = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが見つかりません")?
-        .join("Graphium")
-        .join("skills");
-    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
-    Ok(dir)
+    ensure_subdir("skills")
 }
 
-/// アプリデータの保存先ディレクトリを取得（~/Documents/Graphium/appdata/）
+/// アプリデータの保存先ディレクトリ（`<root>/appdata/`）
 fn appdata_dir() -> Result<PathBuf, String> {
-    let dir = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが見つかりません")?
-        .join("Graphium")
-        .join("appdata");
-    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
-    Ok(dir)
+    ensure_subdir("appdata")
+}
+
+/// 現在の Graphium ルートと既定値を返す（UI の表示用）
+#[tauri::command]
+fn get_graphium_root() -> Result<GraphiumRootInfo, String> {
+    let config = read_app_config()?;
+    let default = default_graphium_root()?;
+    let (current, is_custom) = match &config.graphium_root {
+        Some(p) if !p.trim().is_empty() => (PathBuf::from(p), true),
+        _ => (default.clone(), false),
+    };
+    Ok(GraphiumRootInfo {
+        current: current.to_string_lossy().to_string(),
+        default_root: default.to_string_lossy().to_string(),
+        is_custom,
+    })
+}
+
+/// Graphium ルートを設定する。
+/// `path` が `None` または空文字列ならカスタム設定をクリア（既定に戻る）。
+/// 実在しないディレクトリが指定された場合は作成を試みる。
+#[tauri::command]
+fn set_graphium_root(path: Option<String>) -> Result<GraphiumRootInfo, String> {
+    let mut config = read_app_config()?;
+    match path {
+        Some(p) if !p.trim().is_empty() => {
+            let trimmed = p.trim().to_string();
+            fs::create_dir_all(&trimmed)
+                .map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+            config.graphium_root = Some(trimmed);
+        }
+        _ => {
+            config.graphium_root = None;
+        }
+    }
+    write_app_config(&config)?;
+    get_graphium_root()
 }
 
 /// ファイル情報
@@ -434,6 +532,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             list_note_files,
             read_note_file,
@@ -455,6 +554,8 @@ pub fn run() {
             read_app_data,
             write_app_data,
             get_media_path,
+            get_graphium_root,
+            set_graphium_root,
             shutdown_ack,
         ])
         .setup(|app| {
