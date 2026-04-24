@@ -39,35 +39,34 @@
 @source "../node_modules/@blocknote/react";
 
 @theme {
-  /* Crucible デザインガイドライン準拠 */
-  /* ベース色 */
-  --color-background: #fafdf7;           /* 温かみのあるオフホワイト */
-  --color-foreground: #1a2e1d;           /* 深いグリーンブラック */
-  --color-card: #ffffff;
-  --color-card-foreground: #1a2e1d;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #1a2e1d;
-  /* プライマリー（ブランドグリーン） */
+  /* UX Audit B: ウォームニュートラルベース (hue 85) + ブランドグリーン (#4B7A52) */
+  /* ベース色 — oklch hue 85 ウォームホワイト系 */
+  --color-background: oklch(0.99 0.005 85);   /* ≈ #fdfcf9 */
+  --color-foreground: oklch(0.18 0.01 85);    /* ≈ #201b17 ウォームブラック */
+  --color-card: oklch(0.99 0.005 85);
+  --color-card-foreground: oklch(0.18 0.01 85);
+  --color-popover: oklch(0.99 0.005 85);
+  --color-popover-foreground: oklch(0.18 0.01 85);
+  /* プライマリー（ブランドグリーン — 維持） */
   --color-primary: #4B7A52;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f0f5ef;
-  --color-secondary-foreground: #2d4a32;
-  --color-muted: #f0f5ef;               /* 薄いグリーングレー */
-  --color-muted-foreground: #6b7f6e;     /* 中間のグリーングレー */
-  --color-accent: #e8f0e8;
-  --color-accent-foreground: #2d4a32;
+  --color-secondary: oklch(0.955 0.008 85);
+  --color-secondary-foreground: oklch(0.34 0.01 85);
+  --color-muted: oklch(0.955 0.008 85);
+  --color-muted-foreground: oklch(0.56 0.01 85);
+  --color-accent: oklch(0.955 0.008 85);
+  --color-accent-foreground: oklch(0.34 0.01 85);
   --color-destructive: #dc2626;
-  --color-destructive-foreground: #ffffff;  /* 破壊的ボタン上のテキスト色 */
-  --color-border: #d5e0d7;              /* 淡いグリーングレー */
-  --color-input: #d5e0d7;
+  --color-destructive-foreground: #ffffff;
+  --color-border: oklch(0.90 0.006 85);       /* ≈ var(--rule) と同値 */
+  --color-input: oklch(0.90 0.006 85);
   --color-ring: #4B7A52;
-  /* ニュートラルスケール（グリーングレー系）
-     Slate 系のハードコード色を排除し、Crucible パレットと調和するグリーングレーに統一 */
-  --color-surface: #f5f8f5;              /* 極薄セージ — サブ背景（ヘッダー・パネル区切り） */
-  --color-surface-hover: #edf3ed;        /* 薄セージ — ホバー背景 */
-  --color-border-subtle: #dce5dd;        /* セージボーダー — 軽量ボーダー（パネル区切り線） */
-  --color-text-tertiary: #8fa394;        /* ミディアムセージ — 第三階層テキスト（アイコン・プレースホルダー） */
-  /* セマンティック色（design.md 準拠） */
+  /* ニュートラルスケール（ウォームグレー系） */
+  --color-surface: oklch(0.975 0.006 85);
+  --color-surface-hover: oklch(0.955 0.008 85);
+  --color-border-subtle: oklch(0.94 0.006 85);
+  --color-text-tertiary: oklch(0.72 0.008 85);
+  /* セマンティック色 */
   --color-success: #2d4a32;
   --color-success-bg: #edf5ee;
   --color-success-border: #b8d4bb;
@@ -80,25 +79,25 @@
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
-  /* PROV-DM ラベル色（design.md 準拠） */
-  --color-label-activity: #5b8fb9;          /* [手順] 落ち着いた青 */
+  /* PROV-DM ラベル色（維持） */
+  --color-label-activity: #5b8fb9;
   --color-label-activity-bg: #eaf1f6;
-  --color-label-entity: #4B7A52;            /* [使用するもの] ブランドグリーン */
+  --color-label-entity: #4B7A52;
   --color-label-entity-bg: #edf5ee;
-  --color-label-parameter: #c08b3e;         /* [属性] 落ち着いたアンバー */
+  --color-label-parameter: #c08b3e;
   --color-label-parameter-bg: #faf3e6;
-  --color-label-sample: #8b7ab5;            /* [試料/パターン] グレイッシュ紫 */
+  --color-label-sample: #8b7ab5;
   --color-label-sample-bg: #f0edf6;
-  --color-label-result: #c26356;            /* [結果] テラコッタ */
+  --color-label-result: #c26356;
   --color-label-result-bg: #fbeae8;
   /* サイドバー */
-  --color-sidebar-background: #f0f5ef;
-  --color-sidebar-foreground: #1a2e1d;
+  --color-sidebar-background: oklch(0.975 0.006 85);
+  --color-sidebar-foreground: oklch(0.18 0.01 85);
   --color-sidebar-primary: #4B7A52;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #e8f0e8;
-  --color-sidebar-accent-foreground: #2d4a32;
-  --color-sidebar-border: #d5e0d7;
+  --color-sidebar-accent: oklch(0.955 0.008 85);
+  --color-sidebar-accent-foreground: oklch(0.34 0.01 85);
+  --color-sidebar-border: oklch(0.90 0.006 85);
   --color-sidebar-ring: #4B7A52;
   --radius: 0.625rem;
 }
@@ -173,6 +172,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--ui);
+    color: var(--ink);
     height: 100dvh;
     overflow: hidden;
   }
@@ -222,6 +223,17 @@
   }
 }
 
+/* WikiBanner Regenerate dropdown アイテムのホバー */
+.wiki-banner-dropdown-item:hover {
+  background-color: var(--paper-2) !important;
+}
+.wiki-banner-dropdown-item.is-current {
+  background-color: var(--forest-soft);
+}
+.wiki-banner-dropdown-item.is-current:hover {
+  background-color: oklch(0.91 0.05 150) !important;
+}
+
 /* BlockNote SideMenu がサイドバーに隠れないようにする */
 .bn-side-menu {
   z-index: 30 !important;
@@ -242,10 +254,10 @@ body[data-label-dropdown-open="true"] .bn-side-menu {
   text-decoration: underline;
 }
 
-/* BlockNote エディタ背景を Crucible テーマに統一 */
+/* BlockNote エディタ背景を Paper トークンに統一 */
 .bn-editor,
 .bn-container {
-  background-color: #fafdf7 !important;
+  background-color: var(--paper) !important;
 }
 
 /* BlockNote 見出しサイズ（UX Audit 原案値）

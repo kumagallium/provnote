@@ -218,6 +218,7 @@ export function WikiBanner({
                   <button
                     key={m.name}
                     onClick={() => handleSelectModel(m.name)}
+                    className={`wiki-banner-dropdown-item${m.name === wikiMeta.generatedBy?.model ? " is-current" : ""}`}
                     style={{
                       width: "100%",
                       textAlign: "left",
@@ -228,10 +229,6 @@ export function WikiBanner({
                       fontSize: 11.5,
                       color: "var(--ink)",
                       cursor: "pointer",
-                      background:
-                        m.name === wikiMeta.generatedBy?.model
-                          ? "var(--forest-soft)"
-                          : "transparent",
                       border: "none",
                       font: "inherit",
                     }}
