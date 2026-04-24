@@ -7,6 +7,10 @@ import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
 import {
+  buildDerivedDocument,
+  appendDerivedNoteLink,
+} from "../features/derivation/clone-document";
+import {
   buildNoteGraph,
   type NoteGraphData,
 } from "../features/network-graph";
@@ -623,6 +627,69 @@ export function useFileManager(authenticated: boolean) {
     [activeDoc, handleOpenFile, setActiveFileId]
   );
 
+  // ノート全体を派生する（Phase 4）
+  // 既存ノートの blocks / labels / provLinks / knowledgeLinks を新 ID で複製し、
+  // derivedFromNoteId を張った別ファイルとして保存する。
+  const handleDeriveWholeNote = useCallback(
+    async (derivedTitle?: string) => {
+      const sourceNoteId = activeFileIdRef.current;
+      if (!sourceNoteId) return;
+      setDeriving(true);
+      try {
+        // Drive 上の最新を読み直してからクローン（ローカルで編集中の未保存内容より
+        // 永続化された最新を派生元にする方が PROV 的に正しい）
+        const sourceDoc = await loadFile(sourceNoteId);
+        const title = derivedTitle?.trim() || `↳ ${sourceDoc.title}`;
+        const now = new Date().toISOString();
+
+        let newDoc: GraphiumDocument = buildDerivedDocument({
+          sourceDoc,
+          sourceNoteId,
+          derivedTitle: title,
+          now,
+        });
+        newDoc = await recordRevision(newDoc, null, "human_derivation");
+        const newFileId = await createFile(newDoc.title, newDoc);
+
+        // 元ノートに derived_from の noteLinks を追加して保存
+        let updatedSource: GraphiumDocument = {
+          ...sourceDoc,
+          noteLinks: appendDerivedNoteLink(sourceDoc.noteLinks, newFileId),
+          modifiedAt: now,
+        };
+        updatedSource = await recordRevision(
+          updatedSource,
+          sourceDoc.pages[0],
+          "derive_source",
+          { force: true },
+        );
+        await saveFile(sourceNoteId, updatedSource);
+        docCacheRef.current.set(sourceNoteId, updatedSource);
+        setActiveDoc(updatedSource);
+
+        setFiles((prev) => [
+          { id: newFileId, name: `${newDoc.title}.graphium.json`, modifiedTime: now, createdTime: now },
+          ...prev,
+        ]);
+
+        if (noteIndexRef.current) {
+          let updatedIndex = updateIndexEntry(noteIndexRef.current, newFileId, newDoc);
+          updatedIndex = updateIndexEntry(updatedIndex, sourceNoteId, updatedSource);
+          noteIndexRef.current = updatedIndex;
+          setNoteIndex(updatedIndex);
+          saveIndexFile(updatedIndex).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+
+        handleOpenFile(newFileId);
+      } catch (err) {
+        console.error("ノート全体の派生に失敗:", err);
+      } finally {
+        setDeriving(false);
+      }
+    },
+    [handleOpenFile],
+  );
+
   // AI 派生ノートを作成（構築済みの GraphiumDocument を受け取って保存）
   const handleAiDeriveNote = useCallback(
     async (doc: GraphiumDocument) => {
@@ -1123,6 +1190,7 @@ export function useFileManager(authenticated: boolean) {
     handleNewFromTemplate,
     handleSave,
     handleDeriveNote,
+    handleDeriveWholeNote,
     handleAiDeriveNote,
     handleDelete,
     getCachedDoc,

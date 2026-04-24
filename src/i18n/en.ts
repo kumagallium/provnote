@@ -88,6 +88,7 @@ export const en: Record<string, string> = {
   "editor.titlePlaceholder": "Note title",
   "editor.newNote": "New note",
   "editor.derive": "🔗 Derive new page",
+  "editor.deriveWholeNote": "Derive whole note",
   "editor.aiAssistant": "🤖 AI Assistant",
   "editor.askAi": "Ask AI about selection",
   "editor.derivedNote": "Derived note",

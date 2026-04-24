@@ -88,6 +88,7 @@ export const ja: Record<string, string> = {
   "editor.titlePlaceholder": "ノートのタイトル",
   "editor.newNote": "新しいノート",
   "editor.derive": "🔗 新ページを派生",
+  "editor.deriveWholeNote": "ノート全体を派生",
   "editor.aiAssistant": "🤖 AI アシスタント",
   "editor.askAi": "選択範囲を AI に聞く",
   "editor.derivedNote": "派生ノート",

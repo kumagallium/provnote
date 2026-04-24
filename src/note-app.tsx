@@ -150,6 +150,8 @@ function NoteHeaderMenu({
   pdfExporting,
   onExportProvJsonLd,
   provExportDisabled,
+  onDeriveWholeNote,
+  deriveDisabled,
   onIngestToWiki,
   onIngestFromUrl,
   ingestDisabled,
@@ -162,6 +164,8 @@ function NoteHeaderMenu({
   pdfExporting: boolean;
   onExportProvJsonLd: () => void;
   provExportDisabled: boolean;
+  onDeriveWholeNote?: () => void;
+  deriveDisabled?: boolean;
   onIngestToWiki?: () => void;
   onIngestFromUrl?: () => void;
   ingestDisabled?: boolean;
@@ -221,6 +225,19 @@ function NoteHeaderMenu({
             <Share2 size={14} />
             {t("prov.export")}
           </button>
+          {onDeriveWholeNote && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className={itemClass}
+                disabled={deriveDisabled}
+                onClick={() => { onDeriveWholeNote(); setOpen(false); }}
+              >
+                <GitBranch size={14} />
+                {t("editor.deriveWholeNote")}
+              </button>
+            </>
+          )}
           {onIngestToWiki && !isWikiDoc && (
             <>
               <div className="my-1 border-t border-border" />
@@ -277,6 +294,10 @@ type NoteEditorProps = {
   onIngestToWiki?: () => void;
   /** URL から Knowledge コールバック */
   onIngestFromUrl?: () => void;
+  /** ノート全体を派生コールバック（ヘッダーメニューから呼ばれる） */
+  onDeriveWholeNote?: () => void;
+  /** 派生処理中（ボタンを無効化） */
+  derivingDisabled?: boolean;
   /** チャットから Knowledge コールバック（手動） */
   onIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
   /** チャット応答の自動 Wiki 保存コールバック */
@@ -365,6 +386,8 @@ function NoteEditorInner({
   onEditorRef,
   onIngestToWiki,
   onIngestFromUrl,
+  onDeriveWholeNote,
+  derivingDisabled,
   onIngestChat,
   onAutoIngestChat,
   isWikiDoc,
@@ -1544,6 +1567,8 @@ function NoteEditorInner({
           onIngestToWiki={onIngestToWiki}
           onIngestFromUrl={onIngestFromUrl}
           ingestDisabled={!fileId || saving}
+          onDeriveWholeNote={onDeriveWholeNote && !isWikiDoc ? onDeriveWholeNote : undefined}
+          deriveDisabled={!fileId || saving || derivingDisabled}
           isWikiDoc={isWikiDoc}
           t={t}
         />
@@ -2851,6 +2876,8 @@ export function NoteApp() {
                 }
               : fm.handleSave}
             onDeriveNote={fm.handleDeriveNote}
+            onDeriveWholeNote={fm.handleDeriveWholeNote}
+            derivingDisabled={fm.deriving}
             onAiDeriveNote={fm.handleAiDeriveNote}
             onNavigateNote={(noteId: string, cachedDoc?: import("./lib/document-types").GraphiumDocument) => {
               if (noteId.startsWith("wiki:")) {
