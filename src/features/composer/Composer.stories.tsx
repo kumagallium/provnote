@@ -68,7 +68,7 @@ function Harness({ showDiscoveryCards = false }: Args) {
           background: "var(--paper-2)",
           height: "100dvh",
           padding: 32,
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "var(--ui)",
           color: "var(--ink-2)",
           fontSize: 13,
           lineHeight: 1.6,
