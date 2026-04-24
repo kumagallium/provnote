@@ -7,18 +7,59 @@
 //
 // 書き込み先は下記の優先順で解決する:
 //   1. 環境変数 GRAPHIUM_NOTES_DIR
-//   2. ~/Documents/Graphium/notes/ (Tauri アプリ既定)
+//   2. Graphium 本体の設定ファイル (<OS app config>/com.graphium.app/config.json)
+//      → `graphiumRoot` が指定されていれば <graphiumRoot>/notes/
+//   3. ~/Documents/Graphium/notes/ (Tauri アプリ既定)
 //
 // 依存なし (Node 20+ 標準ライブラリのみ)。
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
+/** Graphium アプリの設定ディレクトリ（Tauri v2 の app_config_dir と一致させる） */
+function graphiumAppConfigDir() {
+  const id = "com.graphium.app";
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Application Support", id);
+  }
+  if (process.platform === "win32") {
+    const appdata =
+      process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+    return join(appdata, id);
+  }
+  // Linux / その他: XDG_CONFIG_HOME があればそれ、なければ ~/.config
+  const xdg = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  return join(xdg, id);
+}
+
+/** Graphium 本体の config.json から graphiumRoot を読む（未設定なら null） */
+function readConfiguredGraphiumRoot() {
+  const configPath = join(graphiumAppConfigDir(), "config.json");
+  if (!existsSync(configPath)) return null;
+  try {
+    const raw = readFileSync(configPath, "utf8").trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const root = parsed?.graphiumRoot;
+    if (typeof root === "string" && root.trim().length > 0) {
+      return root.trim();
+    }
+    return null;
+  } catch {
+    // 壊れた config は無視してフォールバックへ
+    return null;
+  }
+}
+
 function resolveNotesDir() {
   if (process.env.GRAPHIUM_NOTES_DIR) {
     return process.env.GRAPHIUM_NOTES_DIR;
+  }
+  const configured = readConfiguredGraphiumRoot();
+  if (configured) {
+    return join(configured, "notes");
   }
   return join(homedir(), "Documents", "Graphium", "notes");
 }

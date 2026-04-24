@@ -159,13 +159,21 @@ email が記録されるのは以下いずれかの場合だけ:
 
 ## 保存先のカスタマイズ
 
-デフォルトは `~/Documents/Graphium/notes/`。別の場所に保存したい場合は環境変数:
+保存先は以下の優先順で解決される:
+
+1. 環境変数 `GRAPHIUM_NOTES_DIR`（一時的な上書き用途）
+2. Graphium 本体の設定ファイル
+   (`<OS app config>/com.graphium.app/config.json` の `graphiumRoot`)
+   → 設定があれば `<graphiumRoot>/notes/` に書き込む
+3. デフォルト `~/Documents/Graphium/notes/`
+
+つまり、Graphium の設定画面（General タブ → Local save location）で保存先を変えれば、
+このスキルも自動的に同じ場所に書き込むようになる。環境変数はテスト・一時切替用。
 
 ```bash
+# 明示的に上書きしたいとき
 GRAPHIUM_NOTES_DIR="/path/to/notes" node .../save.mjs <<EOF ...
 ```
-
-将来 Graphium 本体に `G-SAVEDIR`（保存先 UI 設定）が入ったら、設定ファイルから自動で読む形に拡張予定。
 
 ## やらないこと
 

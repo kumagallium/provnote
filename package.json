@@ -37,6 +37,7 @@
     "@blocknote/shadcn": "^0.47.0",
     "@hono/node-server": "^1.19.13",
     "@tailwindcss/vite": "^4.2.1",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-opener": "^2.3.0",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",

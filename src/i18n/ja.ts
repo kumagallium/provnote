@@ -242,6 +242,17 @@ export const ja: Record<string, string> = {
   "settings.modelLoading": "モデルを読み込み中...",
   "settings.modelNone": "モデルが未登録です",
   "settings.modelHelp": "使用する AI モデルを選択します。未指定の場合はサーバーのデフォルトモデルが使われます。",
+  // ── ローカル保存先（デスクトップ版のみ） ──
+  "settings.saveDir.title": "ローカル保存先",
+  "settings.saveDir.help": "ノート・メディア・Wiki・アプリデータを保存するフォルダです。Dropbox / Google Drive / OneDrive の同期フォルダを指定すれば、OAuth なしでデバイス間同期できます。",
+  "settings.saveDir.currentLabel": "現在の場所",
+  "settings.saveDir.defaultLabel": "デフォルト",
+  "settings.saveDir.change": "変更…",
+  "settings.saveDir.reset": "デフォルトに戻す",
+  "settings.saveDir.warning": "既存のノートは自動では移動されません。引き継ぎたい場合は、Graphium を使う前に旧フォルダの中身を新しいフォルダへ手動でコピーしてください。",
+  "settings.saveDir.restartNote": "変更を全体に反映するには Graphium を再起動してください。",
+  "settings.saveDir.pickFailed": "フォルダの選択に失敗しました",
+  "settings.saveDir.saveFailed": "保存先の更新に失敗しました",
   // ── 接続状態 ──
   "settings.health.title": "接続状態",
   "settings.health.checking": "確認中...",
