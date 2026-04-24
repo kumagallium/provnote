@@ -138,6 +138,7 @@ import { MobileHeader } from "./components/MobileHeader";
 import { Sheet } from "./ui/sheet";
 import { useIsDesktop } from "./hooks/use-media-query";
 import { Composer, useComposer, type ComposerSubmission, type DiscoveryCard } from "./features/composer";
+import { EmptyNoteGuide } from "./features/onboarding";
 
 import type { GraphiumFile } from "./lib/document-types";
 import type { NoteGraphData } from "./features/network-graph";
@@ -308,6 +309,8 @@ type NoteEditorProps = {
   aiAvailable?: boolean;
   /** ローカル Skill のプロンプト（AI チャットに注入） */
   skillPrompts?: string;
+  /** Cmd+K Composer を開くコールバック（空ノート予示の ⌘K チップから呼ばれる） */
+  onOpenComposer?: () => void;
 };
 
 function NoteEditor(props: NoteEditorProps) {
@@ -393,6 +396,7 @@ function NoteEditorInner({
   isWikiDoc,
   aiAvailable = true,
   skillPrompts,
+  onOpenComposer,
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
@@ -1430,6 +1434,8 @@ function NoteEditorInner({
     markDirty();
     labelAutoRef.current?.();
     triggerRegeneration();
+    // 空ノート予示を隠す（本文に 1 度でも変化があれば以降は非表示）
+    setHasBeenEdited(true);
   }, [markDirty, triggerRegeneration]);
 
   // 初期コンテンツ
@@ -1438,6 +1444,13 @@ function NoteEditorInner({
     if (!blocks?.length) return undefined;
     return sanitizeBlocks(blocks);
   }, [initialDoc]);
+
+  // 空ノート予示（EmptyNoteGuide）の表示可否
+  // 初期ブロックが既に存在するノートでは最初から非表示。
+  // 空ノートを開いた場合、最初の編集でトリガー済みにして以降隠す。
+  const [hasBeenEdited, setHasBeenEdited] = useState(Boolean(initialContent));
+  const isSkillDoc = initialDoc?.source === "skill";
+  const showEmptyNoteGuide = !hasBeenEdited && !isWikiDoc && !isSkillDoc;
 
   // AI アシスタント起動 → Chat タブを開く
   const chatReqRef = useRef(aiAssistant.chatRequestSeq);
@@ -1698,6 +1711,11 @@ function NoteEditorInner({
                   mentionContextRef.current = { tableBlockId: null, rowIndex: -1 };
                 }
               }}
+            />
+            {/* 空ノート予示: ⌘K / # / @ / / の入口をさりげなく案内 */}
+            <EmptyNoteGuide
+              visible={showEmptyNoteGuide}
+              onOpenComposer={onOpenComposer}
             />
           </div>
         </div>
@@ -2915,6 +2933,7 @@ export function NoteApp() {
             onEditorRef={(editor) => { noteEditorRef.current = editor; }}
             isWikiDoc={fm.activeDoc?.source === "ai"}
             aiAvailable={aiAvailable ?? false}
+            onOpenComposer={composer.openComposer}
             skillPrompts={(() => {
               const skills: { title: string; prompt: string }[] = [];
               for (const [skillId, meta] of fm.skillMetas.entries()) {
