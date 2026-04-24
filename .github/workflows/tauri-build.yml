@@ -37,6 +37,11 @@ jobs:
             });
             core.setOutput('release_id', release.id);
 
+  # Currently macOS Apple Silicon only.
+  # Windows / Linux / Intel macOS were dropped in v0.3.8 because the bundled
+  # sidecar (Node.js runtime) only ships for arm64 macOS, and the developer
+  # has no realistic way to verify other platforms' release builds end-to-end.
+  # See ideas: G-MULTIOS-RESUME for the conditions to bring them back.
   build:
     needs: resolve-release
     strategy:
@@ -46,15 +51,6 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             label: macOS (Apple Silicon)
-          - platform: macos-14
-            target: x86_64-apple-darwin
-            label: macOS (Intel)
-          - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            label: Linux
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            label: Windows
 
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.platform }}
@@ -83,32 +79,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Create sidecar wrapper (Unix)
-        if: matrix.platform != 'windows-latest'
-        run: |
-          SRC="src-tauri/binaries/graphium-server-aarch64-apple-darwin"
-          DST="src-tauri/binaries/graphium-server-${{ matrix.target }}"
-          if [ "$SRC" != "$DST" ]; then
-            cp "$SRC" "$DST"
-          fi
-          chmod +x "$DST"
-
-      - name: Create sidecar wrapper (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          $content = @"
-          @echo off
-          set SCRIPT_DIR=%~dp0
-          node "%SCRIPT_DIR%..\sidecar\server.mjs" %*
-          "@
-          Set-Content -Path "src-tauri\binaries\graphium-server-${{ matrix.target }}.exe" -Value $content
+      - name: Bundle Node.js runtime for sidecar
+        run: node scripts/fetch-node.mjs
 
       - name: Bundle server
         run: node scripts/bundle-server.mjs
@@ -144,11 +116,9 @@ jobs:
 
           mkdir -p /tmp/assets
 
+          # macOS Apple Silicon only — see build job comment for rationale
           ASSETS=(
             "Graphium_aarch64.app.tar.gz"
-            "Graphium_x64.app.tar.gz"
-            "Graphium_${VERSION}_amd64.AppImage"
-            "Graphium_${VERSION}_x64-setup.exe"
           )
 
           for ASSET in "${ASSETS[@]}"; do
@@ -183,9 +153,6 @@ jobs:
           }
 
           DARWIN_AARCH64_SIG=$(read_sig "Graphium_aarch64.app.tar.gz")
-          DARWIN_X64_SIG=$(read_sig "Graphium_x64.app.tar.gz")
-          LINUX_SIG=$(read_sig "Graphium_${VERSION}_amd64.AppImage")
-          WINDOWS_SIG=$(read_sig "Graphium_${VERSION}_x64-setup.exe")
 
           cat > latest.json <<EOF
           {
@@ -196,18 +163,6 @@ jobs:
               "darwin-aarch64": {
                 "signature": "${DARWIN_AARCH64_SIG}",
                 "url": "${BASE_URL}/Graphium_aarch64.app.tar.gz"
-              },
-              "darwin-x86_64": {
-                "signature": "${DARWIN_X64_SIG}",
-                "url": "${BASE_URL}/Graphium_x64.app.tar.gz"
-              },
-              "linux-x86_64": {
-                "signature": "${LINUX_SIG}",
-                "url": "${BASE_URL}/Graphium_${VERSION}_amd64.AppImage"
-              },
-              "windows-x86_64": {
-                "signature": "${WINDOWS_SIG}",
-                "url": "${BASE_URL}/Graphium_${VERSION}_x64-setup.exe"
               }
             }
           }

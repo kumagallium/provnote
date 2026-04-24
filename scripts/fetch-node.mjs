@@ -4,6 +4,9 @@
 // macOS の GUI 起動アプリは Finder/launchd 経由で立ち上がり、
 // シェルの PATH を継承しないため、ユーザーが Homebrew/nvm で入れた node が
 // 見えない。配布版アプリでは Node 自体を同梱する必要がある。
+//
+// 現在は macOS のみサポート（v0.3.8 以降、配布対象が macOS Apple Silicon に
+// 絞られたため）。Windows / Linux への再対応は ideas: G-MULTIOS-RESUME 参照。
 
 import { existsSync, mkdirSync, copyFileSync, chmodSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -26,9 +29,11 @@ if (existsSync(TARGET_FILE) && !force) {
 }
 
 const arch = process.arch === "arm64" ? "arm64" : "x64";
-const platform = process.platform === "darwin" ? "darwin" : process.platform === "linux" ? "linux" : null;
+// 現在は macOS のみサポート（v0.3.8 以降、配布対象が macOS Apple Silicon に絞られたため）
+const platform = process.platform === "darwin" ? "darwin" : null;
 if (!platform) {
-  console.error(`[fetch-node] Unsupported platform: ${process.platform}`);
+  console.error(`[fetch-node] Unsupported platform: ${process.platform} (supported: darwin)`);
+  console.error(`[fetch-node] See ideas: G-MULTIOS-RESUME for re-enabling Windows / Linux`);
   process.exit(1);
 }
 
