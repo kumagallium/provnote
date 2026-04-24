@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.3.8](https://github.com/kumagallium/Graphium/compare/v0.3.7...v0.3.8) - 2026-04-24
+- fix: Bundle Node.js runtime for distributed desktop app by @kumagallium in https://github.com/kumagallium/Graphium/pull/129
+
 ## [v0.3.7](https://github.com/kumagallium/Graphium/compare/v0.3.6...v0.3.7) - 2026-04-24
 - [fix] Allow AI chat on unsaved new notes by @kumagallium in https://github.com/kumagallium/Graphium/pull/124
 - feat: Add UI controls to restart sidecar backend by @kumagallium in https://github.com/kumagallium/Graphium/pull/126
