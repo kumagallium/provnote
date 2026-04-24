@@ -463,6 +463,18 @@ export const en: Record<string, string> = {
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "No provenance data to export",
 
+  // ── Onboarding / Empty note guide ──
+  "onboarding.guide.aria": "Empty note tips",
+  "onboarding.guide.lead": "Start writing, or try one of these:",
+  "onboarding.chip.cmdk.label": "Ask AI",
+  "onboarding.chip.cmdk.desc": "Open the Composer to ask, compose, or insert",
+  "onboarding.chip.hash.label": "Label",
+  "onboarding.chip.hash.desc": "Type # at the start of a line to tag it",
+  "onboarding.chip.at.label": "Link a note",
+  "onboarding.chip.at.desc": "Type @ inline to reference another note",
+  "onboarding.chip.slash.label": "Slash menu",
+  "onboarding.chip.slash.desc": "Type / in an empty line for blocks and tools",
+
   // ── Composer（Cmd+K） ──
   "composer.placeholder": "Ask, compose, or insert... (Cmd+K to toggle)",
   "composer.mode.ask": "Ask",

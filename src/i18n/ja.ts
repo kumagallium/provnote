@@ -463,6 +463,18 @@ export const ja: Record<string, string> = {
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "エクスポートするプロヴェナンスデータがありません",
 
+  // ── オンボーディング / 空ノート予示 ──
+  "onboarding.guide.aria": "空のノートのヒント",
+  "onboarding.guide.lead": "まずは普通に書いてみてください。以下でも始められます:",
+  "onboarding.chip.cmdk.label": "AI に頼む",
+  "onboarding.chip.cmdk.desc": "Composer を開いて質問・執筆・挿入",
+  "onboarding.chip.hash.label": "ラベル",
+  "onboarding.chip.hash.desc": "行頭で # を打つとそのブロックにラベル",
+  "onboarding.chip.at.label": "ノートを繋ぐ",
+  "onboarding.chip.at.desc": "文中で @ を打つと他のノートを参照",
+  "onboarding.chip.slash.label": "スラッシュメニュー",
+  "onboarding.chip.slash.desc": "空行で / を打つとブロック・ツール一覧",
+
   // ── Composer（Cmd+K） ──
   "composer.placeholder": "質問・執筆・挿入...（Cmd+K で開閉）",
   "composer.mode.ask": "質問",
