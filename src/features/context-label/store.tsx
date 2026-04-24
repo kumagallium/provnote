@@ -1,8 +1,13 @@
 // ──────────────────────────────────────────────
-// labelStore: blockId → ラベル文字列 + 連動属性 のMap管理
+// labelStore: blockId → ラベル文字列 + 連動属性 の Map 管理
 //
-// サンドボックス実装方式: 外部 Map（React Context）
-// ※ 本番移行時はブロックのprops（JSON内）に変換する
+// 実装方式: 独立アノテーション層（A 方式）を恒久採用。
+// ブロックの props には寝かせず、外部 Map として管理する。
+// 詳細は docs/internal/design-registry.md L-001 を参照。
+//
+// 呼び出し側の同期責任を露出させないため、ブロック削除・コピー・
+// 派生継承などブロック ID が動く局面では useBlockLifecycle
+// (features/block-lifecycle) を経由させる。
 // ──────────────────────────────────────────────
 
 import {

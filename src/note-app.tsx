@@ -38,6 +38,7 @@ import {
   LinkStoreProvider,
   useLinkStore,
 } from "./features/block-link";
+import { useBlockLifecycle } from "./features/block-lifecycle";
 import {
   getHeadingSuggestions,
   getNoteSuggestions,
@@ -361,6 +362,7 @@ function NoteEditorInner({
 }: NoteEditorProps) {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
+  const { removeBlockMetadata } = useBlockLifecycle();
   const indexTableStore = useIndexTableStore();
   const aiAssistant = useAiAssistant();
   const isDesktop = useIsDesktop();
@@ -465,10 +467,11 @@ function NoteEditorInner({
       content.length <= 1 &&
       (!content[0] || (content[0].type === "text" && content[0].text.replace("/", "").trim() === ""))
     ) {
+      removeBlockMetadata([currentBlock.id]);
       editor.removeBlocks([currentBlock]);
     }
     // onChange が自動的にトリガーされるので markDirty() は不要
-  }, []);
+  }, [removeBlockMetadata]);
 
   // スラッシュメニューアイテム（既存メディア・メモから挿入）
   const mediaSlashItems = useMemo(() => getMediaSlashMenuItems(), []);
@@ -502,6 +505,7 @@ function NoteEditorInner({
       if (Array.isArray(content) && content.length <= 1) {
         const text = content[0]?.text?.trim() ?? "";
         if (text === url || text === "") {
+          removeBlockMetadata([block.id]);
           editor.removeBlocks([block]);
         }
       }
@@ -522,7 +526,7 @@ function NoteEditorInner({
         });
       });
     }
-  }, [onAddUrlBookmark]);
+  }, [onAddUrlBookmark, removeBlockMetadata]);
 
   // スラッシュメニューのピッカーから選択 → bookmark ブロック挿入
   const handleUrlSlashPickerSelect = useCallback((entry: MediaIndexEntry) => {
@@ -551,10 +555,11 @@ function NoteEditorInner({
       content.length <= 1 &&
       (!content[0] || (content[0].type === "text" && content[0].text.replace("/", "").trim() === ""))
     ) {
+      removeBlockMetadata([currentBlock.id]);
       editor.removeBlocks([currentBlock]);
     }
     setUrlSlashPickerOpen(false);
-  }, []);
+  }, [removeBlockMetadata]);
 
   // ラベル自動設定のコールバック
   const labelAutoRef = useRef<(() => void) | null>(null);
@@ -1054,6 +1059,8 @@ function NoteEditorInner({
         // 見出しスコープ: 見出し配下のブロックを置換（見出し自体は残す）
         const scope = collectHeadingScope(editor.document, firstBlock);
         // 見出し以外のスコープブロックを削除
+        const scopeIds = scope.slice(1).map((b) => b.id);
+        removeBlockMetadata(scopeIds);
         for (let i = scope.length - 1; i >= 1; i--) {
           editor.removeBlocks([scope[i].id]);
         }
@@ -1068,18 +1075,20 @@ function NoteEditorInner({
         } else {
           // ブロックタイプが異なる場合は削除→挿入
           editor.insertBlocks(newBlocks, firstBlock, "after");
+          removeBlockMetadata([blockIds[0]]);
           editor.removeBlocks([blockIds[0]]);
         }
       } else {
         // 複数ブロック選択: 最初のブロックの後に挿入し、元のブロックを削除
         editor.insertBlocks(newBlocks, firstBlock, "before");
+        removeBlockMetadata(blockIds);
         editor.removeBlocks(blockIds);
       }
 
       lastAiInsertRef.current = true;
       markDirty();
     },
-    [markDirty, aiAssistant],
+    [markDirty, aiAssistant, removeBlockMetadata],
   );
 
   // ── 初期データの復元 ──
@@ -1397,6 +1406,7 @@ function NoteEditorInner({
             if (Array.isArray(content) && content.length <= 1) {
               const text = content[0]?.text?.trim() ?? "";
               if (text === "" || text === "/memo") {
+                removeBlockMetadata([currentBlock.id]);
                 editor.removeBlocks([currentBlock]);
               }
             }

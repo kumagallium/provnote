@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useBlockNoteEditor } from "@blocknote/react";
 import { Trash2, Palette, Bot } from "lucide-react";
 import { useAiAssistant } from "../ai-assistant";
+import { useBlockLifecycle } from "../block-lifecycle";
 import { useT } from "../../i18n";
 
 // BlockNote の色定義
@@ -29,6 +30,7 @@ type SelectionToolbarProps = {
 export function SelectionToolbar({ selectedBlockIds, onClear }: SelectionToolbarProps) {
   const editor = useBlockNoteEditor<any, any, any>();
   const aiAssistant = useAiAssistant();
+  const { removeBlockMetadata } = useBlockLifecycle();
   const t = useT();
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [showColors, setShowColors] = useState(false);
@@ -69,12 +71,14 @@ export function SelectionToolbar({ selectedBlockIds, onClear }: SelectionToolbar
   // 一括削除
   const handleDelete = useCallback(() => {
     if (selectedBlockIds.length === 0) return;
-    // BlockNote API で選択ブロックを削除
+    // labels / provLinks を明示的にクリーンアップしてから削除
+    // （onChange 経由の自動クリーンアップと二重でも idempotent）
+    removeBlockMetadata(selectedBlockIds);
     editor.removeBlocks(
       selectedBlockIds.map((id: string) => ({ id }))
     );
     onClear();
-  }, [editor, selectedBlockIds, onClear]);
+  }, [editor, selectedBlockIds, onClear, removeBlockMetadata]);
 
   // 色変更
   const handleColor = useCallback((color: string) => {
