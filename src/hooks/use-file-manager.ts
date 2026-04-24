@@ -1032,6 +1032,34 @@ export function useFileManager(authenticated: boolean) {
     [activeFileId, setActiveFileId]
   );
 
+  // 通常ノートの新規作成（構築済み GraphiumDocument を受け取って保存する汎用入り口）
+  // URL → PROV ノート生成など、既存ノートに紐づかない新規作成で使う。
+  // 派生リンクが必要な場合は handleAiDeriveNote を使うこと。
+  const handleCreateNoteFromDocument = useCallback(
+    async (doc: GraphiumDocument): Promise<string> => {
+      const agentLabel = doc.generatedBy?.model ?? doc.generatedBy?.agent;
+      doc = await recordRevision(doc, null, "ai_derivation", { agentLabel });
+      const newFileId = await createFile(doc.title, doc);
+      const now = new Date().toISOString();
+      docCacheRef.current.set(newFileId, doc);
+
+      setFiles((prev) => [
+        { id: newFileId, name: `${doc.title}.graphium.json`, modifiedTime: now, createdTime: now },
+        ...prev,
+      ]);
+
+      if (noteIndexRef.current) {
+        const updated = updateIndexEntry(noteIndexRef.current, newFileId, doc);
+        noteIndexRef.current = updated;
+        setNoteIndex(updated);
+        saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+      }
+
+      return newFileId;
+    },
+    [],
+  );
+
   // Wiki の新規作成（Ingest 結果の保存用）
   const handleCreateWikiFile = useCallback(
     async (doc: GraphiumDocument): Promise<string> => {
@@ -1199,6 +1227,7 @@ export function useFileManager(authenticated: boolean) {
     handleDeleteMedia,
     handleRenameMedia,
     handleAddUrlBookmark,
+    handleCreateNoteFromDocument,
     // Wiki
     wikiFiles,
     wikiMetas,
