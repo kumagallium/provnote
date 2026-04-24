@@ -38,11 +38,11 @@ Download the desktop app for offline use with local file storage. Google Drive s
 | Platform | File | How to check |
 |----------|------|-------------|
 | **macOS** (Apple Silicon — M1/M2/M3/M4) | `Graphium_x.x.x_aarch64.dmg` | Apple menu →  About This Mac → "Apple M..." |
-| **macOS** (Intel) | `Graphium_x.x.x_x64.dmg` | Apple menu → About This Mac → "Intel..." |
-| **Windows** | `Graphium_x.x.x_x64-setup.exe` | |
-| **Linux** | `Graphium_x.x.x_amd64.AppImage` | |
 
 **[→ Download from Releases](https://github.com/kumagallium/Graphium/releases/latest)**
+
+> **Other platforms**
+> The desktop build currently ships only for macOS Apple Silicon. If you are on Windows, Linux, or Intel macOS, please use the [browser version on GitHub Pages](https://kumagallium.github.io/Graphium/) (no install) or self-host with the [Docker setup](#option-2-run-with-docker--editor-only) described below. Bringing the desktop app back to other platforms is on the roadmap; see [issues](https://github.com/kumagallium/Graphium/issues) if you'd like to help test.
 
 <details>
 <summary><b>macOS: "Graphium is damaged" error</b></summary>

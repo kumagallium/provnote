@@ -38,11 +38,11 @@ Graphium は**段階的開示（progressive disclosure）**を設計の中心に
 | プラットフォーム | ファイル | 確認方法 |
 |----------------|---------|---------|
 | **macOS** (Apple Silicon — M1/M2/M3/M4) | `Graphium_x.x.x_aarch64.dmg` | Apple メニュー → このMacについて → 「Apple M...」|
-| **macOS** (Intel) | `Graphium_x.x.x_x64.dmg` | Apple メニュー → このMacについて → 「Intel...」|
-| **Windows** | `Graphium_x.x.x_x64-setup.exe` | |
-| **Linux** | `Graphium_x.x.x_amd64.AppImage` | |
 
 **[→ Releases からダウンロード](https://github.com/kumagallium/Graphium/releases/latest)**
+
+> **その他のプラットフォーム**
+> デスクトップ版は現在 macOS Apple Silicon 向けのみ提供しています。Windows / Linux / Intel macOS をお使いの場合は、[GitHub Pages のブラウザ版](https://kumagallium.github.io/Graphium/)（インストール不要）をご利用いただくか、下記の [Docker セットアップ](#option-2-run-with-docker--editor-only) でセルフホストしてください。他プラットフォームへの再対応はロードマップに含まれています。テスト協力者を歓迎します ([Issues](https://github.com/kumagallium/Graphium/issues))。
 
 <details>
 <summary><b>macOS:「Graphium は壊れています」エラーが出る場合</b></summary>
