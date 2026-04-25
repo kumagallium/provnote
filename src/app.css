@@ -243,7 +243,10 @@
     --latin-ui: 'Lexend';
     letter-spacing: 0;
   }
-  /* 日本語 UD ゴシック。ラテン軸とは独立に有効化。 */
+  /* 日本語フォント。ラテン軸とは独立に有効化。 */
+  body[data-jp-font="zen-kaku"] {
+    --ui: var(--latin-ui), 'Zen Kaku Gothic New', system-ui, sans-serif;
+  }
   body[data-jp-font="biz-udp"] {
     --ui: var(--latin-ui), 'BIZ UDPGothic', system-ui, sans-serif;
   }

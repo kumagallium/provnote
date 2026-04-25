@@ -159,6 +159,7 @@ export const en: Record<string, string> = {
   "settings.fontAtkinsonNextMixed": "Atkinson Next + Inter numerals (dyslexia-friendly)",
   "settings.fontAtkinsonNext": "Atkinson Next only (digits with slashed 0)",
   "settings.fontLexend": "Lexend (reading-speed optimized / NASA study)",
+  "settings.fontZenKaku": "Zen Kaku Gothic New (relaxed body gothic)",
   "settings.fontBizUDP": "BIZ UDPGothic (Japanese UD gothic)",
   "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 

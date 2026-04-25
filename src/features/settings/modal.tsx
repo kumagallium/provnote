@@ -662,13 +662,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       style={{
                         fontFamily: jpFont === "biz-udp"
                           ? "'BIZ UDPGothic', system-ui, sans-serif"
-                          : "system-ui, sans-serif",
+                          : jpFont === "zen-kaku"
+                            ? "'Zen Kaku Gothic New', system-ui, sans-serif"
+                            : "system-ui, sans-serif",
                       }}
                     >
                       {JP_FONTS.map((mode) => {
                         const labelKey = mode === ""
                           ? "settings.fontJpDefault"
-                          : "settings.fontBizUDP";
+                          : mode === "zen-kaku"
+                            ? "settings.fontZenKaku"
+                            : "settings.fontBizUDP";
                         return (
                           <option key={mode || "default"} value={mode}>
                             {t(labelKey)}

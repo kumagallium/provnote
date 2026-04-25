@@ -18,11 +18,12 @@ export const LATIN_FONTS: readonly LatinFont[] = ["", "atkinson-next-mixed", "at
 
 /**
  * 日本語用フォント。
- * - ""        : デフォルト = OS のシステムフォント（Hiragino 等）
- * - "biz-udp" : BIZ UDPGothic（モリサワ × 政府の UD ゴシック / OFL ライセンス）
+ * - ""         : デフォルト = OS のシステムフォント（Hiragino 等）
+ * - "zen-kaku" : Zen Kaku Gothic New（大平善道、本文向きで字間ゆったり / OFL）
+ * - "biz-udp"  : BIZ UDPGothic（モリサワ × 政府の UD ゴシック / OFL）
  */
-export type JpFont = "" | "biz-udp";
-export const JP_FONTS: readonly JpFont[] = ["", "biz-udp"] as const;
+export type JpFont = "" | "zen-kaku" | "biz-udp";
+export const JP_FONTS: readonly JpFont[] = ["", "zen-kaku", "biz-udp"] as const;
 
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */

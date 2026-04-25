@@ -159,6 +159,7 @@ export const ja: Record<string, string> = {
   "settings.fontAtkinsonNextMixed": "Atkinson Next + 数字 Inter（dyslexia 配慮）",
   "settings.fontAtkinsonNext": "Atkinson Next 単体（数字もスラッシュ 0）",
   "settings.fontLexend": "Lexend（読み速度最適化 / NASA 共同研究）",
+  "settings.fontZenKaku": "Zen Kaku Gothic New（本文向き、字間ゆったり）",
   "settings.fontBizUDP": "BIZ UDPGothic（UD 配慮 / モリサワ × 政府）",
   "settings.aiNotConfigured": "AI モデルが登録されていません。設定 → AI Setup からモデルを追加してください。",
 
