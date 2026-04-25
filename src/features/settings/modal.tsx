@@ -19,7 +19,7 @@ import {
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
-import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig } from "./store";
+import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type LatinFont, type JpFont, LATIN_FONTS, JP_FONTS, applyFontMode } from "./store";
 import {
   fetchModels,
   fetchProfiles,
@@ -104,6 +104,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [disabledTools, setDisabledTools] = useState<string[]>([]);
   const [registryUrl, setRegistryUrl] = useState("");
   const [customLabels, setCustomLabels] = useState<CustomLabels>({});
+  const [latinFont, setLatinFont] = useState<LatinFont>("");
+  const [jpFont, setJpFont] = useState<JpFont>("");
 
   // サーバーデータ
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -250,6 +252,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setDisabledTools(settings.disabledTools ?? []);
     setRegistryUrl(settings.registryUrl ?? "");
     setCustomLabels(settings.customLabels ?? {});
+    setLatinFont(settings.latinFont ?? "");
+    setJpFont(settings.jpFont ?? "");
     setSaved(false);
     setShowAddForm(false);
     setDeleteConfirm(null);
@@ -520,10 +524,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // ── 保存 ──
   const handleSave = useCallback(() => {
-    saveSettings({ model, embeddingModel, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels });
+    saveSettings({ model, embeddingModel, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont });
+    applyFontMode(latinFont, jpFont);
     setSaved(true);
     setTimeout(() => onClose(), 600);
-  }, [model, embeddingModel, profile, customLabels, onClose]);
+  }, [model, embeddingModel, profile, disabledTools, registryUrl, customLabels, latinFont, jpFont, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -592,6 +597,94 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* 読みやすさ（フォント） — ラテン用と日本語用を独立に設定 */}
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">
+                {t("settings.font")}
+              </label>
+              <div className="space-y-2">
+                {/* ラテン文字用 */}
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">{t("settings.fontLatin")}</div>
+                  <div className="relative">
+                    <select
+                      value={latinFont}
+                      onChange={(e) => {
+                        const next = e.target.value as LatinFont;
+                        setLatinFont(next);
+                        applyFontMode(next, jpFont);
+                        setSaved(false);
+                      }}
+                      className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+                      style={{
+                        fontFamily: latinFont === "lexend"
+                          ? "'Lexend', system-ui, sans-serif"
+                          : latinFont === "atkinson-next"
+                            ? "'Atkinson Hyperlegible Next', system-ui, sans-serif"
+                            : latinFont === "atkinson-next-mixed"
+                              ? "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif"
+                              : "'Inter', system-ui, sans-serif",
+                      }}
+                    >
+                      {LATIN_FONTS.map((mode) => {
+                        const labelKey = mode === ""
+                          ? "settings.fontLatinDefault"
+                          : mode === "atkinson-next-mixed"
+                            ? "settings.fontAtkinsonNextMixed"
+                            : mode === "atkinson-next"
+                              ? "settings.fontAtkinsonNext"
+                              : "settings.fontLexend";
+                        return (
+                          <option key={mode || "default"} value={mode}>
+                            {t(labelKey)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                </div>
+                {/* 日本語用 */}
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">{t("settings.fontJp")}</div>
+                  <div className="relative">
+                    <select
+                      value={jpFont}
+                      onChange={(e) => {
+                        const next = e.target.value as JpFont;
+                        setJpFont(next);
+                        applyFontMode(latinFont, next);
+                        setSaved(false);
+                      }}
+                      className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+                      style={{
+                        fontFamily: jpFont === "biz-udp"
+                          ? "'BIZ UDPGothic', system-ui, sans-serif"
+                          : jpFont === "zen-kaku"
+                            ? "'Zen Kaku Gothic New', system-ui, sans-serif"
+                            : "system-ui, sans-serif",
+                      }}
+                    >
+                      {JP_FONTS.map((mode) => {
+                        const labelKey = mode === ""
+                          ? "settings.fontJpDefault"
+                          : mode === "zen-kaku"
+                            ? "settings.fontZenKaku"
+                            : "settings.fontBizUDP";
+                        return (
+                          <option key={mode || "default"} value={mode}>
+                            {t(labelKey)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">{t("settings.fontHelp")}</p>
             </div>
 
             {/* プロファイル選択 */}

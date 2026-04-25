@@ -4,9 +4,9 @@
    Web Fonts — セルフホスト (public/fonts/)
    - Inter: 本文・UI（design.md 指定、デフォルト）
    - Lexend: dyslexia / 読み速度最適化 (variable font, NASA 共同研究)
-   - Atkinson Hyperlegible: dyslexia / 視覚障害向け (Braille Institute)
+   - Atkinson Hyperlegible Next: dyslexia / 視覚障害向け (Braille Institute, 最新版)
    - JetBrains Mono: mono メタ情報
-   読みやすさモードは body[data-font="lexend"] / [data-font="atkinson"] で切り替え
+   読みやすさモードは body[data-font="lexend"] / [data-font="atkinson-next"] で切り替え
    ============================================================ */
 @font-face {
   font-family: 'Inter';
@@ -23,20 +23,6 @@
   src: url('/fonts/lexend.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Atkinson Hyperlegible';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/atkinson-400.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Atkinson Hyperlegible';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/atkinson-700.woff2') format('woff2');
-}
-@font-face {
   font-family: 'Atkinson Hyperlegible Next';
   font-style: normal;
   font-weight: 400;
@@ -50,9 +36,8 @@
   font-display: swap;
   src: url('/fonts/atkinson-next-700.woff2') format('woff2');
 }
-/* 数字 0-9 だけ Inter のグリフを使うためのサブセット family。
-   font-family stack の先頭に置くと、数字は Inter のグリフが優先される。
-   例: font-family: 'Inter Numerals', 'Atkinson Hyperlegible Next', sans-serif; */
+/* 数字 0-9 のサブセット family。font-family stack の先頭に置くと数字だけ Inter のグリフに
+   なる（Atkinson Next の 0 はスラッシュ入りで好まれない場合があるため）。 */
 @font-face {
   font-family: 'Inter Numerals';
   font-style: normal;
@@ -211,12 +196,13 @@
   --shadow-2: 0 2px 6px rgba(30, 20, 10, 0.06), 0 10px 30px rgba(30, 20, 10, 0.06);
 
   /* Typography
-     UI/本文は Atkinson Hyperlegible Next（dyslexia 配慮、識別性重視）。
-     数字 0-9 のみ Inter に差し替え（'Inter Numerals' は unicode-range で 0-9 のみ提供）。
-     これにより文字部分は Atkinson の dyslexia 配慮を維持しつつ、数字は慣れた字形に。
-     ※ 親リポジトリの design.md は「本文 Inter」だが、本プロジェクトでは
-        アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
-  --ui:   'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+     ラテン用と日本語用を 2 軸で独立に設定できる。
+     - --latin-ui : デフォルトは Inter（design.md 準拠）。dyslexia 配慮の
+                    Atkinson Next + Inter 数字は明示的に選択できる別オプション。
+     - --jp-ui    : デフォルトは system フォールバックを許可（指定なし）
+     - --ui       : 上記 2 軸を結合した最終スタック */
+  --latin-ui: 'Inter';
+  --ui:   var(--latin-ui), system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
@@ -230,30 +216,46 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Tailwind の font-sans/mono ユーティリティを --ui/--mono に同期。
+       @theme で上書きするとデフォルトに勝てなかったため body レベルで宣言。
+       これで <div className="font-sans"> も body[data-font] の変更に追従する。 */
+    --font-sans: var(--ui);
+    --font-mono: var(--mono);
     font-family: var(--ui);
     color: var(--ink);
-    /* Atkinson Next は字幅が広めの設計なので追加 letter-spacing は不要 */
-    letter-spacing: 0;
+    /* Inter デフォルトは少しだけ字間を広げると読みやすい（design.md の指示） */
+    letter-spacing: 0.01em;
     height: 100dvh;
     overflow: hidden;
   }
-  /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-font] を上書き）
-     デフォルト = Atkinson Next + Inter 数字。以下は他フォントを試したい時の代替モード。 */
-  body[data-font="inter"] {
-    font-family: 'Inter', system-ui, sans-serif;
-    letter-spacing: 0.01em;
-  }
-  body[data-font="lexend"] {
-    font-family: 'Lexend', system-ui, sans-serif;
+  /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-latin-font] / body[data-jp-font] を上書き）
+     ラテン用と日本語用は独立軸。Lexend / Atkinson 等はラテン専用フォントなので
+     日本語混在時はその次の指定（BIZ UDPGothic / system フォント）にフォールバックする。 */
+  body[data-latin-font="atkinson-next-mixed"] {
+    --latin-ui: 'Inter Numerals', 'Atkinson Hyperlegible Next';
     letter-spacing: 0;
   }
-  body[data-font="atkinson"] {
-    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  body[data-latin-font="atkinson-next"] {
+    --latin-ui: 'Atkinson Hyperlegible Next';
     letter-spacing: 0;
   }
-  body[data-font="atkinson-next"] {
-    font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  body[data-latin-font="lexend"] {
+    --latin-ui: 'Lexend';
     letter-spacing: 0;
+  }
+  /* 日本語フォント。ラテン軸とは独立に有効化。 */
+  body[data-jp-font="zen-kaku"] {
+    --ui: var(--latin-ui), 'Zen Kaku Gothic New', system-ui, sans-serif;
+  }
+  body[data-jp-font="biz-udp"] {
+    --ui: var(--latin-ui), 'BIZ UDPGothic', system-ui, sans-serif;
+  }
+  /* BlockNote エディタは独自に .bn-default-styles { font-family: Inter, ... } を当てている。
+     設定 UI の読みやすさモードを編集領域にも届かせるため、--ui に従わせる。 */
+  .bn-default-styles,
+  .bn-editor,
+  .bn-container {
+    font-family: var(--ui) !important;
   }
 }
 

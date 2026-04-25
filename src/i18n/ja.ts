@@ -80,6 +80,8 @@ export const ja: Record<string, string> = {
   "sidebar.newNote": "+ 新しいノート",
   "sidebar.provTemplate": "+ PROV テンプレート",
   "sidebar.refresh": "再読み込み",
+  "sidebar.collapse": "サイドバーを折り畳む（⌘+\\ / ⌘+¥）",
+  "sidebar.expand": "サイドバーを開く（⌘+\\ / ⌘+¥）",
   "sidebar.releaseNotes": "Release Notes",
   "sidebar.aiConnected": "AI 接続済み",
   "sidebar.aiNotConfigured": "AI 未設定",
@@ -148,6 +150,17 @@ export const ja: Record<string, string> = {
   // ── 設定モーダル ──
   "settings.title": "設定",
   "settings.language": "言語",
+  "settings.font": "読みやすさ（フォント）",
+  "settings.fontHelp": "ラテン文字と日本語のフォントを独立に設定できます。ラテン文字フォントは英数字に、日本語フォントはひらがな・カタカナ・漢字に適用されます。",
+  "settings.fontLatin": "ラテン文字（英数字）",
+  "settings.fontJp": "日本語",
+  "settings.fontLatinDefault": "デフォルト（Inter）",
+  "settings.fontJpDefault": "デフォルト（OS のシステムフォント）",
+  "settings.fontAtkinsonNextMixed": "Atkinson Next + 数字 Inter（dyslexia 配慮）",
+  "settings.fontAtkinsonNext": "Atkinson Next 単体（数字もスラッシュ 0）",
+  "settings.fontLexend": "Lexend（読み速度最適化 / NASA 共同研究）",
+  "settings.fontZenKaku": "Zen Kaku Gothic New（本文向き、字間ゆったり）",
+  "settings.fontBizUDP": "BIZ UDPGothic（UD 配慮 / モリサワ × 政府）",
   "settings.aiNotConfigured": "AI モデルが登録されていません。設定 → AI Setup からモデルを追加してください。",
 
   // ── AI チャット ──
@@ -267,6 +280,8 @@ export const ja: Record<string, string> = {
   "labelUi.goBack": "← 戻る",
   "labelUi.clickToChange": "{label} — クリックで変更",
   "labelUi.addLabel": "ラベルを付ける",
+  "editor.labelHintOr": "または",
+  "editor.labelHintTooltip": "ブロックに「/」でメニュー、「#」でラベルのオートコンプリートを呼び出せます",
 
   // ── リンクバッジ追加 ──
   "linkBadge.linkCount": "{count} リンク",

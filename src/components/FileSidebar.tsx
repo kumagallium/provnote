@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose } from "lucide-react";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
 import { useT, getDisplayLabelName } from "../i18n";
@@ -56,6 +56,11 @@ export type FileSidebarProps = {
   onShowSkillList?: () => void;
   /** Skill セクションがアクティブか */
   skillActive?: boolean;
+  /**
+   * デスクトップでサイドバーを折り畳むハンドラ。
+   * 渡されると右上に折り畳みボタンが表示される。モバイル Sheet では undefined のまま。
+   */
+  onCollapse?: () => void;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -107,6 +112,7 @@ export function FileSidebar({
   skillCount = 0,
   onShowSkillList,
   skillActive = false,
+  onCollapse,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -136,13 +142,24 @@ export function FileSidebar({
             <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="w-7 h-7" />
             <img src={`${import.meta.env.BASE_URL}logo-text.png`} alt="Graphium" className="h-[18px] mt-px" />
           </div>
-          <button
-            onClick={onRefresh}
-            title={t("sidebar.refresh")}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            &#8635;
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              title={t("sidebar.refresh")}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              &#8635;
+            </button>
+            {onCollapse && (
+              <button
+                onClick={onCollapse}
+                title={t("sidebar.collapse")}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <PanelLeftClose size={14} />
+              </button>
+            )}
+          </div>
         </div>
         <button
           onClick={onNewNote}
@@ -164,7 +181,7 @@ export function FileSidebar({
 
         {/* データ一覧セクション */}
         <div className="px-4 pt-3 pb-2">
-          <h3 className="text-xs font-semibold text-sidebar-foreground/40 mb-1.5">
+          <h3 className="text-xs font-semibold text-sidebar-foreground/40 mb-2">
             {t("asset.dataSection")}
           </h3>
           <div className="space-y-0.5">
@@ -210,8 +227,8 @@ export function FileSidebar({
         </div>
 
         {/* ラベルセクション */}
-        <div className="px-4 pt-1 pb-2">
-          <h3 className="text-xs font-semibold text-sidebar-foreground/40 mb-1.5">
+        <div className="px-4 pt-3 pb-2">
+          <h3 className="text-xs font-semibold text-sidebar-foreground/40 mb-2">
             {t("label.section")}
           </h3>
           {!noteIndex ? (

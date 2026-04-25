@@ -80,6 +80,8 @@ export const en: Record<string, string> = {
   "sidebar.newNote": "+ New Note",
   "sidebar.provTemplate": "+ PROV Template",
   "sidebar.refresh": "Reload",
+  "sidebar.collapse": "Collapse sidebar (⌘+\\)",
+  "sidebar.expand": "Expand sidebar (⌘+\\)",
   "sidebar.releaseNotes": "Release Notes",
   "sidebar.aiConnected": "AI connected",
   "sidebar.aiNotConfigured": "AI not configured",
@@ -148,6 +150,17 @@ export const en: Record<string, string> = {
   // ── 設定モーダル ──
   "settings.title": "Settings",
   "settings.language": "Language",
+  "settings.font": "Reading font",
+  "settings.fontHelp": "Set the Latin and Japanese fonts independently. The Latin font applies to alphanumerics; the Japanese font applies to kana / kanji.",
+  "settings.fontLatin": "Latin (a–z, 0–9)",
+  "settings.fontJp": "Japanese",
+  "settings.fontLatinDefault": "Default (Inter)",
+  "settings.fontJpDefault": "Default (OS system font)",
+  "settings.fontAtkinsonNextMixed": "Atkinson Next + Inter numerals (dyslexia-friendly)",
+  "settings.fontAtkinsonNext": "Atkinson Next only (digits with slashed 0)",
+  "settings.fontLexend": "Lexend (reading-speed optimized / NASA study)",
+  "settings.fontZenKaku": "Zen Kaku Gothic New (relaxed body gothic)",
+  "settings.fontBizUDP": "BIZ UDPGothic (Japanese UD gothic)",
   "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 
   // ── AI チャット ──
@@ -267,6 +280,8 @@ export const en: Record<string, string> = {
   "labelUi.goBack": "← Back",
   "labelUi.clickToChange": "{label} — Click to change",
   "labelUi.addLabel": "Add label",
+  "editor.labelHintOr": "or",
+  "editor.labelHintTooltip": "Press / for the block menu, # for label autocomplete on the current block.",
 
   // ── リンクバッジ追加 ──
   "linkBadge.linkCount": "{count} links",

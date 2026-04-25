@@ -1,5 +1,5 @@
 // 読みやすさ・タイポグラフィ比較用ストーリー
-// dyslexia 観点で Inter / Lexend / Atkinson Hyperlegible を並べて体感比較する
+// dyslexia 観点で Inter / Lexend / Atkinson Hyperlegible Next を並べて体感比較する
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
@@ -10,7 +10,7 @@ const meta: Meta = {
     docs: {
       description: {
         component:
-          "本文の読みやすさを 5 フォントで体感比較。**現行デフォルト = Atkinson Hyperlegible Next + Inter 数字 (B 案)**。dyslexia 配慮（識別性重視の字形）と数字の見慣れたグリフを両立。Inter / Lexend / Atkinson (旧版) / Atkinson Next (生) は body[data-font=\"...\"] で切り替えて比較できる。",
+          "本文の読みやすさを 3 フォントで体感比較。**現行デフォルト = Atkinson Hyperlegible Next**。dyslexia 配慮（識別性重視の字形）。Inter / Lexend は body[data-font=\"...\"] で切り替えて比較できる。",
       },
     },
   },
@@ -39,24 +39,10 @@ const FONTS = [
     letterSpacing: "0",
   },
   {
-    key: "atkinson" as const,
-    name: "Atkinson Hyperlegible",
-    family: "'Atkinson Hyperlegible', system-ui, sans-serif",
-    note: "Braille Institute (2019)。b/d/p/q や I/l/1 を識別性重視で設計。0 は中点入り。",
-    letterSpacing: "0",
-  },
-  {
     key: "atkinson-next" as const,
-    name: "Atkinson Hyperlegible Next",
+    name: "Atkinson Hyperlegible Next ★ デフォルト",
     family: "'Atkinson Hyperlegible Next', system-ui, sans-serif",
-    note: "Braille Institute (2024)。Next は字形リファイン版。0 は中点入りのまま。",
-    letterSpacing: "0",
-  },
-  {
-    key: "atkinson-next-mixed" as const,
-    name: "Atkinson Next + Inter 数字 ★ デフォルト",
-    family: "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif",
-    note: "★ 現行デフォルト。数字 0-9 のみ Inter のグリフに差し替え（unicode-range U+0030-0039）。文字部分の dyslexia 配慮を維持しつつ「0」の中点問題を回避。",
+    note: "★ 現行デフォルト。Braille Institute (2024) のリファイン版。dyslexia 配慮（識別性重視の字形）+ 数字 0 のスラッシュ問題も解消。",
     letterSpacing: "0",
   },
 ];

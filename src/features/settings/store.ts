@@ -6,6 +6,25 @@ const STORAGE_KEY = "graphium-settings";
 /** コアラベルのカスタム表示名（キーは内部ラベルキー、値はユーザーが設定した表示名） */
 export type CustomLabels = Record<string, string>;
 
+/**
+ * ラテン文字用フォント。
+ * - ""                    : デフォルト = Inter（design.md の元仕様、中立的なヒューマニスト体）
+ * - "atkinson-next-mixed" : Atkinson Next + Inter 数字（dyslexia 配慮、Atkinson のスラッシュ 0 を回避）
+ * - "atkinson-next"       : Atkinson Next 単体（数字もスラッシュ 0）
+ * - "lexend"              : Lexend（NASA 共同研究の読み速度最適化）
+ */
+export type LatinFont = "" | "atkinson-next-mixed" | "atkinson-next" | "lexend";
+export const LATIN_FONTS: readonly LatinFont[] = ["", "atkinson-next-mixed", "atkinson-next", "lexend"] as const;
+
+/**
+ * 日本語用フォント。
+ * - ""         : デフォルト = OS のシステムフォント（Hiragino 等）
+ * - "zen-kaku" : Zen Kaku Gothic New（大平善道、本文向きで字間ゆったり / OFL）
+ * - "biz-udp"  : BIZ UDPGothic（モリサワ × 政府の UD ゴシック / OFL）
+ */
+export type JpFont = "" | "zen-kaku" | "biz-udp";
+export const JP_FONTS: readonly JpFont[] = ["", "zen-kaku", "biz-udp"] as const;
+
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
   model: string;
@@ -19,6 +38,10 @@ export type Settings = {
   registryUrl: string;
   /** コアラベルのカスタム表示名（空オブジェクト = デフォルト） */
   customLabels: CustomLabels;
+  /** ラテン文字用フォント。空文字 = デフォルト（Atkinson Next + Inter 数字） */
+  latinFont: LatinFont;
+  /** 日本語用フォント。空文字 = デフォルト（OS システムフォント） */
+  jpFont: JpFont;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +51,8 @@ const DEFAULT_SETTINGS: Settings = {
   disabledTools: [],
   registryUrl: "",
   customLabels: {},
+  latinFont: "",
+  jpFont: "",
 };
 
 /**
@@ -60,11 +85,28 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
+    const parsed = JSON.parse(raw) as Partial<Settings> & { font?: string };
+    // 旧 `font` フィールドを latinFont / jpFont に振り分ける（一回限りのマイグレーション）
+    const legacyFont = typeof parsed.font === "string" ? parsed.font : "";
+    // 旧 latinFont = "inter" は新デフォルト（""）と等価なので丸める。
+    // それ以外で LATIN_FONTS に該当しない値は ""（デフォルト）にフォールバック。
+    const rawLatin = parsed.latinFont as string | undefined;
+    const migratedLatin: LatinFont = rawLatin !== undefined
+      ? (rawLatin === "inter" ? ""
+        : (LATIN_FONTS as readonly string[]).includes(rawLatin) ? (rawLatin as LatinFont)
+        : "")
+      : (legacyFont === "lexend" ? "lexend"
+        : legacyFont === "inter" ? ""
+        : "");
+    const migratedJp: JpFont = parsed.jpFont !== undefined
+      ? (JP_FONTS.includes(parsed.jpFont) ? parsed.jpFont : "")
+      : (legacyFont === "biz-udp" ? "biz-udp" : "");
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
       customLabels: migrateCustomLabels(parsed.customLabels),
+      latinFont: migratedLatin,
+      jpFont: migratedJp,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -109,6 +151,30 @@ export function getEmbeddingModel(): string {
 /** AI バックエンドが利用可能かどうか（ビルトインバックエンドは常に available） */
 export function isAgentConfigured(): boolean {
   return true;
+}
+
+/** 選択中のラテン用フォントを取得する（空文字 = デフォルト） */
+export function getSelectedLatinFont(): LatinFont {
+  const v = loadSettings().latinFont;
+  return LATIN_FONTS.includes(v) ? v : "";
+}
+
+/** 選択中の日本語用フォントを取得する（空文字 = デフォルト） */
+export function getSelectedJpFont(): JpFont {
+  const v = loadSettings().jpFont;
+  return JP_FONTS.includes(v) ? v : "";
+}
+
+/**
+ * 本文フォントを body に反映する。
+ * 空文字（デフォルト）の場合は対応する data 属性を削除し、CSS の `--ui` フォールバックを使う。
+ */
+export function applyFontMode(latinFont: LatinFont, jpFont: JpFont): void {
+  if (typeof document === "undefined") return;
+  if (latinFont) document.body.setAttribute("data-latin-font", latinFont);
+  else document.body.removeAttribute("data-latin-font");
+  if (jpFont) document.body.setAttribute("data-jp-font", jpFont);
+  else document.body.removeAttribute("data-jp-font");
 }
 
 // --- Web モード用: クライアント側 LLM モデル管理 ---
