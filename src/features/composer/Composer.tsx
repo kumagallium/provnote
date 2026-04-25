@@ -43,7 +43,8 @@ type ComposerProps = {
 
 type ResultRow =
   | { kind: "note"; hit: SearchHit }
-  | { kind: "ask-ai" };
+  | { kind: "ask-ai" }
+  | { kind: "card"; card: DiscoveryCard };
 
 const MAX_RESULTS = 8;
 
@@ -74,15 +75,25 @@ export function Composer(props: ComposerProps) {
   const trimmed = prompt.trim();
   const isEmptyQuery = trimmed.length === 0;
 
-  // 結果行を組み立てる: ノート一覧 + 末尾 AI アクション
+  const cards = useMemo(() => discoveryCards ?? [], [discoveryCards]);
+  // 入力空のときだけ発見カードを出す（検索結果が出ているときは候補が二重になり邪魔）
+  const showCards = isEmptyQuery && cards.length > 0;
+
+  // 結果行を組み立てる: ノート一覧 + 末尾 AI アクション + 発見カード
+  // 発見カードもキーボードで選べるように同じ rows 配列にまとめる
   const rows = useMemo<ResultRow[]>(() => {
     const list: ResultRow[] = hits.map((hit) => ({ kind: "note", hit }));
     // 入力が非空のときだけ AI アクションを末尾に出す（空入力は履歴ビューとして純粋に保つ）
     if (!isEmptyQuery) {
       list.push({ kind: "ask-ai" });
     }
+    if (showCards) {
+      for (const card of cards) {
+        list.push({ kind: "card", card });
+      }
+    }
     return list;
-  }, [hits, isEmptyQuery]);
+  }, [hits, isEmptyQuery, showCards, cards]);
 
   // 入力が変わるたびに先頭にハイライトを戻す（ノート行があればそれ、無ければ AI 行）
   useEffect(() => {
@@ -116,6 +127,10 @@ export function Composer(props: ComposerProps) {
   const activateRow = (row: ResultRow) => {
     if (row.kind === "ask-ai") {
       submitAi();
+      return;
+    }
+    if (row.kind === "card") {
+      onDiscoveryCardSelect?.(row.card);
       return;
     }
     if (onNoteSelect) {
@@ -152,10 +167,6 @@ export function Composer(props: ComposerProps) {
       }
     }
   };
-
-  const cards = useMemo(() => discoveryCards ?? [], [discoveryCards]);
-  // 入力空のときだけ発見カードを出す（検索結果が出ているときは候補が二重になり邪魔）
-  const showCards = isEmptyQuery && cards.length > 0;
 
   if (!open) return null;
 
@@ -267,8 +278,9 @@ export function Composer(props: ComposerProps) {
           </span>
         </div>
 
-        {/* 結果リスト（onNoteSelect 未配線のときは出さない） */}
-        {onNoteSelect && (rows.length > 0 || (!isEmptyQuery && hits.length === 0)) && (
+        {/* 結果リスト（onNoteSelect 未配線のときは出さない）
+            cards だけの場合（空入力 + カードのみ）は別ブロックで描画するためここはスキップ */}
+        {onNoteSelect && (hits.length > 0 || !isEmptyQuery) && (
           <div
             style={{
               borderTop: "1px solid var(--rule-2)",
@@ -331,7 +343,7 @@ export function Composer(props: ComposerProps) {
           </div>
         )}
 
-        {/* 発見カード — 入力空のときだけ */}
+        {/* 発見カード — 入力空のときだけ。rows に含まれているのでキーボードで選べる */}
         {showCards && (
           <div
             style={{
@@ -352,37 +364,43 @@ export function Composer(props: ComposerProps) {
             >
               {t("composer.discoveryHint")}
             </div>
-            {cards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => onDiscoveryCardSelect?.(card)}
-                className="composer-discovery-card"
-                style={{
-                  textAlign: "left",
-                  padding: "5px 8px",
-                  background: "transparent",
-                  border: "none",
-                  borderRadius: "var(--r-1)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 8,
-                  font: "inherit",
-                  width: "100%",
-                }}
-              >
-                <span style={{ color: "var(--ink-3)", fontSize: 12, flexShrink: 0 }}>›</span>
-                <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-                  {card.title}
-                </span>
-                {card.hint && (
-                  <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
-                    — {card.hint}
+            {rows.map((row, i) => {
+              if (row.kind !== "card") return null;
+              const active = i === activeIndex;
+              return (
+                <button
+                  key={row.card.id}
+                  type="button"
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => activateRow(row)}
+                  className="composer-discovery-card"
+                  style={{
+                    textAlign: "left",
+                    padding: "5px 8px",
+                    background: active ? "var(--paper-2)" : "transparent",
+                    border: "none",
+                    borderLeft: active ? "2px solid var(--forest)" : "2px solid transparent",
+                    borderRadius: "var(--r-1)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 8,
+                    font: "inherit",
+                    width: "100%",
+                  }}
+                >
+                  <span style={{ color: "var(--ink-3)", fontSize: 12, flexShrink: 0 }}>›</span>
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+                    {row.card.title}
                   </span>
-                )}
-              </button>
-            ))}
+                  {row.card.hint && (
+                    <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
+                      — {row.card.hint}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

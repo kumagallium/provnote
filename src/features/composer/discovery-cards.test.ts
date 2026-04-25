@@ -24,6 +24,7 @@ function entry(partial: Partial<NoteIndexEntry> & { noteId: string; title: strin
     wikiKind: partial.wikiKind,
     author: partial.author,
     model: partial.model,
+    derivedFromNotes: partial.derivedFromNotes,
   };
 }
 
@@ -49,11 +50,15 @@ describe("buildDiscoveryCards", () => {
     expect(cards).toEqual([]);
   });
 
-  it("人間ノートを開いていれば「要約」ベースカードが先頭に来る", () => {
+  it("人間ノートを開いていれば「要約」ベースカードが先頭に来る（既に Knowledge 化済み）", () => {
     const idx: GraphiumIndex = {
-      version: 6,
+      version: 7,
       updatedAt: NOW.toISOString(),
-      notes: [entry({ noteId: "note-A", title: "S-A anneal", modifiedAt: NOW.toISOString(), source: "human" })],
+      notes: [
+        entry({ noteId: "note-A", title: "S-A anneal", modifiedAt: NOW.toISOString(), source: "human" }),
+        // note-A は wiki-A に派生済み → ingest カードは出ない
+        entry({ noteId: "wiki-A", title: "S-A anneal summary", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary", derivedFromNotes: ["note-A"] }),
+      ],
     };
     const cards = buildDiscoveryCards({
       noteIndex: idx,
@@ -63,6 +68,24 @@ describe("buildDiscoveryCards", () => {
     });
     expect(cards[0]?.title).toBe("このノートを要約する");
     expect(cards[0]?.action.kind).toBe("summarize-note");
+  });
+
+  it("未 Knowledge 化の人間ノートを開いていれば「Knowledge に追加」が先頭に来る", () => {
+    const idx: GraphiumIndex = {
+      version: 7,
+      updatedAt: NOW.toISOString(),
+      notes: [entry({ noteId: "note-A", title: "S-A anneal", modifiedAt: NOW.toISOString(), source: "human" })],
+    };
+    const cards = buildDiscoveryCards({
+      noteIndex: idx,
+      activeFileId: "note-A",
+      wikiLogEntries: [],
+      now: NOW,
+    });
+    expect(cards[0]?.title).toBe("このノートを Knowledge に追加");
+    expect(cards[0]?.action).toEqual({ kind: "custom", key: "ingest-current-note" });
+    // 直後にベース要約カード
+    expect(cards[1]?.action.kind).toBe("summarize-note");
   });
 
   it("Wiki ドキュメントを開いていれば「整理」カードが出る", () => {
@@ -185,12 +208,13 @@ describe("buildDiscoveryCards", () => {
 
   it("ベース + ログで枠が余るときは直近更新ノートで埋める（自ノートと AI/skill ノートは除外）", () => {
     const idx: GraphiumIndex = {
-      version: 6,
+      version: 7,
       updatedAt: NOW.toISOString(),
       notes: [
         entry({ noteId: "note-A", title: "active", modifiedAt: NOW.toISOString(), source: "human" }),
         entry({ noteId: "note-B", title: "recent human", modifiedAt: new Date(NOW.getTime() - 3600000).toISOString(), source: "human" }),
-        entry({ noteId: "wiki-1", title: "wiki", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary" }),
+        // note-A は既に派生済みにして ingest カードを抑制
+        entry({ noteId: "wiki-1", title: "wiki", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary", derivedFromNotes: ["note-A"] }),
         entry({ noteId: "skill-1", title: "skill", modifiedAt: NOW.toISOString(), source: "skill" }),
         entry({ noteId: "note-C", title: "older human", modifiedAt: new Date(NOW.getTime() - 7200000).toISOString(), source: "human" }),
       ],
@@ -208,14 +232,15 @@ describe("buildDiscoveryCards", () => {
     expect(cards[2].title).toBe("「older human」について教えて");
   });
 
-  it("最大 4 枚まで切り詰める", () => {
+  it("最大 4 枚まで切り詰める（既に Knowledge 化済みのノート）", () => {
     const recent = (offset: number) => new Date(NOW.getTime() - offset * 3600 * 1000).toISOString();
     const idx: GraphiumIndex = {
-      version: 6,
+      version: 7,
       updatedAt: NOW.toISOString(),
       notes: [
         entry({ noteId: "note-A", title: "active", modifiedAt: NOW.toISOString(), source: "human" }),
-        entry({ noteId: "wiki-1", title: "w1", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary" }),
+        // note-A は派生済みにして ingest カードを抑制（base 1 + log 4 で評価）
+        entry({ noteId: "wiki-1", title: "w1", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary", derivedFromNotes: ["note-A"] }),
         entry({ noteId: "wiki-2", title: "w2", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary" }),
         entry({ noteId: "wiki-3", title: "w3", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary" }),
         entry({ noteId: "wiki-4", title: "w4", modifiedAt: NOW.toISOString(), source: "ai", wikiKind: "summary" }),

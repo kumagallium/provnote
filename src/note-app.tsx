@@ -2212,10 +2212,8 @@ export function NoteApp() {
     },
     [composer],
   );
-  // カードを選んだら、対応するプロンプト文を textarea に流し込む（自動送信はしない）
-  const handleComposerCardSelect = useCallback((card: DiscoveryCard) => {
-    setComposerPrompt(promptForDiscoveryCard(card));
-  }, []);
+  // カード選択ハンドラは enqueueIngest 定義後に置くため後方で宣言する。
+  // ここでは ref 経由で参照だけ確保しておく。
   // 一覧ビュー用サイドピーク（NoteEditorInner 外でも使えるグローバルな state）
   const [listSidePeekNoteId, setListSidePeekNoteId] = useState<string | null>(null);
   const [ingestToast, setIngestToast] = useState<IngestToastState>(null);
@@ -2687,6 +2685,20 @@ export function NoteApp() {
     setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
     processIngestQueue();
   }, [processIngestQueue]);
+
+  // カード選択時のハンドラ:
+  // - "ingest-current-note" は現ノートを直接 enqueueIngest して composer を閉じる（プロンプトには流さない）
+  // - それ以外は対応するプロンプト文を textarea に流し込む（自動送信はしない）
+  const handleComposerCardSelect = useCallback((card: DiscoveryCard) => {
+    if (card.action.kind === "custom" && card.action.key === "ingest-current-note") {
+      if (fm.activeFileId && fm.activeDoc && fm.activeDoc.source !== "ai") {
+        enqueueIngest(fm.activeFileId, fm.activeDoc.title, fm.activeDoc);
+      }
+      composer.closeComposer();
+      return;
+    }
+    setComposerPrompt(promptForDiscoveryCard(card));
+  }, [enqueueIngest, fm.activeFileId, fm.activeDoc, composer]);
 
   // 構造化インデックスを Retriever に注入（Wiki メタ変更時に更新）
   useEffect(() => {

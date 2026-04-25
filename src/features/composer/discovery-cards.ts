@@ -10,6 +10,7 @@
 //
 // ロジック自体は副作用なし。呼び出し側で wikiLog.getRecent() を非同期で取得して渡す。
 
+import { buildKnowledgeMap } from "../navigation/index-file";
 import type { GraphiumIndex, NoteIndexEntry } from "../navigation/index-file";
 import type { WikiLogEntry } from "../wiki/wiki-log";
 import type { DiscoveryCard } from "./types";
@@ -153,6 +154,27 @@ function formatRelativeTime(iso: string, now: Date): string {
   return `${days}d 前`;
 }
 
+/** 現ノートが未 ingest なら「Knowledge に追加」を高優先で 1 枚。
+ * Wiki / skill ドキュメント自身、または既に派生 wiki が存在するノートでは出さない。 */
+function ingestCardForActiveNote(
+  noteIndex: GraphiumIndex | null,
+  activeFileId: string | null,
+): DiscoveryCard | null {
+  if (!activeFileId || !noteIndex) return null;
+  if (activeFileId.startsWith("wiki:") || activeFileId.startsWith("skill:")) return null;
+  const entry = findActiveEntry(noteIndex, activeFileId);
+  if (!entry) return null;
+  if (entry.source === "ai" || entry.source === "skill") return null;
+  const knowledgeMap = buildKnowledgeMap(noteIndex);
+  if ((knowledgeMap.get(entry.noteId)?.length ?? 0) > 0) return null;
+  return {
+    id: `ingest-${entry.noteId}`,
+    title: "このノートを Knowledge に追加",
+    hint: "AI が要約・抽象化して Wiki エントリを作成",
+    action: { kind: "custom", key: "ingest-current-note" },
+  };
+}
+
 /**
  * 現在の文脈から発見カードを最大 4 枚組み立てる。
  * 文脈が乏しい（ノート未選択 + ログなし）場合は空配列を返す。
@@ -160,6 +182,10 @@ function formatRelativeTime(iso: string, now: Date): string {
 export function buildDiscoveryCards(ctx: DiscoveryCardContext): DiscoveryCard[] {
   const now = ctx.now ?? new Date();
   const cards: DiscoveryCard[] = [];
+
+  // 0. 現ノートが未 ingest なら「Knowledge に追加」を最優先で
+  const ingestCard = ingestCardForActiveNote(ctx.noteIndex, ctx.activeFileId);
+  if (ingestCard) cards.push(ingestCard);
 
   // 1. ベースカード（現ノート）
   const base = baseCardForActiveNote(ctx.noteIndex, ctx.activeFileId);
@@ -195,6 +221,11 @@ export function promptForDiscoveryCard(card: DiscoveryCard): string {
       return "頻出キーワードから Concept Wiki の下書きを作ってください。";
     case "custom":
       // custom 内のキーで分岐
+      if (card.action.key === "ingest-current-note") {
+        // この key は呼び出し側で即座に enqueueIngest を発火するため、
+        // 入力欄に流し込む文字列は使われない。空でよい。
+        return "";
+      }
       if (card.action.key === "clarify-wiki") {
         return "この Wiki の矛盾・繰り返しを洗い出し、書き直しのヒントをください。";
       }
