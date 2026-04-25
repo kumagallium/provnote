@@ -2171,10 +2171,12 @@ export function NoteApp() {
 
   const isDesktop = useIsDesktop();
   // Cmd+\ / Ctrl+\ で集中モード切替（デスクトップのみ）
+  // JIS キーボードでは ¥ キーが物理的に \ と同じ位置なので、e.code で両対応する。
   useEffect(() => {
     if (!isDesktop) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.code === "Backslash" || e.code === "IntlYen") {
         e.preventDefault();
         setDesktopSidebarCollapsed((v) => !v);
       }

@@ -192,6 +192,10 @@
         アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
   --ui:   'Atkinson Hyperlegible Next', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  /* Tailwind の font-sans / font-mono ユーティリティを --ui / --mono に同期。
+     これがないと <div className="font-sans"> が body[data-font] を上書きしてしまう。 */
+  --font-sans: var(--ui);
+  --font-mono: var(--mono);
 }
 
 @layer base {
@@ -212,13 +216,16 @@
     overflow: hidden;
   }
   /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-font] を上書き）
-     デフォルト = Atkinson Hyperlegible Next。以下は他フォントを試したい時の代替モード。 */
+     デフォルト = Atkinson Hyperlegible Next。
+     --ui を上書きすることで、body 直接スタイル + Tailwind font-sans の両方が連動する。
+     ※ Lexend / Atkinson はラテン文字専用フォント。日本語文字は OS のシステムフォント
+        （Hiragino 等）にフォールバックするので、日本語のみのテキストでは違いが出ない。 */
   body[data-font="inter"] {
-    font-family: 'Inter', system-ui, sans-serif;
+    --ui: 'Inter', system-ui, sans-serif;
     letter-spacing: 0.01em;
   }
   body[data-font="lexend"] {
-    font-family: 'Lexend', system-ui, sans-serif;
+    --ui: 'Lexend', system-ui, sans-serif;
     letter-spacing: 0;
   }
 }
