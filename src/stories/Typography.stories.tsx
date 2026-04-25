@@ -42,7 +42,14 @@ const FONTS = [
     key: "atkinson" as const,
     name: "Atkinson Hyperlegible",
     family: "'Atkinson Hyperlegible', system-ui, sans-serif",
-    note: "Braille Institute が視覚障害向けに設計。b/d/p/q や I/l/1 など混同しやすい字形を識別性重視で設計。",
+    note: "Braille Institute (2019)。b/d/p/q や I/l/1 を識別性重視で設計。0 は中点入り。",
+    letterSpacing: "0",
+  },
+  {
+    key: "atkinson-next" as const,
+    name: "Atkinson Hyperlegible Next",
+    family: "'Atkinson Hyperlegible Next', system-ui, sans-serif",
+    note: "Braille Institute (2024)。Next は字形リファイン版で 0 がプレーン。識別性は維持。",
     letterSpacing: "0",
   },
 ];
@@ -127,7 +134,7 @@ function Sample({
 }
 
 export const ThreeUp: StoryObj = {
-  name: "3 フォント並列比較",
+  name: "4 フォント並列比較",
   render: () => (
     <div
       style={{
@@ -135,7 +142,7 @@ export const ThreeUp: StoryObj = {
         minHeight: "100dvh",
         padding: 24,
         display: "grid",
-        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
         gap: 16,
       }}
     >
@@ -195,6 +202,15 @@ export const AtkinsonOnly: StoryObj = {
   render: () => (
     <div style={{ background: "var(--paper)", padding: 32, maxWidth: 720 }}>
       <Sample family={FONTS[2].family} letterSpacing={FONTS[2].letterSpacing} />
+    </div>
+  ),
+};
+
+export const AtkinsonNextOnly: StoryObj = {
+  name: "Atkinson Hyperlegible Next 単独",
+  render: () => (
+    <div style={{ background: "var(--paper)", padding: 32, maxWidth: 720 }}>
+      <Sample family={FONTS[3].family} letterSpacing={FONTS[3].letterSpacing} />
     </div>
   ),
 };
