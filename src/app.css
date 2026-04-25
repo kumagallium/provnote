@@ -36,6 +36,16 @@
   font-display: swap;
   src: url('/fonts/atkinson-next-700.woff2') format('woff2');
 }
+/* 数字 0-9 のサブセット family。font-family stack の先頭に置くと数字だけ Inter のグリフに
+   なる（Atkinson Next の 0 はスラッシュ入りで好まれない場合があるため）。 */
+@font-face {
+  font-family: 'Inter Numerals';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter.woff2') format('woff2');
+  unicode-range: U+0030-0039;
+}
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
@@ -186,11 +196,14 @@
   --shadow-2: 0 2px 6px rgba(30, 20, 10, 0.06), 0 10px 30px rgba(30, 20, 10, 0.06);
 
   /* Typography
-     UI/本文は Atkinson Hyperlegible Next（dyslexia 配慮、識別性重視）。
-     2024 リファイン版で数字 0 のスラッシュ問題が解消されたため、Inter 数字混合は廃止。
+     ラテン用と日本語用を 2 軸で独立に設定できる。
+     - --latin-ui : Atkinson Next + Inter 数字（0 のスラッシュを Inter で置換）
+     - --jp-ui    : デフォルトは system フォールバックを許可（指定なし）
+     - --ui       : 上記 2 軸を結合した最終スタック
      ※ 親リポジトリの design.md は「本文 Inter」だが、本プロジェクトでは
         アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
-  --ui:   'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --latin-ui: 'Inter Numerals', 'Atkinson Hyperlegible Next';
+  --ui:   var(--latin-ui), system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
@@ -216,24 +229,20 @@
     height: 100dvh;
     overflow: hidden;
   }
-  /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-font] を上書き）
-     デフォルト = Atkinson Hyperlegible Next。
-     --ui を上書きすることで、body 直接スタイル + Tailwind font-sans の両方が連動する。
-     ※ Lexend / Atkinson はラテン文字専用フォント。日本語文字は OS のシステムフォント
-        （Hiragino 等）にフォールバックするので、日本語のみのテキストでは違いが出ない。 */
-  body[data-font="inter"] {
-    --ui: 'Inter', system-ui, sans-serif;
+  /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-latin-font] / body[data-jp-font] を上書き）
+     ラテン用と日本語用は独立軸。Lexend / Atkinson 等はラテン専用フォントなので
+     日本語混在時はその次の指定（BIZ UDPGothic / system フォント）にフォールバックする。 */
+  body[data-latin-font="inter"] {
+    --latin-ui: 'Inter';
     letter-spacing: 0.01em;
   }
-  body[data-font="lexend"] {
-    --ui: 'Lexend', system-ui, sans-serif;
+  body[data-latin-font="lexend"] {
+    --latin-ui: 'Lexend';
     letter-spacing: 0;
   }
-  /* 日本語 UD ゴシック。ラテン文字は BIZ UDPGothic 自体がカバーするが、
-     英語混在時の読みやすさのため Atkinson Next を先に置いている。 */
-  body[data-font="biz-udp"] {
-    --ui: 'Atkinson Hyperlegible Next', 'BIZ UDPGothic', system-ui, sans-serif;
-    letter-spacing: 0;
+  /* 日本語 UD ゴシック。ラテン軸とは独立に有効化。 */
+  body[data-jp-font="biz-udp"] {
+    --ui: var(--latin-ui), 'BIZ UDPGothic', system-ui, sans-serif;
   }
   /* BlockNote エディタは独自に .bn-default-styles { font-family: Inter, ... } を当てている。
      設定 UI の読みやすさモードを編集領域にも届かせるため、--ui に従わせる。 */

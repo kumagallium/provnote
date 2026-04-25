@@ -7,27 +7,22 @@ const STORAGE_KEY = "graphium-settings";
 export type CustomLabels = Record<string, string>;
 
 /**
- * 本文フォントモード（読みやすさモード）。
- * 言語によって候補は出し分ける（FONT_MODES_BY_LOCALE 参照）。
- *
- * ラテン用:
- * - ""        : デフォルト = Atkinson Hyperlegible Next（dyslexia 配慮、2024 リファイン版）
- * - "inter"   : Inter（design.md の元仕様、中立的なヒューマニスト体）
- * - "lexend"  : Lexend（NASA 共同研究の読み速度最適化）
- *
- * 日本語用:
+ * ラテン文字用フォント。
+ * - ""       : デフォルト = Atkinson Hyperlegible Next + Inter 数字
+ *              （Atkinson の 0 はスラッシュ入りで好まない人向けに数字だけ Inter）
+ * - "inter"  : Inter（design.md の元仕様、中立的なヒューマニスト体）
+ * - "lexend" : Lexend（NASA 共同研究の読み速度最適化）
+ */
+export type LatinFont = "" | "inter" | "lexend";
+export const LATIN_FONTS: readonly LatinFont[] = ["", "inter", "lexend"] as const;
+
+/**
+ * 日本語用フォント。
  * - ""        : デフォルト = OS のシステムフォント（Hiragino 等）
  * - "biz-udp" : BIZ UDPGothic（モリサワ × 政府の UD ゴシック / OFL ライセンス）
  */
-export type FontMode = "" | "inter" | "lexend" | "biz-udp";
-
-export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend", "biz-udp"] as const;
-
-/** 言語ごとに表示するフォント候補（select の中身を出し分ける）。 */
-export const FONT_MODES_BY_LOCALE: Record<"en" | "ja", readonly FontMode[]> = {
-  en: ["", "inter", "lexend"],
-  ja: ["", "biz-udp"],
-};
+export type JpFont = "" | "biz-udp";
+export const JP_FONTS: readonly JpFont[] = ["", "biz-udp"] as const;
 
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
@@ -42,8 +37,10 @@ export type Settings = {
   registryUrl: string;
   /** コアラベルのカスタム表示名（空オブジェクト = デフォルト） */
   customLabels: CustomLabels;
-  /** 本文フォントモード（読みやすさ）。空文字 = デフォルト */
-  font: FontMode;
+  /** ラテン文字用フォント。空文字 = デフォルト（Atkinson Next + Inter 数字） */
+  latinFont: LatinFont;
+  /** 日本語用フォント。空文字 = デフォルト（OS システムフォント） */
+  jpFont: JpFont;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -53,7 +50,8 @@ const DEFAULT_SETTINGS: Settings = {
   disabledTools: [],
   registryUrl: "",
   customLabels: {},
-  font: "",
+  latinFont: "",
+  jpFont: "",
 };
 
 /**
@@ -86,11 +84,21 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
+    const parsed = JSON.parse(raw) as Partial<Settings> & { font?: string };
+    // 旧 `font` フィールドを latinFont / jpFont に振り分ける（一回限りのマイグレーション）
+    const legacyFont = typeof parsed.font === "string" ? parsed.font : "";
+    const migratedLatin: LatinFont = parsed.latinFont !== undefined
+      ? (LATIN_FONTS.includes(parsed.latinFont) ? parsed.latinFont : "")
+      : (legacyFont === "inter" || legacyFont === "lexend" ? legacyFont : "");
+    const migratedJp: JpFont = parsed.jpFont !== undefined
+      ? (JP_FONTS.includes(parsed.jpFont) ? parsed.jpFont : "")
+      : (legacyFont === "biz-udp" ? "biz-udp" : "");
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
       customLabels: migrateCustomLabels(parsed.customLabels),
+      latinFont: migratedLatin,
+      jpFont: migratedJp,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -137,23 +145,28 @@ export function isAgentConfigured(): boolean {
   return true;
 }
 
-/** 選択中のフォントモードを取得する（空文字 = デフォルト） */
-export function getSelectedFont(): FontMode {
-  const v = loadSettings().font;
-  return FONT_MODES.includes(v) ? v : "";
+/** 選択中のラテン用フォントを取得する（空文字 = デフォルト） */
+export function getSelectedLatinFont(): LatinFont {
+  const v = loadSettings().latinFont;
+  return LATIN_FONTS.includes(v) ? v : "";
+}
+
+/** 選択中の日本語用フォントを取得する（空文字 = デフォルト） */
+export function getSelectedJpFont(): JpFont {
+  const v = loadSettings().jpFont;
+  return JP_FONTS.includes(v) ? v : "";
 }
 
 /**
- * 本文フォントモードを body に反映する。
- * 空文字（デフォルト）の場合は data-font 属性を削除し、CSS の `--ui` フォールバックを使う。
+ * 本文フォントを body に反映する。
+ * 空文字（デフォルト）の場合は対応する data 属性を削除し、CSS の `--ui` フォールバックを使う。
  */
-export function applyFontMode(font: FontMode): void {
+export function applyFontMode(latinFont: LatinFont, jpFont: JpFont): void {
   if (typeof document === "undefined") return;
-  if (font) {
-    document.body.setAttribute("data-font", font);
-  } else {
-    document.body.removeAttribute("data-font");
-  }
+  if (latinFont) document.body.setAttribute("data-latin-font", latinFont);
+  else document.body.removeAttribute("data-latin-font");
+  if (jpFont) document.body.setAttribute("data-jp-font", jpFont);
+  else document.body.removeAttribute("data-jp-font");
 }
 
 // --- Web モード用: クライアント側 LLM モデル管理 ---
