@@ -6,7 +6,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 const meta: Meta = {
   title: "Foundation/Typography",
   parameters: {
-    layout: "fullscreen",
+    layout: "padded",
     docs: {
       description: {
         component:
@@ -49,7 +49,14 @@ const FONTS = [
     key: "atkinson-next" as const,
     name: "Atkinson Hyperlegible Next",
     family: "'Atkinson Hyperlegible Next', system-ui, sans-serif",
-    note: "Braille Institute (2024)。Next は字形リファイン版で 0 がプレーン。識別性は維持。",
+    note: "Braille Institute (2024)。Next は字形リファイン版。0 は中点入りのまま。",
+    letterSpacing: "0",
+  },
+  {
+    key: "atkinson-next-mixed" as const,
+    name: "Atkinson Next + Inter 数字",
+    family: "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif",
+    note: "B 案。数字 0-9 のみ Inter のグリフに差し替え（unicode-range U+0030-0039）。文字部分の dyslexia 配慮を維持しつつ「0」問題を回避。",
     letterSpacing: "0",
   },
 ];
@@ -124,22 +131,30 @@ function Sample({
           padding: "8px 10px",
           background: "var(--paper-2)",
           borderRadius: "var(--r-2)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
         }}
       >
-        <span style={{ fontFamily: "var(--mono)", marginRight: 8 }}>混同字形:</span>
-        {CONFUSABLES}
+        <div>
+          <span style={{ fontFamily: "var(--mono)", marginRight: 8 }}>数字:</span>
+          <span style={{ fontSize: 18 }}>0 1 2 3 4 5 6 7 8 9</span>
+        </div>
+        <div>
+          <span style={{ fontFamily: "var(--mono)", marginRight: 8 }}>混同字形:</span>
+          {CONFUSABLES}
+        </div>
       </div>
     </div>
   );
 }
 
 export const ThreeUp: StoryObj = {
-  name: "4 フォント並列比較",
+  name: "5 フォント並列比較",
   render: () => (
     <div
       style={{
         background: "var(--paper)",
-        minHeight: "100dvh",
         padding: 24,
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -211,6 +226,15 @@ export const AtkinsonNextOnly: StoryObj = {
   render: () => (
     <div style={{ background: "var(--paper)", padding: 32, maxWidth: 720 }}>
       <Sample family={FONTS[3].family} letterSpacing={FONTS[3].letterSpacing} />
+    </div>
+  ),
+};
+
+export const AtkinsonNextMixedOnly: StoryObj = {
+  name: "Atkinson Next + Inter 数字 単独 (B 案)",
+  render: () => (
+    <div style={{ background: "var(--paper)", padding: 32, maxWidth: 720 }}>
+      <Sample family={FONTS[4].family} letterSpacing={FONTS[4].letterSpacing} />
     </div>
   ),
 };

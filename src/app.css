@@ -50,6 +50,17 @@
   font-display: swap;
   src: url('/fonts/atkinson-next-700.woff2') format('woff2');
 }
+/* 数字 0-9 だけ Inter のグリフを使うためのサブセット family。
+   font-family stack の先頭に置くと、数字は Inter のグリフが優先される。
+   例: font-family: 'Inter Numerals', 'Atkinson Hyperlegible Next', sans-serif; */
+@font-face {
+  font-family: 'Inter Numerals';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter.woff2') format('woff2');
+  unicode-range: U+0030-0039;
+}
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
@@ -233,6 +244,11 @@
   }
   body[data-font="atkinson-next"] {
     font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+  body[data-font="atkinson-next-mixed"] {
+    /* 数字だけ Inter のグリフ、それ以外は Atkinson Next */
+    font-family: 'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
     letter-spacing: 0;
   }
 }
