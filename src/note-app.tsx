@@ -2,7 +2,7 @@
 // Google Drive と連携してノートの作成・保存・読み込みを行う
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText } from "lucide-react";
+import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText, PanelLeftOpen } from "lucide-react";
 import { apiBase, isTauri } from "./lib/platform";
 import { ensureSidecar } from "./lib/sidecar";
 import { SandboxEditor } from "./base/editor";
@@ -2113,6 +2113,13 @@ export function NoteApp() {
     return () => { cancelled = true; };
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // デスクトップ用: 集中モード（左サイドバーを折り畳む）。設定は localStorage に永続化。
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("graphium-sidebar-collapsed") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("graphium-sidebar-collapsed", desktopSidebarCollapsed ? "1" : "0"); } catch {}
+  }, [desktopSidebarCollapsed]);
   const [showMemos, setShowMemos] = useState(false);
 
   // Cmd+K Composer（統一された AI 呼び出し口 / UX Audit #04）
@@ -2163,6 +2170,18 @@ export function NoteApp() {
   const [pendingMemoInsert, setPendingMemoInsert] = useState<{ captureId: string; text: string; deleteAfter: boolean } | null>(null);
 
   const isDesktop = useIsDesktop();
+  // Cmd+\ / Ctrl+\ で集中モード切替（デスクトップのみ）
+  useEffect(() => {
+    if (!isDesktop) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setDesktopSidebarCollapsed((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDesktop]);
   const fm = useFileManager(authenticated);
   const capture = useCapture(authenticated);
 
@@ -2827,8 +2846,25 @@ export function NoteApp() {
         </Sheet>
       )}
       <div className="flex flex-1 min-h-0">
-      {/* デスクトップ: 通常のサイドバー */}
-      {isDesktop && <FileSidebar {...sidebarProps} />}
+      {/* デスクトップ: 通常のサイドバー（集中モード時は細いレールに退避） */}
+      {isDesktop && (
+        desktopSidebarCollapsed ? (
+          <div className="w-9 shrink-0 border-r border-sidebar-border bg-sidebar-background flex flex-col items-center py-3">
+            <button
+              onClick={() => setDesktopSidebarCollapsed(false)}
+              title={t("sidebar.expand")}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-sidebar-accent"
+            >
+              <PanelLeftOpen size={16} />
+            </button>
+          </div>
+        ) : (
+          <FileSidebar
+            {...sidebarProps}
+            onCollapse={() => setDesktopSidebarCollapsed(true)}
+          />
+        )
+      )}
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {fm.activeAssetType ? (
           <AssetGalleryView

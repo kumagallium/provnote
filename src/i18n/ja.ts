@@ -80,6 +80,8 @@ export const ja: Record<string, string> = {
   "sidebar.newNote": "+ 新しいノート",
   "sidebar.provTemplate": "+ PROV テンプレート",
   "sidebar.refresh": "再読み込み",
+  "sidebar.collapse": "サイドバーを折り畳む（⌘+\\）",
+  "sidebar.expand": "サイドバーを開く（⌘+\\）",
   "sidebar.releaseNotes": "Release Notes",
   "sidebar.aiConnected": "AI 接続済み",
   "sidebar.aiNotConfigured": "AI 未設定",
@@ -150,10 +152,9 @@ export const ja: Record<string, string> = {
   "settings.language": "言語",
   "settings.font": "読みやすさ（フォント）",
   "settings.fontHelp": "本文・UI フォントを切り替えます。dyslexia 配慮で文字を識別しやすい字形にしたり、Lexend で読み速度を最適化したりできます。",
-  "settings.fontDefault": "デフォルト（Atkinson Next + 数字 Inter）",
+  "settings.fontDefault": "デフォルト（Atkinson Next / dyslexia 配慮）",
   "settings.fontInter": "Inter（中立的なヒューマニスト体）",
   "settings.fontLexend": "Lexend（読み速度最適化 / NASA 共同研究）",
-  "settings.fontAtkinsonNext": "Atkinson Next（数字も Atkinson のグリフ）",
   "settings.aiNotConfigured": "AI モデルが登録されていません。設定 → AI Setup からモデルを追加してください。",
 
   // ── AI チャット ──

@@ -80,6 +80,8 @@ export const en: Record<string, string> = {
   "sidebar.newNote": "+ New Note",
   "sidebar.provTemplate": "+ PROV Template",
   "sidebar.refresh": "Reload",
+  "sidebar.collapse": "Collapse sidebar (⌘+\\)",
+  "sidebar.expand": "Expand sidebar (⌘+\\)",
   "sidebar.releaseNotes": "Release Notes",
   "sidebar.aiConnected": "AI connected",
   "sidebar.aiNotConfigured": "AI not configured",
@@ -150,10 +152,9 @@ export const en: Record<string, string> = {
   "settings.language": "Language",
   "settings.font": "Reading font",
   "settings.fontHelp": "Switch the body/UI font. Tune for dyslexia-friendly letter shapes or use Lexend for optimized reading speed.",
-  "settings.fontDefault": "Default (Atkinson Next + Inter numerals)",
+  "settings.fontDefault": "Default (Atkinson Next / dyslexia-friendly)",
   "settings.fontInter": "Inter (neutral humanist sans)",
   "settings.fontLexend": "Lexend (reading-speed optimized / NASA study)",
-  "settings.fontAtkinsonNext": "Atkinson Next (Atkinson glyphs incl. digits)",
   "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 
   // ── AI チャット ──

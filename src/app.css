@@ -36,17 +36,6 @@
   font-display: swap;
   src: url('/fonts/atkinson-next-700.woff2') format('woff2');
 }
-/* 数字 0-9 だけ Inter のグリフを使うためのサブセット family。
-   font-family stack の先頭に置くと、数字は Inter のグリフが優先される。
-   例: font-family: 'Inter Numerals', 'Atkinson Hyperlegible Next', sans-serif; */
-@font-face {
-  font-family: 'Inter Numerals';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('/fonts/inter.woff2') format('woff2');
-  unicode-range: U+0030-0039;
-}
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
@@ -198,11 +187,10 @@
 
   /* Typography
      UI/本文は Atkinson Hyperlegible Next（dyslexia 配慮、識別性重視）。
-     数字 0-9 のみ Inter に差し替え（'Inter Numerals' は unicode-range で 0-9 のみ提供）。
-     これにより文字部分は Atkinson の dyslexia 配慮を維持しつつ、数字は慣れた字形に。
+     2024 リファイン版で数字 0 のスラッシュ問題が解消されたため、Inter 数字混合は廃止。
      ※ 親リポジトリの design.md は「本文 Inter」だが、本プロジェクトでは
         アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
-  --ui:   'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --ui:   'Atkinson Hyperlegible Next', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
@@ -224,17 +212,13 @@
     overflow: hidden;
   }
   /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-font] を上書き）
-     デフォルト = Atkinson Next + Inter 数字。以下は他フォントを試したい時の代替モード。 */
+     デフォルト = Atkinson Hyperlegible Next。以下は他フォントを試したい時の代替モード。 */
   body[data-font="inter"] {
     font-family: 'Inter', system-ui, sans-serif;
     letter-spacing: 0.01em;
   }
   body[data-font="lexend"] {
     font-family: 'Lexend', system-ui, sans-serif;
-    letter-spacing: 0;
-  }
-  body[data-font="atkinson-next"] {
-    font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
     letter-spacing: 0;
   }
 }

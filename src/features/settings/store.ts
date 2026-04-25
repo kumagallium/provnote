@@ -8,14 +8,13 @@ export type CustomLabels = Record<string, string>;
 
 /**
  * 本文フォントモード（読みやすさモード）。
- * - ""             : デフォルト = Atkinson Hyperlegible Next + Inter 数字（B 案）
- * - "inter"        : Inter のみ
- * - "lexend"       : Lexend（NASA 共同研究の読み速度最適化）
- * - "atkinson-next": Atkinson Next 単体（数字も Atkinson のグリフ）
+ * - ""       : デフォルト = Atkinson Hyperlegible Next（dyslexia 配慮、2024 リファイン版）
+ * - "inter"  : Inter（design.md の元仕様、中立的なヒューマニスト体）
+ * - "lexend" : Lexend（NASA 共同研究の読み速度最適化）
  */
-export type FontMode = "" | "inter" | "lexend" | "atkinson-next";
+export type FontMode = "" | "inter" | "lexend";
 
-export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend", "atkinson-next"] as const;
+export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend"] as const;
 
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */

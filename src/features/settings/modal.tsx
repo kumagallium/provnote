@@ -602,39 +602,38 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <label className="text-xs font-semibold text-foreground mb-1 block">
                 {t("settings.font")}
               </label>
-              <div className="space-y-1">
-                {FONT_MODES.map((mode) => {
-                  const labelKey = mode === ""
-                    ? "settings.fontDefault"
-                    : mode === "inter"
-                      ? "settings.fontInter"
-                      : mode === "lexend"
-                        ? "settings.fontLexend"
-                        : "settings.fontAtkinsonNext";
-                  const previewFamily = mode === ""
-                    ? "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif"
-                    : mode === "inter"
+              <div className="relative">
+                <select
+                  value={font}
+                  onChange={(e) => {
+                    const next = e.target.value as FontMode;
+                    setFont(next);
+                    applyFontMode(next);
+                    setSaved(false);
+                  }}
+                  className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+                  style={{
+                    fontFamily: font === "inter"
                       ? "'Inter', system-ui, sans-serif"
-                      : mode === "lexend"
+                      : font === "lexend"
                         ? "'Lexend', system-ui, sans-serif"
-                        : "'Atkinson Hyperlegible Next', system-ui, sans-serif";
-                  const selected = font === mode;
-                  return (
-                    <button
-                      key={mode || "default"}
-                      type="button"
-                      onClick={() => { setFont(mode); applyFontMode(mode); setSaved(false); }}
-                      className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-colors ${
-                        selected
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
-                      }`}
-                      style={{ fontFamily: previewFamily }}
-                    >
-                      {t(labelKey)}
-                    </button>
-                  );
-                })}
+                        : "'Atkinson Hyperlegible Next', system-ui, sans-serif",
+                  }}
+                >
+                  {FONT_MODES.map((mode) => {
+                    const labelKey = mode === ""
+                      ? "settings.fontDefault"
+                      : mode === "inter"
+                        ? "settings.fontInter"
+                        : "settings.fontLexend";
+                    return (
+                      <option key={mode || "default"} value={mode}>
+                        {t(labelKey)}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">{t("settings.fontHelp")}</p>
             </div>
