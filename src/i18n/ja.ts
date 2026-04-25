@@ -152,9 +152,10 @@ export const ja: Record<string, string> = {
   "settings.language": "言語",
   "settings.font": "読みやすさ（フォント）",
   "settings.fontHelp": "本文・UI フォントを切り替えます。dyslexia 配慮で文字を識別しやすい字形にしたり、Lexend で読み速度を最適化したりできます。",
-  "settings.fontDefault": "デフォルト（Atkinson Next / dyslexia 配慮）",
+  "settings.fontDefault": "デフォルト（システムフォント）",
   "settings.fontInter": "Inter（中立的なヒューマニスト体）",
   "settings.fontLexend": "Lexend（読み速度最適化 / NASA 共同研究）",
+  "settings.fontBizUDP": "BIZ UDPGothic（UD 配慮 / モリサワ × 政府）",
   "settings.aiNotConfigured": "AI モデルが登録されていません。設定 → AI Setup からモデルを追加してください。",
 
   // ── AI チャット ──

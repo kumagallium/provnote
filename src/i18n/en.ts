@@ -155,6 +155,7 @@ export const en: Record<string, string> = {
   "settings.fontDefault": "Default (Atkinson Next / dyslexia-friendly)",
   "settings.fontInter": "Inter (neutral humanist sans)",
   "settings.fontLexend": "Lexend (reading-speed optimized / NASA study)",
+  "settings.fontBizUDP": "BIZ UDPGothic (Japanese UD gothic)",
   "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 
   // ── AI チャット ──

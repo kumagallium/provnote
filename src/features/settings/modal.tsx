@@ -19,7 +19,7 @@ import {
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
-import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type FontMode, FONT_MODES, applyFontMode } from "./store";
+import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type FontMode, FONT_MODES_BY_LOCALE, applyFontMode } from "./store";
 import {
   fetchModels,
   fetchProfiles,
@@ -617,15 +617,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       ? "'Inter', system-ui, sans-serif"
                       : font === "lexend"
                         ? "'Lexend', system-ui, sans-serif"
-                        : "'Atkinson Hyperlegible Next', system-ui, sans-serif",
+                        : font === "biz-udp"
+                          ? "'BIZ UDPGothic', system-ui, sans-serif"
+                          : "'Atkinson Hyperlegible Next', system-ui, sans-serif",
                   }}
                 >
-                  {FONT_MODES.map((mode) => {
+                  {FONT_MODES_BY_LOCALE[locale].map((mode) => {
                     const labelKey = mode === ""
                       ? "settings.fontDefault"
                       : mode === "inter"
                         ? "settings.fontInter"
-                        : "settings.fontLexend";
+                        : mode === "lexend"
+                          ? "settings.fontLexend"
+                          : "settings.fontBizUDP";
                     return (
                       <option key={mode || "default"} value={mode}>
                         {t(labelKey)}

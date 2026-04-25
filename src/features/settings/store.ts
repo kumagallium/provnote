@@ -8,13 +8,26 @@ export type CustomLabels = Record<string, string>;
 
 /**
  * 本文フォントモード（読みやすさモード）。
- * - ""       : デフォルト = Atkinson Hyperlegible Next（dyslexia 配慮、2024 リファイン版）
- * - "inter"  : Inter（design.md の元仕様、中立的なヒューマニスト体）
- * - "lexend" : Lexend（NASA 共同研究の読み速度最適化）
+ * 言語によって候補は出し分ける（FONT_MODES_BY_LOCALE 参照）。
+ *
+ * ラテン用:
+ * - ""        : デフォルト = Atkinson Hyperlegible Next（dyslexia 配慮、2024 リファイン版）
+ * - "inter"   : Inter（design.md の元仕様、中立的なヒューマニスト体）
+ * - "lexend"  : Lexend（NASA 共同研究の読み速度最適化）
+ *
+ * 日本語用:
+ * - ""        : デフォルト = OS のシステムフォント（Hiragino 等）
+ * - "biz-udp" : BIZ UDPGothic（モリサワ × 政府の UD ゴシック / OFL ライセンス）
  */
-export type FontMode = "" | "inter" | "lexend";
+export type FontMode = "" | "inter" | "lexend" | "biz-udp";
 
-export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend"] as const;
+export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend", "biz-udp"] as const;
+
+/** 言語ごとに表示するフォント候補（select の中身を出し分ける）。 */
+export const FONT_MODES_BY_LOCALE: Record<"en" | "ja", readonly FontMode[]> = {
+  en: ["", "inter", "lexend"],
+  ja: ["", "biz-udp"],
+};
 
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
