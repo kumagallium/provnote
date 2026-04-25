@@ -101,6 +101,7 @@ import { ingestUrlToProv, buildProvNoteDocument } from "./features/url-to-prov";
 import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt, buildSkillPromptSection } from "./features/skill";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
+import { TemplatePickerModal, getTemplateSlashMenuItem, setTemplatePickerCallback, getAllTemplates } from "./features/template";
 import type { CaptureEntry } from "./features/mobile-capture";
 import {
   AssetGalleryView,
@@ -489,6 +490,90 @@ function NoteEditorInner({
     return () => { setBookmarkPickerCallback(null); };
   }, []);
 
+  // スラッシュメニューからテンプレートピッカーを開くコールバック登録
+  useEffect(() => {
+    setTemplatePickerCallback((triggerBlock: any) => {
+      templateTriggerBlockRef.current = triggerBlock;
+      setTemplatePickerOpen(true);
+    });
+    return () => { setTemplatePickerCallback(null); };
+  }, []);
+
+  // テンプレートを選択してエディタに挿入
+  const handleTemplateSelect = useCallback((templateId: string) => {
+    setTemplatePickerOpen(false);
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const allTemplates = getAllTemplates();
+    const tmpl = allTemplates.find((t) => t.id === templateId);
+    if (!tmpl) return;
+
+    const triggerBlock = templateTriggerBlockRef.current ?? editor.getTextCursorPosition()?.block;
+    if (!triggerBlock) return;
+
+    const { blocks, labels, provLinks } = tmpl.build(tStatic);
+
+    const inserted = editor.insertBlocks(blocks, triggerBlock, "after");
+
+    // スラッシュを打ったブロックが空なら削除
+    const content = triggerBlock.content;
+    if (
+      Array.isArray(content) &&
+      content.length <= 1 &&
+      (!content[0] ||
+        (content[0].type === "text" &&
+          content[0].text.replace("/", "").trim() === ""))
+    ) {
+      editor.removeBlocks([triggerBlock]);
+    }
+
+    // パスから挿入後のブロックを取得
+    const resolveByPath = (path: number[]): any | null => {
+      let nodes: any[] = inserted as any[];
+      let node: any = null;
+      for (const idx of path) {
+        node = nodes?.[idx];
+        if (!node) return null;
+        nodes = node.children ?? [];
+      }
+      return node;
+    };
+
+    // ラベル付与・前手順リンク追加（次フレームに延期して、エディタの状態反映後に実行）
+    if (labels.length > 0 || (provLinks && provLinks.length > 0)) {
+      setTimeout(() => {
+        for (const { path, label } of labels) {
+          const block = resolveByPath(path);
+          if (block?.id) {
+            labelStore.setLabel(block.id, label);
+          }
+        }
+        for (const link of provLinks ?? []) {
+          const source = resolveByPath(link.sourcePath);
+          const target = resolveByPath(link.targetPath);
+          if (source?.id && target?.id) {
+            linkStore.addLink({
+              sourceBlockId: source.id,
+              targetBlockId: target.id,
+              type: link.type,
+              createdBy: "human",
+            });
+          }
+        }
+      }, 0);
+    }
+
+    // フォーカスブロックにカーソルを移動
+    const focusBlock = resolveByPath(tmpl.focusPath);
+    if (focusBlock) {
+      editor.setTextCursorPosition(focusBlock, "end");
+    }
+
+    templateTriggerBlockRef.current = null;
+    // insertBlocks による onChange で自動的に markDirty される
+  }, [labelStore, linkStore]);
+
   // ピッカーで選択されたメディアをエディタに挿入
   const handlePickerSelect = useCallback((entry: MediaIndexEntry) => {
     const editor = editorRef.current;
@@ -522,6 +607,11 @@ function NoteEditorInner({
   // スラッシュメニューアイテム（既存メディア・メモから挿入）
   const mediaSlashItems = useMemo(() => getMediaSlashMenuItems(), []);
   const memoSlashItem = useMemo(() => getMemoSlashMenuItem(), []);
+  const templateSlashItem = useMemo(() => getTemplateSlashMenuItem(), []);
+
+  // テンプレートピッカーモーダル
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const templateTriggerBlockRef = useRef<any>(null);
 
   // ── URL ペースト検知 ──
   const [pastedUrl, setPastedUrl] = useState<{ url: string; position: { x: number; y: number }; blockId: string } | null>(null);
@@ -1665,6 +1755,13 @@ function NoteEditorInner({
           onAddUrlBookmark={onAddUrlBookmark}
         />
       )}
+      {/* テンプレートピッカーモーダル（スラッシュメニュー /template から） */}
+      {templatePickerOpen && (
+        <TemplatePickerModal
+          onSelect={handleTemplateSelect}
+          onClose={() => setTemplatePickerOpen(false)}
+        />
+      )}
       {/* ヘッダー */}
       <div className="px-3 md:px-4 py-2.5 md:py-2 border-b border-border flex items-center gap-2 md:gap-3 shrink-0">
         <input
@@ -1704,7 +1801,7 @@ function NoteEditorInner({
               blocks={[pdfViewerBlock, bookmarkBlock]}
               initialContent={initialContent}
               sideMenu={NoteSideMenu}
-              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, ...mediaSlashItems, bookmarkSlashItem, memoSlashItem]}
+              extraSlashMenuItems={[...buildLabelSlashMenuItems(), indexTableSlashItem, templateSlashItem, ...mediaSlashItems, bookmarkSlashItem, memoSlashItem]}
               excludeDefaultSlashTitles={DEFAULT_MEDIA_SLASH_TITLES}
               formattingToolbar={NoteFormattingToolbar}
               onEditorReady={handleEditorReady}
