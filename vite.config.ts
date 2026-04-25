@@ -46,6 +46,15 @@ const isVercel = process.env.VERCEL === "1";
 
 export default defineConfig({
   base: (isTauri || isVercel) ? "/" : "/Graphium/",
+  build: {
+    rollupOptions: {
+      // Multi-page: root `/` serves the landing page, `/app/` serves the editor.
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        app: path.resolve(__dirname, "app/index.html"),
+      },
+    },
+  },
   plugins: [
     releaseNotesPlugin(),
     tailwindcss(),

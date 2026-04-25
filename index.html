@@ -1,23 +1,53 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/Graphium/favicon.ico" />
     <link rel="apple-touch-icon" href="/Graphium/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#fafdf7" />
-    <title>Graphium</title>
-    <!-- 日本語 UD ゴシック（dyslexia 配慮 / OFL ライセンス）。Google Fonts は unicode-range で
-         必要なグリフだけ遅延ロードするので、起動コストは最小化される。 -->
+    <title>Graphium — Notes for the joy of discovery</title>
+    <meta name="description" content="A block-based editor where your trial and error crystallizes into provenance — and AI extends from there." />
+
+    <meta property="og:title" content="Graphium — Notes for the joy of discovery" />
+    <meta property="og:description" content="A block-based editor where your trial and error crystallizes into provenance — and AI extends from there." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kumagallium.github.io/Graphium/" />
+    <meta property="og:image" content="https://kumagallium.github.io/Graphium/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" />
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Returning-user redirect: if the visitor has Graphium data or an app-shaped hash,
+         send them to /Graphium/app/ so existing bookmarks keep working. -->
+    <script>
+      (function () {
+        try {
+          var hash = window.location.hash || "";
+          var appHashPattern = /^#(note|notes|wiki|wiki-log|wiki-lint|assets|labels|memos|home)(\/|$)/;
+          var hasAppHash = appHashPattern.test(hash);
+          var hasLocalData = false;
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i) || "";
+            if (key.indexOf("graphium") === 0 || key.indexOf("provnote") === 0) {
+              hasLocalData = true;
+              break;
+            }
+          }
+          var bypass = window.location.search.indexOf("intro=1") !== -1;
+          if (!bypass && (hasAppHash || hasLocalData)) {
+            window.location.replace("/Graphium/app/" + hash);
+          }
+        } catch (e) {
+          // best-effort; fall through to landing
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/landing/main.tsx"></script>
   </body>
 </html>
