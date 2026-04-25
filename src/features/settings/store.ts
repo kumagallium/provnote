@@ -6,6 +6,17 @@ const STORAGE_KEY = "graphium-settings";
 /** コアラベルのカスタム表示名（キーは内部ラベルキー、値はユーザーが設定した表示名） */
 export type CustomLabels = Record<string, string>;
 
+/**
+ * 本文フォントモード（読みやすさモード）。
+ * - ""             : デフォルト = Atkinson Hyperlegible Next + Inter 数字（B 案）
+ * - "inter"        : Inter のみ
+ * - "lexend"       : Lexend（NASA 共同研究の読み速度最適化）
+ * - "atkinson-next": Atkinson Next 単体（数字も Atkinson のグリフ）
+ */
+export type FontMode = "" | "inter" | "lexend" | "atkinson-next";
+
+export const FONT_MODES: readonly FontMode[] = ["", "inter", "lexend", "atkinson-next"] as const;
+
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
   model: string;
@@ -19,6 +30,8 @@ export type Settings = {
   registryUrl: string;
   /** コアラベルのカスタム表示名（空オブジェクト = デフォルト） */
   customLabels: CustomLabels;
+  /** 本文フォントモード（読みやすさ）。空文字 = デフォルト */
+  font: FontMode;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +41,7 @@ const DEFAULT_SETTINGS: Settings = {
   disabledTools: [],
   registryUrl: "",
   customLabels: {},
+  font: "",
 };
 
 /**
@@ -109,6 +123,25 @@ export function getEmbeddingModel(): string {
 /** AI バックエンドが利用可能かどうか（ビルトインバックエンドは常に available） */
 export function isAgentConfigured(): boolean {
   return true;
+}
+
+/** 選択中のフォントモードを取得する（空文字 = デフォルト） */
+export function getSelectedFont(): FontMode {
+  const v = loadSettings().font;
+  return FONT_MODES.includes(v) ? v : "";
+}
+
+/**
+ * 本文フォントモードを body に反映する。
+ * 空文字（デフォルト）の場合は data-font 属性を削除し、CSS の `--ui` フォールバックを使う。
+ */
+export function applyFontMode(font: FontMode): void {
+  if (typeof document === "undefined") return;
+  if (font) {
+    document.body.setAttribute("data-font", font);
+  } else {
+    document.body.removeAttribute("data-font");
+  }
 }
 
 // --- Web モード用: クライアント側 LLM モデル管理 ---

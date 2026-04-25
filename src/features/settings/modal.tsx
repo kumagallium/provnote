@@ -19,7 +19,7 @@ import {
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
-import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig } from "./store";
+import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type FontMode, FONT_MODES, applyFontMode } from "./store";
 import {
   fetchModels,
   fetchProfiles,
@@ -104,6 +104,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [disabledTools, setDisabledTools] = useState<string[]>([]);
   const [registryUrl, setRegistryUrl] = useState("");
   const [customLabels, setCustomLabels] = useState<CustomLabels>({});
+  const [font, setFont] = useState<FontMode>("");
 
   // サーバーデータ
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -250,6 +251,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setDisabledTools(settings.disabledTools ?? []);
     setRegistryUrl(settings.registryUrl ?? "");
     setCustomLabels(settings.customLabels ?? {});
+    setFont(settings.font ?? "");
     setSaved(false);
     setShowAddForm(false);
     setDeleteConfirm(null);
@@ -520,10 +522,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // ── 保存 ──
   const handleSave = useCallback(() => {
-    saveSettings({ model, embeddingModel, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels });
+    saveSettings({ model, embeddingModel, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, font });
+    applyFontMode(font);
     setSaved(true);
     setTimeout(() => onClose(), 600);
-  }, [model, embeddingModel, profile, customLabels, onClose]);
+  }, [model, embeddingModel, profile, disabledTools, registryUrl, customLabels, font, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -592,6 +595,48 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* 読みやすさ（フォント） */}
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">
+                {t("settings.font")}
+              </label>
+              <div className="space-y-1">
+                {FONT_MODES.map((mode) => {
+                  const labelKey = mode === ""
+                    ? "settings.fontDefault"
+                    : mode === "inter"
+                      ? "settings.fontInter"
+                      : mode === "lexend"
+                        ? "settings.fontLexend"
+                        : "settings.fontAtkinsonNext";
+                  const previewFamily = mode === ""
+                    ? "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif"
+                    : mode === "inter"
+                      ? "'Inter', system-ui, sans-serif"
+                      : mode === "lexend"
+                        ? "'Lexend', system-ui, sans-serif"
+                        : "'Atkinson Hyperlegible Next', system-ui, sans-serif";
+                  const selected = font === mode;
+                  return (
+                    <button
+                      key={mode || "default"}
+                      type="button"
+                      onClick={() => { setFont(mode); applyFontMode(mode); setSaved(false); }}
+                      className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-colors ${
+                        selected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                      }`}
+                      style={{ fontFamily: previewFamily }}
+                    >
+                      {t(labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">{t("settings.fontHelp")}</p>
             </div>
 
             {/* プロファイル選択 */}

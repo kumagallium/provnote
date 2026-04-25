@@ -148,6 +148,12 @@ export const en: Record<string, string> = {
   // ── 設定モーダル ──
   "settings.title": "Settings",
   "settings.language": "Language",
+  "settings.font": "Reading font",
+  "settings.fontHelp": "Switch the body/UI font. Tune for dyslexia-friendly letter shapes or use Lexend for optimized reading speed.",
+  "settings.fontDefault": "Default (Atkinson Next + Inter numerals)",
+  "settings.fontInter": "Inter (neutral humanist sans)",
+  "settings.fontLexend": "Lexend (reading-speed optimized / NASA study)",
+  "settings.fontAtkinsonNext": "Atkinson Next (Atkinson glyphs incl. digits)",
   "settings.aiNotConfigured": "No AI models registered. Go to Settings → AI Setup to add a model.",
 
   // ── AI チャット ──
