@@ -64,13 +64,17 @@ export function Composer(props: ComposerProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  const submit = () => {
+    const trimmed = prompt.trim();
+    if (trimmed.length === 0) return;
+    onSubmit({ mode, prompt: trimmed });
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter で送信（Shift+Enter は改行）
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // Cmd/Ctrl + Enter で送信。素の Enter は改行を許可（複数行入力に対応）
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      const trimmed = prompt.trim();
-      if (trimmed.length === 0) return;
-      onSubmit({ mode, prompt: trimmed });
+      submit();
     }
   };
 
@@ -79,7 +83,7 @@ export function Composer(props: ComposerProps) {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     }
   };
 
@@ -155,8 +159,10 @@ export function Composer(props: ComposerProps) {
             onKeyDown={handleKeyDown}
             placeholder={t("composer.placeholder")}
             rows={1}
+            wrap="soft"
             style={{
               flex: 1,
+              minWidth: 0,  // flex item が長文で親より広がるのを防ぐ → 折り返しが正しく効く
               resize: "none",
               border: "none",
               outline: "none",
@@ -165,63 +171,102 @@ export function Composer(props: ComposerProps) {
               lineHeight: 1.5,
               color: "var(--ink)",
               minHeight: 22,
-              maxHeight: 120,
+              maxHeight: 200,
+              overflowWrap: "break-word",
+              wordBreak: "break-word",
+              whiteSpace: "pre-wrap",
               fontFamily: "inherit",
             }}
           />
-          <kbd
-            style={{
-              fontFamily: "ui-monospace, 'SF Mono', monospace",
-              fontSize: 10,
-              padding: "2px 6px",
-              borderRadius: "var(--r-1)",
-              border: "1px solid var(--rule)",
-              color: "var(--ink-3)",
-              background: "var(--paper-2)",
-              alignSelf: "flex-start",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Esc
-          </kbd>
         </div>
 
-        {/* 中段 — 発見カード */}
+        {/* 上段の下 — ショートカット表示 + 送信ボタン */}
+        <div
+          style={{
+            padding: "0 16px 10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              color: "var(--ink-4)",
+              fontFamily: "var(--mono)",
+            }}
+          >
+            ⌘ + Enter {t("composer.kbd.submit")} · Esc {t("composer.kbd.close")}
+          </span>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={prompt.trim().length === 0}
+            style={{
+              padding: "5px 12px",
+              fontSize: 12,
+              fontWeight: 500,
+              borderRadius: "var(--r-1)",
+              border: "1px solid var(--forest)",
+              background: prompt.trim().length === 0 ? "var(--paper-2)" : "var(--forest)",
+              color: prompt.trim().length === 0 ? "var(--ink-4)" : "#fff",
+              cursor: prompt.trim().length === 0 ? "not-allowed" : "pointer",
+              transition: "background-color 120ms ease",
+            }}
+          >
+            {t("composer.submit")}
+          </button>
+        </div>
+
+        {/* 中段 — 発見カード（ヒント。選ばなくても良い） */}
         {cards.length > 0 && (
           <div
             style={{
               borderTop: "1px solid var(--rule-2)",
-              padding: "10px 12px 12px",
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 8,
-              background: "var(--paper-2)",
+              padding: "8px 12px 10px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
             }}
           >
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--ink-3)",
+                fontFamily: "var(--mono)",
+                padding: "2px 4px 4px",
+              }}
+            >
+              {t("composer.discoveryHint")}
+            </div>
             {cards.map((card) => (
               <button
                 key={card.id}
                 type="button"
                 onClick={() => onDiscoveryCardSelect?.(card)}
+                className="composer-discovery-card"
                 style={{
                   textAlign: "left",
-                  padding: "10px 12px",
-                  background: "var(--paper)",
-                  border: "1px solid var(--rule)",
-                  borderRadius: "var(--r-2)",
+                  padding: "5px 8px",
+                  background: "transparent",
+                  border: "none",
+                  borderRadius: "var(--r-1)",
                   cursor: "pointer",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
+                  alignItems: "baseline",
+                  gap: 8,
                   font: "inherit",
+                  width: "100%",
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                <span style={{ color: "var(--ink-3)", fontSize: 12, flexShrink: 0 }}>›</span>
+                <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
                   {card.title}
                 </span>
                 {card.hint && (
-                  <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.45 }}>
-                    {card.hint}
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
+                    — {card.hint}
                   </span>
                 )}
               </button>

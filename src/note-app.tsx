@@ -140,6 +140,8 @@ import { MobileHeader } from "./components/MobileHeader";
 import { Sheet } from "./ui/sheet";
 import { useIsDesktop } from "./hooks/use-media-query";
 import { Composer, useComposer, type ComposerSubmission, type DiscoveryCard } from "./features/composer";
+import { buildDiscoveryCards, promptForDiscoveryCard } from "./features/composer/discovery-cards";
+import type { WikiLogEntry } from "./features/wiki/wiki-log";
 import { EmptyNoteGuide } from "./features/onboarding";
 
 import type { GraphiumFile } from "./lib/document-types";
@@ -1227,6 +1229,7 @@ function NoteEditorInner({
     insertComposerResultAtEnd,
     setRightTab,
     setPickerMediaType,
+    parkChat: aiAssistant.parkChat,
   });
   composerHandlersRef.current = {
     handleAiChatSubmit,
@@ -1234,6 +1237,7 @@ function NoteEditorInner({
     insertComposerResultAtEnd,
     setRightTab,
     setPickerMediaType,
+    parkChat: aiAssistant.parkChat,
   };
 
   useEffect(() => {
@@ -1243,6 +1247,10 @@ function NoteEditorInner({
       const h = composerHandlersRef.current;
 
       if (mode === "ask") {
+        // Cmd+K で開く Composer は「新しい問いを立てる」ショートカットとして扱う。
+        // 既存チャットがあれば履歴 (chats) に退避してから新セッションを開始する。
+        // チャット欄を開いている状態での追加質問は、チャット欄の input を使えばよい。
+        h.parkChat();
         h.setRightTab("chat");
         await h.handleAiChatSubmit(prompt);
         return;
@@ -2103,6 +2111,8 @@ export function NoteApp() {
   // 「ノート上でのみ開く」よう制御する。
   const composer = useComposer({ disableShortcut: true });
   const [composerPrompt, setComposerPrompt] = useState("");
+  // 発見カード — Composer が開かれたときに直近 7 日の wikiLog を取得して計算
+  const [recentWikiLogEntries, setRecentWikiLogEntries] = useState<WikiLogEntry[]>([]);
   const composerSubmitRef = useRef<
     ((submission: ComposerSubmission) => void | Promise<void>) | null
   >(null);
@@ -2123,8 +2133,9 @@ export function NoteApp() {
     },
     [composer],
   );
+  // カードを選んだら、対応するプロンプト文を textarea に流し込む（自動送信はしない）
   const handleComposerCardSelect = useCallback((card: DiscoveryCard) => {
-    console.info("[Composer] discovery card selected (not yet wired):", card);
+    setComposerPrompt(promptForDiscoveryCard(card));
   }, []);
   // 一覧ビュー用サイドピーク（NoteEditorInner 外でも使えるグローバルな state）
   const [listSidePeekNoteId, setListSidePeekNoteId] = useState<string | null>(null);
@@ -2160,6 +2171,27 @@ export function NoteApp() {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [composer]);
+
+  // Composer が開いた瞬間だけ wikiLog の直近イベントを取得してカード計算に使う
+  // (常時 subscribe しない理由: ログは IndexedDB なので軽量、開いた時だけで十分)
+  useEffect(() => {
+    if (!composer.open) return;
+    let cancelled = false;
+    wikiLog.getRecent(50).then((entries) => {
+      if (!cancelled) setRecentWikiLogEntries(entries);
+    }).catch(() => { /* IndexedDB 未対応環境などは静かに失敗 */ });
+    return () => { cancelled = true; };
+  }, [composer.open]);
+
+  // 発見カードは noteIndex / 現ノート / wikiLog から純関数で導出
+  const composerDiscoveryCards = useMemo(
+    () => buildDiscoveryCards({
+      noteIndex: fm.noteIndex ?? null,
+      activeFileId: fm.activeFileId,
+      wikiLogEntries: recentWikiLogEntries,
+    }),
+    [fm.noteIndex, fm.activeFileId, recentWikiLogEntries],
+  );
 
   // ─── URL ハッシュルーター ───
   const routeActions: RouteActions = useMemo(() => ({
@@ -3366,6 +3398,7 @@ export function NoteApp() {
         onPromptChange={setComposerPrompt}
         onSubmit={handleComposerSubmit}
         onClose={composer.closeComposer}
+        discoveryCards={composerDiscoveryCards}
         onDiscoveryCardSelect={handleComposerCardSelect}
       />
       {showNewSkillDialog && (
