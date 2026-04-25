@@ -97,8 +97,8 @@ export function WikiBanner({
       style={{
         margin: "14px 32px 6px",
         borderRadius: "var(--r-3)",
-        border: "1px solid var(--sky)",
-        background: "var(--sky-soft)",
+        border: "1px solid var(--forest)",
+        background: "var(--forest-soft)",
         padding: "10px 14px",
       }}
     >
@@ -111,9 +111,9 @@ export function WikiBanner({
             gap: 4,
             padding: "2px 8px",
             borderRadius: "var(--pill)",
-            background: "var(--sky-soft)",
-            border: "1px solid var(--sky)",
-            color: "var(--sky-ink)",
+            background: "#ffffff",
+            border: "1px solid var(--forest)",
+            color: "var(--forest-ink)",
             fontSize: 10,
             fontWeight: 500,
           }}
@@ -123,7 +123,7 @@ export function WikiBanner({
               width: 14,
               height: 14,
               borderRadius: 3,
-              background: "var(--sky)",
+              background: "var(--forest)",
               color: "#fff",
               fontSize: 8,
               display: "inline-flex",

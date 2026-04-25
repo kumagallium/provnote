@@ -2,28 +2,14 @@
 
 /* ============================================================
    Web Fonts — セルフホスト (public/fonts/)
-   Fraunces 500 / Inter Tight 400,500 / JetBrains Mono 400,500
+   Inter (本文・UI、design.md 指定) / JetBrains Mono (mono メタ情報)
    ============================================================ */
 @font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/fraunces-500.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Fraunces';
-  font-style: italic;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/fraunces-500i.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Inter Tight';
+  font-family: 'Inter';
   font-style: normal;
   font-weight: 400 500;
   font-display: swap;
-  src: url('/fonts/inter-tight.woff2') format('woff2');
+  src: url('/fonts/inter.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
@@ -39,33 +25,33 @@
 @source "../node_modules/@blocknote/react";
 
 @theme {
-  /* UX Audit B: ウォームニュートラルベース (hue 85) + ブランドグリーン (#4B7A52) */
-  /* ベース色 — oklch hue 85 ウォームホワイト系 */
-  --color-background: oklch(0.99 0.005 85);   /* ≈ #fdfcf9 */
-  --color-foreground: oklch(0.18 0.01 85);    /* ≈ #201b17 ウォームブラック */
-  --color-card: oklch(0.99 0.005 85);
-  --color-card-foreground: oklch(0.18 0.01 85);
-  --color-popover: oklch(0.99 0.005 85);
-  --color-popover-foreground: oklch(0.18 0.01 85);
-  /* プライマリー（ブランドグリーン — 維持） */
+  /* Crucible デザインガイドライン準拠（design.md / ブランドグリーン基調） */
+  /* ベース色 */
+  --color-background: #fafdf7;           /* 温かみのあるオフホワイト */
+  --color-foreground: #1a2e1d;           /* 深いグリーンブラック */
+  --color-card: #ffffff;
+  --color-card-foreground: #1a2e1d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a2e1d;
+  /* プライマリー（ブランドグリーン） */
   --color-primary: #4B7A52;
   --color-primary-foreground: #ffffff;
-  --color-secondary: oklch(0.955 0.008 85);
-  --color-secondary-foreground: oklch(0.34 0.01 85);
-  --color-muted: oklch(0.955 0.008 85);
-  --color-muted-foreground: oklch(0.56 0.01 85);
-  --color-accent: oklch(0.955 0.008 85);
-  --color-accent-foreground: oklch(0.34 0.01 85);
+  --color-secondary: #f0f5ef;
+  --color-secondary-foreground: #2d4a32;
+  --color-muted: #f0f5ef;
+  --color-muted-foreground: #6b7f6e;
+  --color-accent: #e8f0e8;
+  --color-accent-foreground: #2d4a32;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
-  --color-border: oklch(0.90 0.006 85);       /* ≈ var(--rule) と同値 */
-  --color-input: oklch(0.90 0.006 85);
+  --color-border: #d5e0d7;
+  --color-input: #d5e0d7;
   --color-ring: #4B7A52;
-  /* ニュートラルスケール（ウォームグレー系） */
-  --color-surface: oklch(0.975 0.006 85);
-  --color-surface-hover: oklch(0.955 0.008 85);
-  --color-border-subtle: oklch(0.94 0.006 85);
-  --color-text-tertiary: oklch(0.72 0.008 85);
+  /* ニュートラルスケール（グリーングレー系） */
+  --color-surface: #f5f8f5;
+  --color-surface-hover: #edf3ed;
+  --color-border-subtle: #dce5dd;
+  --color-text-tertiary: #8fa394;
   /* セマンティック色 */
   --color-success: #2d4a32;
   --color-success-bg: #edf5ee;
@@ -79,7 +65,7 @@
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
-  /* PROV-DM ラベル色（維持） */
+  /* PROV-DM ラベル色 */
   --color-label-activity: #5b8fb9;
   --color-label-activity-bg: #eaf1f6;
   --color-label-entity: #4B7A52;
@@ -91,13 +77,13 @@
   --color-label-result: #c26356;
   --color-label-result-bg: #fbeae8;
   /* サイドバー */
-  --color-sidebar-background: oklch(0.975 0.006 85);
-  --color-sidebar-foreground: oklch(0.18 0.01 85);
+  --color-sidebar-background: #f0f5ef;
+  --color-sidebar-foreground: #1a2e1d;
   --color-sidebar-primary: #4B7A52;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: oklch(0.955 0.008 85);
-  --color-sidebar-accent-foreground: oklch(0.34 0.01 85);
-  --color-sidebar-border: oklch(0.90 0.006 85);
+  --color-sidebar-accent: #e8f0e8;
+  --color-sidebar-accent-foreground: #2d4a32;
+  --color-sidebar-border: #d5e0d7;
   --color-sidebar-ring: #4B7A52;
   --radius: 0.625rem;
 }
@@ -112,22 +98,22 @@
    ブランドグリーン --forest は既存 #4B7A52 とほぼ同値。
    ============================================================ */
 :root {
-  /* Paper — 温かみのあるニュートラル（背景系） */
-  --paper: oklch(0.99 0.005 85);
-  --paper-2: oklch(0.975 0.006 85);
-  --paper-3: oklch(0.955 0.008 85);
+  /* Paper — グリーンティントの温かみのあるオフホワイト（design.md #fafdf7 系） */
+  --paper: oklch(0.985 0.012 150);
+  --paper-2: oklch(0.97 0.014 150);
+  --paper-3: oklch(0.95 0.014 150);
 
-  /* Ink — テキスト階層（前景系） */
-  --ink: oklch(0.18 0.01 85);
-  --ink-2: oklch(0.34 0.01 85);
-  --ink-3: oklch(0.56 0.01 85);
-  --ink-4: oklch(0.72 0.008 85);
+  /* Ink — テキスト階層（design.md グリーンブラック系） */
+  --ink: oklch(0.27 0.04 150);
+  --ink-2: oklch(0.40 0.03 150);
+  --ink-3: oklch(0.55 0.02 150);
+  --ink-4: oklch(0.70 0.015 150);
 
-  /* Rule — 罫線・区切り */
-  --rule: oklch(0.90 0.006 85);
-  --rule-2: oklch(0.94 0.006 85);
+  /* Rule — 罫線・区切り（design.md #d5e0d7 系） */
+  --rule: oklch(0.88 0.013 150);
+  --rule-2: oklch(0.93 0.012 150);
 
-  /* Forest — ブランド（既存 #4B7A52 と等価）: primary / provenance */
+  /* Forest — ブランド（既存 #4B7A52 と等価） */
   --forest: oklch(0.48 0.09 150);
   --forest-soft: oklch(0.94 0.04 150);
   --forest-ink: oklch(0.30 0.08 150);
@@ -141,7 +127,7 @@
   --rose: oklch(0.62 0.14 25);
   --rose-soft: oklch(0.95 0.04 25);
 
-  /* Sky — AI・リンク・情報 */
+  /* Sky — AI・リンク・情報（補助、ブランド外アクセント用） */
   --sky: oklch(0.60 0.10 230);
   --sky-soft: oklch(0.95 0.035 230);
   --sky-ink: oklch(0.38 0.09 230);
@@ -156,10 +142,9 @@
   --shadow-1: 0 1px 2px rgba(30, 20, 10, 0.05), 0 2px 6px rgba(30, 20, 10, 0.04);
   --shadow-2: 0 2px 6px rgba(30, 20, 10, 0.06), 0 10px 30px rgba(30, 20, 10, 0.06);
 
-  /* Typography — font-family tokens */
-  --serif: 'Fraunces', Georgia, serif;
-  --ui:    'Inter Tight', system-ui, sans-serif;
-  --mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  /* Typography — design.md 準拠（本文 Inter、mono JetBrains Mono） */
+  --ui:   'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
 @layer base {
@@ -213,25 +198,26 @@
 /* モバイルレスポンシブ: BlockNote 見出しサイズ調整 */
 @media (max-width: 767px) {
   .bn-editor h1 {
-    font-size: 22px !important;
+    font-size: 24px !important;
   }
   .bn-editor h2 {
-    font-size: 18px !important;
+    font-size: 20px !important;
   }
   .bn-editor h3 {
-    font-size: 15px !important;
+    font-size: 18px !important;
   }
 }
 
 /* WikiBanner Regenerate dropdown アイテムのホバー */
 .wiki-banner-dropdown-item:hover {
-  background-color: var(--paper-2) !important;
+  background-color: var(--paper-3) !important;
 }
 .wiki-banner-dropdown-item.is-current {
   background-color: var(--forest-soft);
+  font-weight: 500;
 }
 .wiki-banner-dropdown-item.is-current:hover {
-  background-color: oklch(0.91 0.05 150) !important;
+  background-color: oklch(0.90 0.06 150) !important;
 }
 
 /* BlockNote SideMenu がサイドバーに隠れないようにする */
@@ -260,28 +246,23 @@ body[data-label-dropdown-open="true"] .bn-side-menu {
   background-color: var(--paper) !important;
 }
 
-/* BlockNote 見出しサイズ（UX Audit 原案値）
-   H1: 26px/500 — ページタイトル（Fraunces serif）
-   H2: 20px/500 — セクション見出し
-   H3: 16px/500 — サブ見出し */
+/* BlockNote 見出しサイズ（design.md / Notion 準拠）
+   H1: 30px/700 — ページタイトル
+   H2: 24px/600 — セクション見出し
+   H3: 20px/600 — サブ見出し */
 .bn-editor h1 {
-  font-family: var(--serif) !important;
-  font-size: 26px !important;
-  font-weight: 500 !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
   line-height: 1.3 !important;
-  letter-spacing: -0.015em !important;
 }
 .bn-editor h2 {
-  font-family: var(--serif) !important;
-  font-size: 20px !important;
-  font-weight: 500 !important;
+  font-size: 24px !important;
+  font-weight: 600 !important;
   line-height: 1.3 !important;
-  letter-spacing: -0.010em !important;
 }
 .bn-editor h3 {
-  font-family: var(--serif) !important;
-  font-size: 16px !important;
-  font-weight: 500 !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
   line-height: 1.4 !important;
 }
 
