@@ -1331,7 +1331,7 @@ function NoteEditorInner({
       if (!editorRef.current) return;
       const editor = editorRef.current;
 
-      // 挿入後にラベルを適用するヘルパー（path → 実ブロック ID 解決）
+      // 挿入後にラベルを適用 + 連続する procedure 見出しを informed_by で自動連結する
       const applyExtractedLabels = (
         inserted: any[],
         extracted: { path: number[]; label: string }[],
@@ -1347,11 +1347,26 @@ function NoteEditorInner({
           }
           return node;
         };
-        // エディタ反映後にラベルを付与
         setTimeout(() => {
+          // ラベル付与
+          const procedureHeadingIds: string[] = [];
           for (const { path, label } of extracted) {
             const block = resolveByPath(path);
-            if (block?.id) labelStore.setLabel(block.id, label);
+            if (!block?.id) continue;
+            labelStore.setLabel(block.id, label);
+            // procedure 見出し（H2+）を順序通りに収集して informed_by チェーンを作る
+            if (label === "procedure" && block.type === "heading" && (block.props?.level ?? 0) >= 2) {
+              procedureHeadingIds.push(block.id);
+            }
+          }
+          // 同レベル連続 procedure を informed_by で連結（テンプレート Step1→Step2 と同じ意図）
+          for (let i = 1; i < procedureHeadingIds.length; i++) {
+            linkStore.addLink({
+              sourceBlockId: procedureHeadingIds[i],
+              targetBlockId: procedureHeadingIds[i - 1],
+              type: "informed_by",
+              createdBy: "ai",
+            });
           }
         }, 0);
       };
@@ -1396,7 +1411,7 @@ function NoteEditorInner({
       lastAiInsertRef.current = true;
       markDirty();
     },
-    [markDirty, aiAssistant.sourceBlockIds, labelStore],
+    [markDirty, aiAssistant.sourceBlockIds, labelStore, linkStore],
   );
 
   // AI 回答で対象ブロックを置換

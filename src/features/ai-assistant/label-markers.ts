@@ -112,61 +112,107 @@ export function buildLabeledOutputInstruction(language: "en" | "ja" | string): s
   if (language === "ja") {
     return `
 
-## 構造化出力（コンテキストラベル）
-回答が「実験手順」「材料」「使用する道具」「条件・属性」「結果・成果物」のいずれかに該当する内容を含む場合、該当するブロックの**先頭**に次のいずれかのマーカーを付けてください。マーカーは半角の二重角括弧で、行頭にのみ出現させ、本文との間は半角スペース 1 つで区切ります。
+## 構造化出力（PROV グラフ生成）
+回答に「実験手順」「材料」「ツール」「条件」「結果」が含まれる場合、Graphium が PROV グラフを自動生成できるよう、**次の構造ルール**に従って出力してください。マーカーは半角の二重角括弧で、ブロック先頭にのみ置き、本文との間は半角スペース 1 つで区切ります。
 
-- 実験手順・操作: \`[[label:procedure]]\`
-- 材料・試薬・原料: \`[[label:material]]\`
-- 装置・器具・ツール: \`[[label:tool]]\`
-- 条件・パラメータ・属性: \`[[label:attribute]]\`
-- 結果・成果物・観察: \`[[label:result]]\`
+### 5 つのラベル
+- \`[[label:procedure]]\` — 実験手順・操作（**必ず H2 見出しに付与する**）
+- \`[[label:material]]\` — 材料・試薬・原料
+- \`[[label:tool]]\` — 装置・器具
+- \`[[label:attribute]]\` — 条件・パラメータ
+- \`[[label:result]]\` — 結果・成果物・観察
 
-例:
+### 構造ルール（重要）
+1. **手順は必ず H2 見出し（\`## \`）にする**。番号リストや箇条書きに \`[[label:procedure]]\` を付けても Activity ノードにならず、エッジが張られません。
+2. **その手順で使うもの・出るもの**（material / tool / attribute / result）は、その H2 見出しの**直下に箇条書きまたは段落として配置**する。次の H2 見出しまでが 1 手順のスコープです。
+3. 概要・背景の H2 には \`[[label:procedure]]\` を付けない（Activity にしない）。
+4. 番号付きリストは「手順内の細かいステップ説明」として使い、ラベルは付けない（H2 が手順、リストは中身の説明）。
+
+### 推奨フォーマット例
 \`\`\`
-## 合成手順
-1. [[label:procedure]] 試料 A と B を 1:1 で混合する
-2. [[label:procedure]] 80℃ で 30 分加熱する
+# XRD 解析の標準手順
 
-- [[label:material]] 試料 A
-- [[label:tool]] 電気炉
-- [[label:attribute]] 加熱温度: 80℃
-- [[label:result]] 単相結晶相
+## 概要
+粉末XRD測定から相同定までの流れ。
+
+## [[label:procedure]] 試料準備
+- [[label:material]] 測定対象の粉末試料
+- [[label:tool]] メノウ乳鉢・乳棒
+- [[label:tool]] ガラス試料ホルダー
+- [[label:attribute]] 粒径目安: 10 µm 以下
+- [[label:result]] 充填済み試料ホルダー
+
+## [[label:procedure]] XRD 測定
+- [[label:material]] 充填済み試料ホルダー
+- [[label:tool]] X 線回折装置
+- [[label:attribute]] X 線源: Cu Kα
+- [[label:attribute]] 走査範囲: 10°–90° (2θ)
+- [[label:result]] 回折パターン (.xy)
+
+## [[label:procedure]] 相同定
+- [[label:material]] 回折パターン
+- [[label:tool]] ICDD PDF データベース
+- [[label:result]] 同定された相
 \`\`\`
 
-ルール:
-- マーカーは各ブロックの先頭にのみ置き、文中・末尾には絶対に置かない
-- 該当しない一般的な説明文や見出し（H1/H2/H3）にはマーカーを付けない
-- 1 ブロックにつきマーカーは 1 つまで
-- マーカーは ASCII の \`[[label:xxx]]\` のみで、種別名は上記 5 種以外は使わない
+### NG パターン
+- ❌ \`1. [[label:procedure]] 試料を粉砕する\` （リスト項目に procedure → Activity にならない）
+- ❌ \`## 試料準備\` の下に procedure マーカー無し （見出しは普通の見出しのまま）
+- ❌ マーカーが行中・末尾に出現する
+
+ルール: マーカーは行頭のみ、1 ブロック 1 つまで、ASCII の \`[[label:xxx]]\` だけ、種別は上記 5 種以外使わない。
 `;
   }
   return `
 
-## Structured output (context labels)
-When your answer includes content that fits one of these categories, prefix the **beginning of that block** with the matching marker. Markers are ASCII double-bracket tags placed only at the very start of a block, separated from the body by a single space.
+## Structured output (PROV graph generation)
+When your answer includes experimental procedure, materials, tools, conditions, or results, follow the **structure rules** below so Graphium can auto-generate a PROV graph. Markers are ASCII double-bracket tags placed only at the very start of a block, separated from the body by a single space.
 
-- Experimental procedure / step: \`[[label:procedure]]\`
-- Material / reagent / input: \`[[label:material]]\`
-- Tool / instrument / equipment: \`[[label:tool]]\`
-- Condition / parameter / attribute: \`[[label:attribute]]\`
-- Result / output / observation: \`[[label:result]]\`
+### Five labels
+- \`[[label:procedure]]\` — Experimental step / activity (**must be on an H2 heading**)
+- \`[[label:material]]\` — Material / reagent / input
+- \`[[label:tool]]\` — Tool / instrument / equipment
+- \`[[label:attribute]]\` — Condition / parameter
+- \`[[label:result]]\` — Result / output / observation
 
-Example:
+### Structure rules (important)
+1. **Procedures MUST be on H2 headings** (\`## \`). Putting \`[[label:procedure]]\` on numbered list items or bullets will NOT create an Activity node, so no edges will be drawn.
+2. **Materials, tools, attributes, and results for that step** go as bullets or paragraphs **directly under** that H2 heading. The scope of one activity runs until the next H2.
+3. Do NOT label overview / background H2 headings as procedures.
+4. Use numbered lists only for fine-grained sub-steps inside a procedure; do not add labels to those list items.
+
+### Recommended format
 \`\`\`
-## Synthesis procedure
-1. [[label:procedure]] Mix samples A and B at a 1:1 ratio
-2. [[label:procedure]] Heat at 80°C for 30 minutes
+# XRD analysis — standard procedure
 
-- [[label:material]] Sample A
-- [[label:tool]] Electric furnace
-- [[label:attribute]] Heating temperature: 80°C
-- [[label:result]] Single-phase crystal
+## Overview
+Flow from powder XRD measurement to phase identification.
+
+## [[label:procedure]] Sample preparation
+- [[label:material]] Powder sample to be measured
+- [[label:tool]] Agate mortar and pestle
+- [[label:tool]] Glass sample holder
+- [[label:attribute]] Target particle size: ≤ 10 µm
+- [[label:result]] Filled sample holder
+
+## [[label:procedure]] XRD measurement
+- [[label:material]] Filled sample holder
+- [[label:tool]] X-ray diffractometer
+- [[label:attribute]] X-ray source: Cu Kα
+- [[label:attribute]] Scan range: 10°–90° (2θ)
+- [[label:result]] Diffraction pattern (.xy)
+
+## [[label:procedure]] Phase identification
+- [[label:material]] Diffraction pattern
+- [[label:tool]] ICDD PDF database
+- [[label:result]] Identified phases
 \`\`\`
 
-Rules:
-- Markers must appear only at the start of a block, never mid-sentence or at the end.
-- Do not add markers to generic explanations or headings (H1/H2/H3).
-- At most one marker per block.
-- Use only the ASCII form \`[[label:xxx]]\` with one of the five labels above.
+### Anti-patterns
+- ❌ \`1. [[label:procedure]] Crush the sample\` (list item — won't become an Activity)
+- ❌ \`## Sample preparation\` without the procedure marker (stays a plain heading)
+- ❌ Markers placed mid-sentence or at end of a block
+
+Rules: marker only at start of a block, at most one per block, ASCII \`[[label:xxx]]\` only, no labels outside the five above.
 `;
 }

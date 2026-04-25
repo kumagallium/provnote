@@ -80,20 +80,22 @@ describe("extractLabelMarkersFromBlocks", () => {
 });
 
 describe("buildLabeledOutputInstruction", () => {
-  it("ja は日本語の指示文を返す", () => {
+  it("ja は日本語の指示文を返し H2 ルールを含む", () => {
     const text = buildLabeledOutputInstruction("ja");
-    expect(text).toContain("コンテキストラベル");
+    expect(text).toContain("PROV グラフ");
     expect(text).toContain("[[label:procedure]]");
+    expect(text).toContain("H2");
   });
 
-  it("en は英語の指示文を返す", () => {
+  it("en は英語の指示文を返し H2 ルールを含む", () => {
     const text = buildLabeledOutputInstruction("en");
-    expect(text).toContain("context labels");
+    expect(text).toContain("PROV graph");
     expect(text).toContain("[[label:procedure]]");
+    expect(text).toContain("H2");
   });
 
   it("既知でない言語は en にフォールバックする", () => {
     const text = buildLabeledOutputInstruction("fr");
-    expect(text).toContain("context labels");
+    expect(text).toContain("PROV graph");
   });
 });
