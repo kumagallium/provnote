@@ -94,8 +94,10 @@ export default defineConfig({
         theme_color: "#fafdf7",
         background_color: "#fafdf7",
         display: "standalone",
-        scope: isVercel ? "/" : "/Graphium/",
-        start_url: isVercel ? "/" : "/Graphium/",
+        // PWA points at the editor, not the marketing page — anyone who has
+        // installed Graphium to their home screen wants the app to launch.
+        scope: isVercel ? "/" : "/Graphium/app/",
+        start_url: isVercel ? "/" : "/Graphium/app/",
         icons: [
           { src: "logo.png", sizes: "192x192", type: "image/png" },
           { src: "apple-touch-icon.png", sizes: "180x180", type: "image/png" },

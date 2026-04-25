@@ -13,7 +13,7 @@
     "windows": [
       {
         "title": "Graphium",
-        "url": "/app/",
+        "url": "app/index.html",
         "width": 1280,
         "height": 800,
         "minWidth": 800,

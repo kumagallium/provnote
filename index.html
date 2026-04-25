@@ -20,14 +20,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" />
 
-    <!-- Returning-user redirect: if the visitor has Graphium data or an app-shaped hash,
-         send them to /Graphium/app/ so existing bookmarks keep working. -->
+    <!-- Returning-user redirect: if the visitor has Graphium data, an app-shaped
+         hash, or an OAuth callback in the URL, send them to /Graphium/app/ so
+         existing bookmarks and the mobile OAuth redirect flow keep working. -->
     <script>
       (function () {
         try {
           var hash = window.location.hash || "";
+          var search = window.location.search || "";
           var appHashPattern = /^#(note|notes|wiki|wiki-log|wiki-lint|assets|labels|memos|home)(\/|$)/;
+          var oauthHashPattern = /[#&?](access_token|id_token|code|state|error)=/;
           var hasAppHash = appHashPattern.test(hash);
+          var hasOAuthParams =
+            oauthHashPattern.test(hash) || oauthHashPattern.test(search);
           var hasLocalData = false;
           for (var i = 0; i < localStorage.length; i++) {
             var key = localStorage.key(i) || "";
@@ -36,9 +41,10 @@
               break;
             }
           }
-          var bypass = window.location.search.indexOf("intro=1") !== -1;
-          if (!bypass && (hasAppHash || hasLocalData)) {
-            window.location.replace("/Graphium/app/" + hash);
+          var bypass = search.indexOf("intro=1") !== -1;
+          if (!bypass && (hasAppHash || hasOAuthParams || hasLocalData)) {
+            // Preserve both ?query and #hash so OAuth tokens survive the hop.
+            window.location.replace("/Graphium/app/" + search + hash);
           }
         } catch (e) {
           // best-effort; fall through to landing
