@@ -1,0 +1,313 @@
+/* Landing page own styles. Tailwind is the main driver via app.css; this file
+   adds a few section-level rhythm tokens that are easier to read as plain CSS. */
+
+.lp-root {
+  min-height: 100dvh;
+  background: var(--paper, #fafdf7);
+  color: var(--ink, #1d2620);
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  line-height: 1.55;
+}
+
+.lp-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(64px, 10vw, 120px) clamp(24px, 6vw, 48px);
+}
+
+.lp-eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink, #1d2620) 60%, transparent);
+}
+
+.lp-h1 {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.lp-h2 {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  margin: 0 0 0.8rem;
+}
+
+.lp-lead {
+  font-size: clamp(1.05rem, 1.6vw, 1.2rem);
+  color: color-mix(in srgb, var(--ink, #1d2620) 78%, transparent);
+  max-width: 56ch;
+}
+
+.lp-tagline {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-style: italic;
+  font-size: clamp(1.2rem, 2.4vw, 1.6rem);
+  line-height: 1.35;
+  color: var(--forest, #4b7a52);
+  border-left: 3px solid color-mix(in srgb, var(--forest, #4b7a52) 40%, transparent);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  max-width: 48ch;
+}
+
+.lp-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  border: 1px solid transparent;
+}
+
+.lp-btn:active {
+  transform: translateY(1px);
+}
+
+.lp-btn-primary {
+  background: var(--forest, #4b7a52);
+  color: #fff;
+}
+.lp-btn-primary:hover {
+  background: color-mix(in srgb, var(--forest, #4b7a52) 88%, black);
+}
+
+.lp-btn-secondary {
+  background: transparent;
+  color: var(--ink, #1d2620);
+  border-color: color-mix(in srgb, var(--ink, #1d2620) 25%, transparent);
+}
+.lp-btn-secondary:hover {
+  border-color: var(--ink, #1d2620);
+}
+
+.lp-btn-ghost {
+  background: transparent;
+  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+}
+.lp-btn-ghost:hover {
+  color: var(--ink, #1d2620);
+}
+
+.lp-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(16px, 2.4vw, 28px);
+  margin-top: 2.4rem;
+}
+
+.lp-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: clamp(16px, 2.4vw, 24px);
+  margin-top: 2.4rem;
+}
+
+.lp-card {
+  background: color-mix(in srgb, var(--paper, #fafdf7) 92%, var(--ink, #1d2620));
+  border: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  border-radius: 14px;
+  padding: 1.4rem 1.5rem;
+}
+
+.lp-card h3 {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: 1.15rem;
+  margin: 0 0 0.5rem;
+}
+
+.lp-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: color-mix(in srgb, var(--ink, #1d2620) 75%, transparent);
+}
+
+.lp-card .lp-card-icon {
+  font-size: 1.4rem;
+  margin-bottom: 0.6rem;
+  display: inline-block;
+}
+
+.lp-divider {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  margin: 0;
+}
+
+.lp-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--paper, #fafdf7) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink, #1d2620) 6%, transparent);
+}
+
+.lp-header-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0.8rem clamp(24px, 6vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.lp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: 1.1rem;
+  color: var(--ink, #1d2620);
+  text-decoration: none;
+}
+
+.lp-brand img {
+  width: 28px;
+  height: 28px;
+}
+
+.lp-nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.lp-nav a,
+.lp-nav button {
+  background: none;
+  border: none;
+  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+}
+
+.lp-nav a:hover,
+.lp-nav button:hover {
+  color: var(--ink, #1d2620);
+}
+
+.lp-footer {
+  border-top: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  padding: 2.2rem clamp(24px, 6vw, 48px);
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ink, #1d2620) 60%, transparent);
+}
+
+.lp-footer-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lp-footer a {
+  color: inherit;
+  text-decoration: none;
+  margin-right: 1rem;
+}
+
+.lp-footer a:hover {
+  color: var(--ink, #1d2620);
+  text-decoration: underline;
+}
+
+.lp-pillars {
+  margin-top: 2.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(20px, 2.6vw, 32px);
+}
+
+.lp-pillar h3 {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: 1.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.lp-pillar .lp-pillar-num {
+  display: inline-block;
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  color: var(--forest, #4b7a52);
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.4rem;
+}
+
+.lp-pillar p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink, #1d2620) 75%, transparent);
+  font-size: 0.98rem;
+}
+
+.lp-section--accent {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--forest, #4b7a52) 6%, transparent),
+    transparent 70%
+  );
+}
+
+.lp-cta-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.6rem 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--ink, #1d2620) 12%, transparent);
+  border-radius: 16px;
+  background: var(--paper, #fafdf7);
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.lp-cta-card:hover {
+  border-color: var(--forest, #4b7a52);
+  transform: translateY(-2px);
+}
+
+.lp-cta-card h3 {
+  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-weight: 500;
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.lp-cta-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+}
+
+.lp-cta-card .lp-cta-link {
+  margin-top: auto;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--forest, #4b7a52);
+}

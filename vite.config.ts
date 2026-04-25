@@ -46,6 +46,15 @@ const isVercel = process.env.VERCEL === "1";
 
 export default defineConfig({
   base: (isTauri || isVercel) ? "/" : "/Graphium/",
+  build: {
+    rollupOptions: {
+      // Multi-page: root `/` serves the landing page, `/app/` serves the editor.
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        app: path.resolve(__dirname, "app/index.html"),
+      },
+    },
+  },
   plugins: [
     releaseNotesPlugin(),
     tailwindcss(),
@@ -85,8 +94,10 @@ export default defineConfig({
         theme_color: "#fafdf7",
         background_color: "#fafdf7",
         display: "standalone",
-        scope: isVercel ? "/" : "/Graphium/",
-        start_url: isVercel ? "/" : "/Graphium/",
+        // PWA points at the editor, not the marketing page — anyone who has
+        // installed Graphium to their home screen wants the app to launch.
+        scope: isVercel ? "/" : "/Graphium/app/",
+        start_url: isVercel ? "/" : "/Graphium/app/",
         icons: [
           { src: "logo.png", sizes: "192x192", type: "image/png" },
           { src: "apple-touch-icon.png", sizes: "180x180", type: "image/png" },
