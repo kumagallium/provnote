@@ -228,6 +228,13 @@
     --ui: 'Lexend', system-ui, sans-serif;
     letter-spacing: 0;
   }
+  /* BlockNote エディタは独自に .bn-default-styles { font-family: Inter, ... } を当てている。
+     設定 UI の読みやすさモードを編集領域にも届かせるため、--ui に従わせる。 */
+  .bn-default-styles,
+  .bn-editor,
+  .bn-container {
+    font-family: var(--ui) !important;
+  }
 }
 
 /* モバイルレスポンシブ: アニメーション */
