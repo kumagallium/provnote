@@ -1,12 +1,81 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Web Fonts — セルフホスト (public/fonts/)
+   - Inter: 本文・UI（design.md 指定、デフォルト）
+   - Lexend: dyslexia / 読み速度最適化 (variable font, NASA 共同研究)
+   - Atkinson Hyperlegible: dyslexia / 視覚障害向け (Braille Institute)
+   - JetBrains Mono: mono メタ情報
+   読みやすさモードは body[data-font="lexend"] / [data-font="atkinson"] で切り替え
+   ============================================================ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/inter.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Lexend';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/lexend.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/atkinson-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/atkinson-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/atkinson-next-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/atkinson-next-700.woff2') format('woff2');
+}
+/* 数字 0-9 だけ Inter のグリフを使うためのサブセット family。
+   font-family stack の先頭に置くと、数字は Inter のグリフが優先される。
+   例: font-family: 'Inter Numerals', 'Atkinson Hyperlegible Next', sans-serif; */
+@font-face {
+  font-family: 'Inter Numerals';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter.woff2') format('woff2');
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+}
+
 /* BlockNoteのshadcnテーマCSSをTailwindに認識させる */
 @source "../node_modules/@blocknote/shadcn";
 @source "../node_modules/@blocknote/core";
 @source "../node_modules/@blocknote/react";
 
 @theme {
-  /* Crucible デザインガイドライン準拠 */
+  /* Crucible デザインガイドライン準拠（design.md / ブランドグリーン基調） */
   /* ベース色 */
   --color-background: #fafdf7;           /* 温かみのあるオフホワイト */
   --color-foreground: #1a2e1d;           /* 深いグリーンブラック */
@@ -19,22 +88,21 @@
   --color-primary-foreground: #ffffff;
   --color-secondary: #f0f5ef;
   --color-secondary-foreground: #2d4a32;
-  --color-muted: #f0f5ef;               /* 薄いグリーングレー */
-  --color-muted-foreground: #6b7f6e;     /* 中間のグリーングレー */
+  --color-muted: #f0f5ef;
+  --color-muted-foreground: #6b7f6e;
   --color-accent: #e8f0e8;
   --color-accent-foreground: #2d4a32;
   --color-destructive: #dc2626;
-  --color-destructive-foreground: #ffffff;  /* 破壊的ボタン上のテキスト色 */
-  --color-border: #d5e0d7;              /* 淡いグリーングレー */
+  --color-destructive-foreground: #ffffff;
+  --color-border: #d5e0d7;
   --color-input: #d5e0d7;
   --color-ring: #4B7A52;
-  /* ニュートラルスケール（グリーングレー系）
-     Slate 系のハードコード色を排除し、Crucible パレットと調和するグリーングレーに統一 */
-  --color-surface: #f5f8f5;              /* 極薄セージ — サブ背景（ヘッダー・パネル区切り） */
-  --color-surface-hover: #edf3ed;        /* 薄セージ — ホバー背景 */
-  --color-border-subtle: #dce5dd;        /* セージボーダー — 軽量ボーダー（パネル区切り線） */
-  --color-text-tertiary: #8fa394;        /* ミディアムセージ — 第三階層テキスト（アイコン・プレースホルダー） */
-  /* セマンティック色（design.md 準拠） */
+  /* ニュートラルスケール（グリーングレー系） */
+  --color-surface: #f5f8f5;
+  --color-surface-hover: #edf3ed;
+  --color-border-subtle: #dce5dd;
+  --color-text-tertiary: #8fa394;
+  /* セマンティック色 */
   --color-success: #2d4a32;
   --color-success-bg: #edf5ee;
   --color-success-border: #b8d4bb;
@@ -47,16 +115,16 @@
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
-  /* PROV-DM ラベル色（design.md 準拠） */
-  --color-label-activity: #5b8fb9;          /* [手順] 落ち着いた青 */
+  /* PROV-DM ラベル色 */
+  --color-label-activity: #5b8fb9;
   --color-label-activity-bg: #eaf1f6;
-  --color-label-entity: #4B7A52;            /* [使用するもの] ブランドグリーン */
+  --color-label-entity: #4B7A52;
   --color-label-entity-bg: #edf5ee;
-  --color-label-parameter: #c08b3e;         /* [属性] 落ち着いたアンバー */
+  --color-label-parameter: #c08b3e;
   --color-label-parameter-bg: #faf3e6;
-  --color-label-sample: #8b7ab5;            /* [試料/パターン] グレイッシュ紫 */
+  --color-label-sample: #8b7ab5;
   --color-label-sample-bg: #f0edf6;
-  --color-label-result: #c26356;            /* [結果] テラコッタ */
+  --color-label-result: #c26356;
   --color-label-result-bg: #fbeae8;
   /* サイドバー */
   --color-sidebar-background: #f0f5ef;
@@ -68,6 +136,24 @@
   --color-sidebar-border: #d5e0d7;
   --color-sidebar-ring: #4B7A52;
   --radius: 0.625rem;
+
+  /* タイプスケール（ratio 1.25 / Notion 準拠 / design.md と整合）
+     12 → 14 → 16 → 20 → 24 → 30 px
+     line-height: UI は 1.5、本文（text-base 個別上書きで）は 1.7、見出しは段階的に詰める */
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.5;
+  --text-base: 16px;
+  --text-base--line-height: 1.6;
+  --text-lg: 20px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 24px;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 30px;
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 36px;
+  --text-3xl--line-height: 1.2;
 }
 
 /* ============================================================
@@ -80,22 +166,22 @@
    ブランドグリーン --forest は既存 #4B7A52 とほぼ同値。
    ============================================================ */
 :root {
-  /* Paper — 温かみのあるニュートラル（背景系） */
-  --paper: oklch(0.985 0.005 85);
-  --paper-2: oklch(0.972 0.006 85);
-  --paper-3: oklch(0.955 0.008 85);
+  /* Paper — グリーンティントの温かみのあるオフホワイト（design.md #fafdf7 系） */
+  --paper: oklch(0.985 0.012 150);
+  --paper-2: oklch(0.97 0.014 150);
+  --paper-3: oklch(0.95 0.014 150);
 
-  /* Ink — テキスト階層（前景系） */
-  --ink: oklch(0.22 0.01 85);
-  --ink-2: oklch(0.38 0.01 85);
-  --ink-3: oklch(0.56 0.01 85);
-  --ink-4: oklch(0.72 0.008 85);
+  /* Ink — テキスト階層（design.md グリーンブラック系） */
+  --ink: oklch(0.27 0.04 150);
+  --ink-2: oklch(0.40 0.03 150);
+  --ink-3: oklch(0.55 0.02 150);
+  --ink-4: oklch(0.70 0.015 150);
 
-  /* Rule — 罫線・区切り */
-  --rule: oklch(0.90 0.006 85);
-  --rule-2: oklch(0.94 0.006 85);
+  /* Rule — 罫線・区切り（design.md #d5e0d7 系） */
+  --rule: oklch(0.88 0.013 150);
+  --rule-2: oklch(0.93 0.012 150);
 
-  /* Forest — ブランド（既存 #4B7A52 と等価）: primary / provenance */
+  /* Forest — ブランド（既存 #4B7A52 と等価） */
   --forest: oklch(0.48 0.09 150);
   --forest-soft: oklch(0.94 0.04 150);
   --forest-ink: oklch(0.30 0.08 150);
@@ -109,7 +195,7 @@
   --rose: oklch(0.62 0.14 25);
   --rose-soft: oklch(0.95 0.04 25);
 
-  /* Sky — AI・リンク・情報 */
+  /* Sky — AI・リンク・情報（補助、ブランド外アクセント用） */
   --sky: oklch(0.60 0.10 230);
   --sky-soft: oklch(0.95 0.035 230);
   --sky-ink: oklch(0.38 0.09 230);
@@ -123,6 +209,15 @@
   /* Shadows */
   --shadow-1: 0 1px 2px rgba(30, 20, 10, 0.05), 0 2px 6px rgba(30, 20, 10, 0.04);
   --shadow-2: 0 2px 6px rgba(30, 20, 10, 0.06), 0 10px 30px rgba(30, 20, 10, 0.06);
+
+  /* Typography
+     UI/本文は Atkinson Hyperlegible Next（dyslexia 配慮、識別性重視）。
+     数字 0-9 のみ Inter に差し替え（'Inter Numerals' は unicode-range で 0-9 のみ提供）。
+     これにより文字部分は Atkinson の dyslexia 配慮を維持しつつ、数字は慣れた字形に。
+     ※ 親リポジトリの design.md は「本文 Inter」だが、本プロジェクトでは
+        アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
+  --ui:   'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
 
 @layer base {
@@ -135,8 +230,30 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--ui);
+    color: var(--ink);
+    /* Atkinson Next は字幅が広めの設計なので追加 letter-spacing は不要 */
+    letter-spacing: 0;
     height: 100dvh;
     overflow: hidden;
+  }
+  /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-font] を上書き）
+     デフォルト = Atkinson Next + Inter 数字。以下は他フォントを試したい時の代替モード。 */
+  body[data-font="inter"] {
+    font-family: 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+  body[data-font="lexend"] {
+    font-family: 'Lexend', system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+  body[data-font="atkinson"] {
+    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+  body[data-font="atkinson-next"] {
+    font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+    letter-spacing: 0;
   }
 }
 
@@ -184,6 +301,18 @@
   }
 }
 
+/* WikiBanner Regenerate dropdown アイテムのホバー */
+.wiki-banner-dropdown-item:hover {
+  background-color: var(--paper-3) !important;
+}
+.wiki-banner-dropdown-item.is-current {
+  background-color: var(--forest-soft);
+  font-weight: 500;
+}
+.wiki-banner-dropdown-item.is-current:hover {
+  background-color: oklch(0.90 0.06 150) !important;
+}
+
 /* BlockNote SideMenu がサイドバーに隠れないようにする */
 .bn-side-menu {
   z-index: 30 !important;
@@ -204,16 +333,31 @@ body[data-label-dropdown-open="true"] .bn-side-menu {
   text-decoration: underline;
 }
 
-/* BlockNote エディタ背景を Crucible テーマに統一 */
+/* BlockNote エディタ背景を Paper トークンに統一 */
 .bn-editor,
 .bn-container {
-  background-color: #fafdf7 !important;
+  background-color: var(--paper) !important;
 }
 
-/* BlockNote 見出しサイズ（Notion 準拠）
-   H1: 30px — ページタイトル
-   H2: 24px — セクション見出し
-   H3: 20px — サブ見出し */
+/* BlockNote 本文 — タイプスケール base (16px) を採用、行間は読み物用に 1.7
+   UI 部分（sidebar 等）の text-base が 1.6 なのに対し、エディタ本文は読み心地優先で広めに取る */
+.bn-editor {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.bn-editor p,
+.bn-editor li,
+.bn-editor [data-content-type="paragraph"],
+.bn-editor [data-content-type="bulletListItem"],
+.bn-editor [data-content-type="numberedListItem"],
+.bn-editor [data-content-type="checkListItem"] {
+  line-height: 1.7;
+}
+
+/* BlockNote 見出しサイズ（design.md / Notion 準拠）
+   H1: 30px/700 — ページタイトル
+   H2: 24px/600 — セクション見出し
+   H3: 20px/600 — サブ見出し */
 .bn-editor h1 {
   font-size: 30px !important;
   font-weight: 700 !important;

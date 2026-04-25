@@ -1,8 +1,8 @@
 // Wiki ドキュメント用バナー
-// エディタ上部に表示: AI 生成バッジ、由来ノート、アクションボタン
+// エディタ上部に表示: AI 生成バッジ、アクションボタン
 
 import { useState, useRef, useEffect } from "react";
-import { Bot, RefreshCw, Trash2, ChevronDown } from "lucide-react";
+import { RefreshCw, Trash2, ChevronDown } from "lucide-react";
 import type { WikiMeta } from "../../lib/document-types";
 
 export type RegenerateOptions = {
@@ -22,7 +22,6 @@ type Props = {
   loading?: boolean;
 };
 
-/** 日付をフォーマット */
 function formatDate(isoDate: string): string {
   const d = new Date(isoDate);
   if (isNaN(d.getTime())) return "";
@@ -39,15 +38,18 @@ export function WikiBanner({
   onDelete,
   loading = false,
 }: Props) {
-  const kindLabel = wikiMeta.kind === "summary" ? "Summary" : wikiMeta.kind === "synthesis" ? "Synthesis" : "Concept";
+  const kindLabel =
+    wikiMeta.kind === "summary"
+      ? "Summary"
+      : wikiMeta.kind === "synthesis"
+        ? "Synthesis"
+        : "Concept";
 
-  // モデル選択ドロップダウンの状態
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [defaultModel, setDefaultModel] = useState("");
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // ドロップダウン外クリックで閉じる
   useEffect(() => {
     if (!showModelPicker) return;
     const handleClick = (e: MouseEvent) => {
@@ -59,19 +61,17 @@ export function WikiBanner({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showModelPicker]);
 
-  // モデルリスト取得
   const handleOpenPicker = async () => {
     if (showModelPicker) {
       setShowModelPicker(false);
       return;
     }
     try {
-      // Web モード: localStorage からモデル一覧を取得
       const { apiBase, isTauri } = await import("../../lib/platform");
       if (!isTauri()) {
         const { getLLMModels } = await import("../settings/store");
         const localModels = getLLMModels();
-        setModels(localModels.map((m) => ({ name: m.name, provider: m.provider, model_id: m.modelId })));
+        setModels(localModels.map((m) => ({ name: m.name, provider: m.provider })));
         setDefaultModel(localModels[0]?.name ?? "");
       } else {
         const res = await fetch(`${apiBase()}/models`);
@@ -93,36 +93,93 @@ export function WikiBanner({
   };
 
   return (
-    <div className="mx-4 mt-2 mb-1 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div
+      style={{
+        margin: "14px 32px 6px",
+        borderRadius: "var(--r-3)",
+        border: "1px solid var(--forest)",
+        background: "var(--forest-soft)",
+        padding: "10px 14px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {/* AI バッジ */}
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-          <Bot size={12} />
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 8px",
+            borderRadius: "var(--pill)",
+            background: "#ffffff",
+            border: "1px solid var(--forest)",
+            color: "var(--forest-ink)",
+            fontSize: 10,
+            fontWeight: 500,
+          }}
+        >
+          <span
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: 3,
+              background: "var(--forest)",
+              color: "#fff",
+              fontSize: 8,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "var(--mono)",
+              fontWeight: 500,
+              letterSpacing: "0.04em",
+              flexShrink: 0,
+            }}
+          >
+            AI
+          </span>
           AI {kindLabel}
         </span>
 
         {/* 生成日 */}
-        <span className="text-[10px] text-muted-foreground">
+        <span style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
           {formatDate(wikiMeta.generatedAt)}
         </span>
 
-        {/* モデル */}
+        {/* モデル名 */}
         {wikiMeta.generatedBy?.model && (
-          <span className="text-[10px] text-muted-foreground/60">
+          <span
+            style={{
+              fontSize: 10.5,
+              color: "var(--ink-4)",
+              fontFamily: "var(--mono)",
+            }}
+          >
             {wikiMeta.generatedBy.model}
           </span>
         )}
 
-        <div className="flex-1" />
+        <div style={{ flex: 1 }} />
 
         {/* アクションボタン */}
-        <div className="flex items-center gap-1">
-          {/* Regenerate ボタン + モデル選択ドロップダウン */}
-          <div className="relative" ref={pickerRef}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {/* Regenerate ▾ */}
+          <div style={{ position: "relative" }} ref={pickerRef}>
             <button
               onClick={handleOpenPicker}
               disabled={loading}
-              className="inline-flex items-center gap-0.5 rounded px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 2,
+                padding: "4px 8px",
+                borderRadius: "var(--r-1)",
+                border: "1px solid var(--rule)",
+                background: "var(--paper)",
+                color: "var(--ink-2)",
+                fontSize: 11,
+                cursor: "pointer",
+                opacity: loading ? 0.5 : 1,
+              }}
               title="Regenerate with model selection"
             >
               <RefreshCw size={12} />
@@ -130,27 +187,84 @@ export function WikiBanner({
             </button>
 
             {showModelPicker && (
-              <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border bg-popover shadow-lg">
-                <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground border-b">
-                  Regenerate with...
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 4px)",
+                  minWidth: 220,
+                  background: "var(--paper)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: "var(--r-2)",
+                  boxShadow: "var(--shadow-2)",
+                  zIndex: 50,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "7px 12px",
+                    fontSize: 11,
+                    color: "var(--ink-3)",
+                    borderBottom: "1px solid var(--rule-2)",
+                  }}
+                >
+                  Regenerate with…
                 </div>
                 {models.map((m) => (
                   <button
                     key={m.name}
                     onClick={() => handleSelectModel(m.name)}
-                    className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-muted transition-colors flex items-center gap-2"
+                    className={`wiki-banner-dropdown-item${m.name === wikiMeta.generatedBy?.model ? " is-current" : ""}`}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "7px 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 11.5,
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      border: "none",
+                      font: "inherit",
+                    }}
                   >
-                    <span className="truncate">{m.name}</span>
+                    <span style={{ flex: 1 }}>{m.name}</span>
                     {m.name === defaultModel && (
-                      <span className="text-[9px] text-muted-foreground/60 shrink-0">(default)</span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontFamily: "var(--mono)",
+                          color: "var(--ink-3)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        (default)
+                      </span>
                     )}
                     {m.name === wikiMeta.generatedBy?.model && (
-                      <span className="text-[9px] text-primary/60 shrink-0">current</span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontFamily: "var(--mono)",
+                          color: "var(--forest-ink)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        current
+                      </span>
                     )}
                   </button>
                 ))}
                 {models.length === 0 && (
-                  <div className="px-3 py-2 text-[10px] text-muted-foreground">
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      fontSize: 11,
+                      color: "var(--ink-3)",
+                    }}
+                  >
                     No models configured
                   </div>
                 )}
@@ -158,23 +272,27 @@ export function WikiBanner({
             )}
           </div>
 
+          {/* Delete */}
           <button
             onClick={onDelete}
             disabled={loading}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            style={{
+              padding: "4px 7px",
+              borderRadius: "var(--r-1)",
+              border: "none",
+              background: "transparent",
+              color: "var(--ink-3)",
+              cursor: "pointer",
+              opacity: loading ? 0.5 : 1,
+              display: "inline-flex",
+              alignItems: "center",
+            }}
             title="Delete"
           >
-            <Trash2 size={12} />
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
-
-      {/* 由来ノート */}
-      {wikiMeta.derivedFromNotes.length > 0 && (
-        <div className="mt-1 text-[10px] text-muted-foreground/70">
-          Source: {wikiMeta.derivedFromNotes.length} note(s)
-        </div>
-      )}
     </div>
   );
 }
