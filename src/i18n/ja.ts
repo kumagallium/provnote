@@ -281,8 +281,6 @@ export const ja: Record<string, string> = {
   "labelUi.goBack": "← 戻る",
   "labelUi.clickToChange": "{label} — クリックで変更",
   "labelUi.addLabel": "ラベルを付ける",
-  "editor.labelHintOr": "または",
-  "editor.labelHintTooltip": "ブロックに「/」でメニュー、「#」でラベルのオートコンプリートを呼び出せます",
 
   // ── リンクバッジ追加 ──
   "linkBadge.linkCount": "{count} リンク",

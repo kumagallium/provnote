@@ -2,7 +2,7 @@
 // 右パネルの Chat タブに表示される継続対話 UI
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle, X, AtSign } from "lucide-react";
+import { Bot, BookPlus, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle, X, AtSign } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
@@ -259,7 +259,7 @@ export function AiAssistantPanel({
               title="Add to Knowledge"
               className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             >
-              <Bot size={12} />
+              <BookPlus size={12} />
             </button>
           )}
           {messages.length > 0 && (

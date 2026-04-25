@@ -2,7 +2,7 @@
 // 左: 画像拡大表示 / 右: 使用ノートのグラフ構造
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, BookPlus, FlaskConical } from "lucide-react";
 import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import { getActiveProvider } from "../../lib/storage/registry";
@@ -424,8 +424,8 @@ export function MediaDetailModal({
     >
       <div className="bg-background border border-border rounded-lg shadow-2xl w-[90vw] max-w-5xl h-[75vh] flex flex-col overflow-hidden">
         {/* ヘッダー */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {editing ? (
               <input
                 type="text"
@@ -458,28 +458,33 @@ export function MediaDetailModal({
               </span>
             )}
           </div>
-          {onIngest && (entry.type === "url" || entry.type === "pdf") && (
+          <div className="flex items-center gap-2 shrink-0">
+            {onIngest && (entry.type === "url" || entry.type === "pdf") && (
+              <button
+                onClick={() => onIngest(entry)}
+                className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5"
+              >
+                <BookPlus size={14} />
+                Add to Knowledge
+              </button>
+            )}
+            {onCreateProvNote && entry.type === "url" && (
+              <button
+                onClick={() => onCreateProvNote(entry)}
+                className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5"
+              >
+                <FlaskConical size={14} />
+                Create PROV Note
+              </button>
+            )}
             <button
-              onClick={() => onIngest(entry)}
-              className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none px-1 ml-1"
+              aria-label={t("common.close")}
             >
-              🤖 Add to Knowledge
+              ✕
             </button>
-          )}
-          {onCreateProvNote && entry.type === "url" && (
-            <button
-              onClick={() => onCreateProvNote(entry)}
-              className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
-            >
-              🧪 Create PROV Note
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none px-1"
-          >
-            ✕
-          </button>
+          </div>
         </div>
 
         {/* コンテンツ: 左 画像 / 右 グラフ */}
