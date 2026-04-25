@@ -619,22 +619,22 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       }}
                       className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
                       style={{
-                        fontFamily: latinFont === "inter"
-                          ? "'Inter', system-ui, sans-serif"
-                          : latinFont === "lexend"
-                            ? "'Lexend', system-ui, sans-serif"
-                            : latinFont === "atkinson-next"
-                              ? "'Atkinson Hyperlegible Next', system-ui, sans-serif"
-                              : "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif",
+                        fontFamily: latinFont === "lexend"
+                          ? "'Lexend', system-ui, sans-serif"
+                          : latinFont === "atkinson-next"
+                            ? "'Atkinson Hyperlegible Next', system-ui, sans-serif"
+                            : latinFont === "atkinson-next-mixed"
+                              ? "'Inter Numerals', 'Atkinson Hyperlegible Next', system-ui, sans-serif"
+                              : "'Inter', system-ui, sans-serif",
                       }}
                     >
                       {LATIN_FONTS.map((mode) => {
                         const labelKey = mode === ""
                           ? "settings.fontLatinDefault"
-                          : mode === "atkinson-next"
-                            ? "settings.fontAtkinsonNext"
-                            : mode === "inter"
-                              ? "settings.fontInter"
+                          : mode === "atkinson-next-mixed"
+                            ? "settings.fontAtkinsonNextMixed"
+                            : mode === "atkinson-next"
+                              ? "settings.fontAtkinsonNext"
                               : "settings.fontLexend";
                         return (
                           <option key={mode || "default"} value={mode}>

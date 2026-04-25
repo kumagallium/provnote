@@ -197,12 +197,11 @@
 
   /* Typography
      ラテン用と日本語用を 2 軸で独立に設定できる。
-     - --latin-ui : Atkinson Next + Inter 数字（0 のスラッシュを Inter で置換）
+     - --latin-ui : デフォルトは Inter（design.md 準拠）。dyslexia 配慮の
+                    Atkinson Next + Inter 数字は明示的に選択できる別オプション。
      - --jp-ui    : デフォルトは system フォールバックを許可（指定なし）
-     - --ui       : 上記 2 軸を結合した最終スタック
-     ※ 親リポジトリの design.md は「本文 Inter」だが、本プロジェクトでは
-        アクセシビリティ優先で逸脱（feedback_dyslexia_typography 参照） */
-  --latin-ui: 'Inter Numerals', 'Atkinson Hyperlegible Next';
+     - --ui       : 上記 2 軸を結合した最終スタック */
+  --latin-ui: 'Inter';
   --ui:   var(--latin-ui), system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 }
@@ -224,21 +223,21 @@
     --font-mono: var(--mono);
     font-family: var(--ui);
     color: var(--ink);
-    /* Atkinson Next は字幅が広めの設計なので追加 letter-spacing は不要 */
-    letter-spacing: 0;
+    /* Inter デフォルトは少しだけ字間を広げると読みやすい（design.md の指示） */
+    letter-spacing: 0.01em;
     height: 100dvh;
     overflow: hidden;
   }
   /* 読みやすさモード切り替え（設定 UI 経由 / DevTools で body[data-latin-font] / body[data-jp-font] を上書き）
      ラテン用と日本語用は独立軸。Lexend / Atkinson 等はラテン専用フォントなので
      日本語混在時はその次の指定（BIZ UDPGothic / system フォント）にフォールバックする。 */
+  body[data-latin-font="atkinson-next-mixed"] {
+    --latin-ui: 'Inter Numerals', 'Atkinson Hyperlegible Next';
+    letter-spacing: 0;
+  }
   body[data-latin-font="atkinson-next"] {
     --latin-ui: 'Atkinson Hyperlegible Next';
     letter-spacing: 0;
-  }
-  body[data-latin-font="inter"] {
-    --latin-ui: 'Inter';
-    letter-spacing: 0.01em;
   }
   body[data-latin-font="lexend"] {
     --latin-ui: 'Lexend';

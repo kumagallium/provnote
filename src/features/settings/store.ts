@@ -8,14 +8,13 @@ export type CustomLabels = Record<string, string>;
 
 /**
  * ラテン文字用フォント。
- * - ""              : デフォルト = Atkinson Hyperlegible Next + Inter 数字
- *                     （Atkinson の 0 はスラッシュ入りで好まない人向けに数字だけ Inter）
- * - "atkinson-next" : Atkinson Next 単体（数字も Atkinson のグリフ、スラッシュ 0 容認）
- * - "inter"         : Inter（design.md の元仕様、中立的なヒューマニスト体）
- * - "lexend"        : Lexend（NASA 共同研究の読み速度最適化）
+ * - ""                    : デフォルト = Inter（design.md の元仕様、中立的なヒューマニスト体）
+ * - "atkinson-next-mixed" : Atkinson Next + Inter 数字（dyslexia 配慮、Atkinson のスラッシュ 0 を回避）
+ * - "atkinson-next"       : Atkinson Next 単体（数字もスラッシュ 0）
+ * - "lexend"              : Lexend（NASA 共同研究の読み速度最適化）
  */
-export type LatinFont = "" | "atkinson-next" | "inter" | "lexend";
-export const LATIN_FONTS: readonly LatinFont[] = ["", "atkinson-next", "inter", "lexend"] as const;
+export type LatinFont = "" | "atkinson-next-mixed" | "atkinson-next" | "lexend";
+export const LATIN_FONTS: readonly LatinFont[] = ["", "atkinson-next-mixed", "atkinson-next", "lexend"] as const;
 
 /**
  * 日本語用フォント。
@@ -88,9 +87,17 @@ export function loadSettings(): Settings {
     const parsed = JSON.parse(raw) as Partial<Settings> & { font?: string };
     // 旧 `font` フィールドを latinFont / jpFont に振り分ける（一回限りのマイグレーション）
     const legacyFont = typeof parsed.font === "string" ? parsed.font : "";
-    const migratedLatin: LatinFont = parsed.latinFont !== undefined
-      ? (LATIN_FONTS.includes(parsed.latinFont) ? parsed.latinFont : "")
-      : (legacyFont === "inter" || legacyFont === "lexend" ? legacyFont : "");
+    // 旧 latinFont = "inter" は新デフォルトと等価なので "" に丸める。
+    // 旧 "" は Atkinson + Inter 数字を意味していたので "atkinson-next-mixed" にマッピング。
+    const rawLatin = parsed.latinFont as string | undefined;
+    const migratedLatin: LatinFont = rawLatin !== undefined
+      ? (rawLatin === "inter" ? ""
+        : rawLatin === "" ? "atkinson-next-mixed"
+        : (LATIN_FONTS as readonly string[]).includes(rawLatin) ? (rawLatin as LatinFont)
+        : "")
+      : (legacyFont === "lexend" ? "lexend"
+        : legacyFont === "inter" ? ""
+        : "");
     const migratedJp: JpFont = parsed.jpFont !== undefined
       ? (JP_FONTS.includes(parsed.jpFont) ? parsed.jpFont : "")
       : (legacyFont === "biz-udp" ? "biz-udp" : "");
