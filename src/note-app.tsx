@@ -2,7 +2,7 @@
 // Google Drive と連携してノートの作成・保存・読み込みを行う
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText, PanelLeftOpen } from "lucide-react";
+import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText, PanelLeftOpen, BookPlus } from "lucide-react";
 import { apiBase, isTauri } from "./lib/platform";
 import { ensureSidecar } from "./lib/sidecar";
 import { SandboxEditor } from "./base/editor";
@@ -252,7 +252,7 @@ function NoteHeaderMenu({
                 disabled={ingestDisabled}
                 onClick={() => { onIngestToWiki(); setOpen(false); }}
               >
-                <span className="text-sm">🤖</span>
+                <BookPlus size={14} />
                 Add to Knowledge
               </button>
             </>
@@ -1839,16 +1839,6 @@ function NoteEditorInner({
           placeholder={t("editor.titlePlaceholder")}
           title={title}
         />
-        {!isWikiDoc && (
-          <span
-            className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0"
-            title={t("editor.labelHintTooltip")}
-          >
-            <kbd className="font-mono text-[10px] px-1 py-px rounded border border-border bg-muted">/</kbd>
-            <span className="opacity-60">{t("editor.labelHintOr")}</span>
-            <kbd className="font-mono text-[10px] px-1 py-px rounded border border-border bg-muted">#</kbd>
-          </span>
-        )}
         <span className="text-[10px] text-muted-foreground shrink-0">
           {saving ? t("common.saving") : dirty ? t("common.unsaved") : t("common.saved")}
         </span>
