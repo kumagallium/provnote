@@ -2883,75 +2883,9 @@ export function NoteApp() {
     }
   }, [fm.handleRenameMedia]);
 
-  // 認証読み込み中
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-dvh bg-background">
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
-  // 未認証
-  if (!authenticated) {
-    return (
-      <>
-        <LoginScreen onSignIn={() => signIn("google-drive")} onSelectLocal={() => switchProvider(isTauri() ? "filesystem" : "local")} />
-        {authError && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 max-w-sm px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm shadow-lg">
-            <p className="font-medium">{t("login.authError")}</p>
-            <p className="text-xs mt-1 opacity-80">{authError}</p>
-          </div>
-        )}
-      </>
-    );
-  }
-
-  const sidebarProps = {
-    activeFileId: fm.activeFileId,
-    onSelect: (fileId: string) => { fm.handleOpenFile(fileId); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "editor", fileId }); },
-    onNewNote: () => { fm.handleNewNote(); setShowMemos(false); setSidebarOpen(false); },
-    onRefresh: fm.refreshFiles,
-    onSignOut: signOut,
-    onShowReleaseNotes: () => setShowReleaseNotes(true),
-    onShowSettings: () => { setShowSettings(true); setSidebarOpen(false); },
-    agentConfigured,
-    recentNotes: fm.recentNotes,
-    onShowNoteList: () => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "notes" }); },
-    mediaIndex: fm.mediaIndex,
-    onShowAssetGallery: (type: import("./features/asset-browser").MediaType) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "assets", mediaType: type }); },
-    noteIndex: fm.noteIndex,
-    onShowLabelGallery: (label: string) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "labels", label }); },
-    activeAssetType: fm.activeAssetType,
-    activeLabel: fm.activeLabel,
-    filesLoading: fm.filesLoading,
-    memoCount: capture.captureIndex?.captures.length ?? 0,
-    onShowMemos: () => { setShowMemos(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setSidebarOpen(false); router.navigate({ view: "memos" }); },
-    memosActive: showMemos,
-    wikiCounts: (() => {
-      let summary = 0;
-      let concept = 0;
-      let synthesis = 0;
-      for (const meta of fm.wikiMetas.values()) {
-        if (meta.kind === "summary") summary++;
-        else if (meta.kind === "concept") concept++;
-        else if (meta.kind === "synthesis") synthesis++;
-      }
-      return { summary, concept, synthesis };
-    })(),
-    onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
-    activeWikiKind: fm.activeWikiKind,
-    aiAvailable: aiAvailable ?? false,
-    onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-log" }); },
-    onShowWikiLint: () => { setActiveWikiView("lint"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-lint" }); },
-    activeWikiView,
-    skillCount: fm.skillMetas.size,
-    onShowSkillList: () => { setShowSkillList(true); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); },
-    skillActive: showSkillList,
-  };
-
   // Wiki 単体の再生成（WikiBanner / Settings の Maintenance タブ両方から呼ばれる）
   // openAfter=true で再生成後にエディタで開く（バナー経由のとき）
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
   const regenerateWikiById = useCallback(async (
     wikiId: string,
     options?: { model?: string; openAfter?: boolean },
@@ -3064,7 +2998,6 @@ export function NoteApp() {
           if (sDoc) sourceDocs.push({ noteId, doc: sDoc });
         }
 
-        // ソースノートが読めない場合（チャット由来など）、Wiki 自身をソースにする
         if (sourceDocs.length === 0) {
           sourceDocs.push({ noteId: wikiId, doc });
         }
@@ -3132,6 +3065,7 @@ export function NoteApp() {
   }, [fm]);
 
   // Settings → Maintenance タブから呼ばれる Wiki サマリー
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
   const wikiSummariesForSettings = useMemo(() => {
     return fm.wikiFiles.map((wf) => {
       const meta = fm.wikiMetas.get(wf.id);
@@ -3144,6 +3078,73 @@ export function NoteApp() {
       };
     });
   }, [fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc]);
+
+  // 認証読み込み中
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-dvh bg-background">
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  // 未認証
+  if (!authenticated) {
+    return (
+      <>
+        <LoginScreen onSignIn={() => signIn("google-drive")} onSelectLocal={() => switchProvider(isTauri() ? "filesystem" : "local")} />
+        {authError && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 max-w-sm px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm shadow-lg">
+            <p className="font-medium">{t("login.authError")}</p>
+            <p className="text-xs mt-1 opacity-80">{authError}</p>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  const sidebarProps = {
+    activeFileId: fm.activeFileId,
+    onSelect: (fileId: string) => { fm.handleOpenFile(fileId); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "editor", fileId }); },
+    onNewNote: () => { fm.handleNewNote(); setShowMemos(false); setSidebarOpen(false); },
+    onRefresh: fm.refreshFiles,
+    onSignOut: signOut,
+    onShowReleaseNotes: () => setShowReleaseNotes(true),
+    onShowSettings: () => { setShowSettings(true); setSidebarOpen(false); },
+    agentConfigured,
+    recentNotes: fm.recentNotes,
+    onShowNoteList: () => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "notes" }); },
+    mediaIndex: fm.mediaIndex,
+    onShowAssetGallery: (type: import("./features/asset-browser").MediaType) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "assets", mediaType: type }); },
+    noteIndex: fm.noteIndex,
+    onShowLabelGallery: (label: string) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "labels", label }); },
+    activeAssetType: fm.activeAssetType,
+    activeLabel: fm.activeLabel,
+    filesLoading: fm.filesLoading,
+    memoCount: capture.captureIndex?.captures.length ?? 0,
+    onShowMemos: () => { setShowMemos(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setSidebarOpen(false); router.navigate({ view: "memos" }); },
+    memosActive: showMemos,
+    wikiCounts: (() => {
+      let summary = 0;
+      let concept = 0;
+      let synthesis = 0;
+      for (const meta of fm.wikiMetas.values()) {
+        if (meta.kind === "summary") summary++;
+        else if (meta.kind === "concept") concept++;
+        else if (meta.kind === "synthesis") synthesis++;
+      }
+      return { summary, concept, synthesis };
+    })(),
+    onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
+    activeWikiKind: fm.activeWikiKind,
+    aiAvailable: aiAvailable ?? false,
+    onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-log" }); },
+    onShowWikiLint: () => { setActiveWikiView("lint"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-lint" }); },
+    activeWikiView,
+    skillCount: fm.skillMetas.size,
+    onShowSkillList: () => { setShowSkillList(true); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); },
+    skillActive: showSkillList,
+  };
 
   return (
     <div className="flex flex-col h-dvh font-sans antialiased bg-background text-foreground">
