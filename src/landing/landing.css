@@ -25,7 +25,17 @@ body {
 .lp-section {
   max-width: 1080px;
   margin: 0 auto;
-  padding: clamp(64px, 10vw, 120px) clamp(24px, 6vw, 48px);
+  /* Section spacing: ~96-160px between adjacent sections (sum of bottom + top
+     padding). Previously clamp(64,10vw,120) produced 128-240px, which felt
+     stretched on shorter sections. */
+  padding: clamp(48px, 6vw, 80px) clamp(24px, 6vw, 48px);
+}
+
+/* Hero gets a slightly more generous top/bottom rhythm so the page opens with
+   breathing room rather than sliding straight into Problem. */
+.lp-section:first-of-type {
+  padding-top: clamp(72px, 9vw, 120px);
+  padding-bottom: clamp(56px, 7vw, 96px);
 }
 
 .lp-eyebrow {
