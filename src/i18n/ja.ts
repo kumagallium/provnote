@@ -314,6 +314,8 @@ export const ja: Record<string, string> = {
   "settings.maintenance.running": "実行中...",
   "settings.maintenance.confirm": "{count} 件の Wiki を再生成します。LLM 呼び出しが発生し、コストとトークン消費があります。続行しますか？",
   "settings.maintenance.failed": "失敗",
+  "settings.maintenance.cancelling": "キャンセル中...",
+  "settings.maintenance.cancellingHint": "現在処理中の Wiki が完了したら停止します。LLM 呼び出しは中断できません。",
   "settings.maintenance.current": "処理中",
   "settings.maintenance.done": "完了しました。",
   "settings.maintenance.unavailable": "再生成ハンドラが利用できません。",

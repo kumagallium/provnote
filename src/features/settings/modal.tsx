@@ -1471,6 +1471,7 @@ function MaintenanceTab({
   cancelBulkRef,
 }: MaintenanceTabProps) {
   const KINDS: WikiKind[] = ["concept", "summary", "synthesis"];
+  const [cancelling, setCancelling] = useState(false);
 
   const targets = useMemo(
     () => wikiSummaries.filter((w) => bulkKinds.has(w.kind)),
@@ -1490,6 +1491,7 @@ function MaintenanceTab({
     if (!window.confirm(confirmMsg)) return;
 
     setBulkRunning(true);
+    setCancelling(false);
     cancelBulkRef.current = false;
     setBulkProgress({ done: 0, total: targets.length, failed: 0 });
 
@@ -1505,10 +1507,12 @@ function MaintenanceTab({
     }
 
     setBulkRunning(false);
+    setCancelling(false);
   };
 
   const handleCancel = () => {
     cancelBulkRef.current = true;
+    setCancelling(true);
   };
 
   const kindLabel = (k: WikiKind) =>
@@ -1613,8 +1617,8 @@ function MaintenanceTab({
               )}
             </span>
             {bulkRunning && (
-              <Button variant="ghost" size="sm" onClick={handleCancel}>
-                {t("common.cancel")}
+              <Button variant="ghost" size="sm" onClick={handleCancel} disabled={cancelling}>
+                {cancelling ? t("settings.maintenance.cancelling") : t("common.cancel")}
               </Button>
             )}
           </div>
@@ -1627,6 +1631,11 @@ function MaintenanceTab({
           {bulkProgress.current && bulkRunning && (
             <div className="text-[11px] text-muted-foreground truncate">
               {t("settings.maintenance.current")}: {bulkProgress.current}
+            </div>
+          )}
+          {cancelling && bulkRunning && (
+            <div className="text-[11px] text-amber-600">
+              {t("settings.maintenance.cancellingHint")}
             </div>
           )}
           {!bulkRunning && bulkProgress.done > 0 && (

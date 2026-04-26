@@ -314,6 +314,8 @@ export const en: Record<string, string> = {
   "settings.maintenance.running": "Running...",
   "settings.maintenance.confirm": "Regenerate {count} wiki page(s)? This will issue LLM calls and incur cost / token usage. Continue?",
   "settings.maintenance.failed": "failed",
+  "settings.maintenance.cancelling": "Cancelling...",
+  "settings.maintenance.cancellingHint": "Will stop after the current Wiki finishes. The in-flight LLM call cannot be interrupted.",
   "settings.maintenance.current": "Processing",
   "settings.maintenance.done": "Done.",
   "settings.maintenance.unavailable": "Regenerate handler is not available.",
