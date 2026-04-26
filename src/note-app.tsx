@@ -70,7 +70,7 @@ import {
 } from "./features/ai-assistant";
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -2940,7 +2940,8 @@ export function NoteApp() {
 
         const synthHeaders: Record<string, string> = { "Content-Type": "application/json" };
         if (!isTauri()) {
-          const llmModel = getDefaultLLMModel();
+          // Synthesis は Chat & Synthesis モデル経由（未設定なら default にフォールバック）
+          const llmModel = getChatSynthesisLLMModel();
           if (llmModel) {
             synthHeaders["X-LLM-API-Key"] = JSON.stringify({
               provider: llmModel.provider, modelId: llmModel.modelId,
