@@ -316,6 +316,8 @@ export const ja: Record<string, string> = {
   "settings.maintenance.failed": "失敗",
   "settings.maintenance.cancelling": "キャンセル中...",
   "settings.maintenance.cancellingHint": "現在処理中の Wiki が完了したら停止します。LLM 呼び出しは中断できません。",
+  "settings.maintenance.failedList": "失敗した Wiki",
+  "settings.maintenance.retryFailed": "失敗した Wiki だけ再試行",
   "settings.maintenance.current": "処理中",
   "settings.maintenance.done": "完了しました。",
   "settings.maintenance.unavailable": "再生成ハンドラが利用できません。",

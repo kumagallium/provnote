@@ -93,6 +93,15 @@ export type RegenerateWikiHandler = (
   options?: { model?: string },
 ) => Promise<{ ok: boolean; error?: string }>;
 
+type BulkFailedItem = { id: string; title: string; error?: string };
+type BulkProgress = {
+  done: number;
+  total: number;
+  failed: number;
+  current?: string;
+  failedItems: BulkFailedItem[];
+};
+
 // ラベルタブで使う内部キーと i18n デフォルト名のマッピング
 const LABEL_I18N_KEYS: Record<CoreLabel, string> = {
   procedure: "label.step",
@@ -154,7 +163,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [bulkKinds, setBulkKinds] = useState<Set<WikiKind>>(new Set(["concept", "summary", "synthesis"]));
   const [bulkModelOverride, setBulkModelOverride] = useState("");
   const [bulkRunning, setBulkRunning] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failed: number; current?: string } | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
   const cancelBulkRef = useRef(false);
 
   // モデル追加フォーム
@@ -1449,8 +1458,8 @@ type MaintenanceTabProps = {
   setBulkModelOverride: (s: string) => void;
   bulkRunning: boolean;
   setBulkRunning: (b: boolean) => void;
-  bulkProgress: { done: number; total: number; failed: number; current?: string } | null;
-  setBulkProgress: (p: { done: number; total: number; failed: number; current?: string } | null) => void;
+  bulkProgress: BulkProgress | null;
+  setBulkProgress: (p: BulkProgress | null) => void;
   cancelBulkRef: { current: boolean };
 };
 
@@ -1485,29 +1494,39 @@ function MaintenanceTab({
     setBulkKinds(next);
   };
 
-  const handleRun = async () => {
-    if (!onRegenerateWiki || bulkRunning || targets.length === 0) return;
-    const confirmMsg = t("settings.maintenance.confirm").replace("{count}", String(targets.length));
+  const runRegenerate = async (items: { id: string; title: string }[]) => {
+    if (!onRegenerateWiki || bulkRunning || items.length === 0) return;
+    const confirmMsg = t("settings.maintenance.confirm").replace("{count}", String(items.length));
     if (!window.confirm(confirmMsg)) return;
 
     setBulkRunning(true);
     setCancelling(false);
     cancelBulkRef.current = false;
-    setBulkProgress({ done: 0, total: targets.length, failed: 0 });
+    setBulkProgress({ done: 0, total: items.length, failed: 0, failedItems: [] });
 
     let done = 0;
     let failed = 0;
-    for (const w of targets) {
+    const failedItems: BulkFailedItem[] = [];
+    for (const w of items) {
       if (cancelBulkRef.current) break;
-      setBulkProgress({ done, total: targets.length, failed, current: w.title });
+      setBulkProgress({ done, total: items.length, failed, current: w.title, failedItems });
       const result = await onRegenerateWiki(w.id, bulkModelOverride.trim() ? { model: bulkModelOverride.trim() } : undefined);
-      if (!result.ok) failed += 1;
+      if (!result.ok) {
+        failed += 1;
+        failedItems.push({ id: w.id, title: w.title, error: result.error });
+      }
       done += 1;
-      setBulkProgress({ done, total: targets.length, failed });
+      setBulkProgress({ done, total: items.length, failed, failedItems });
     }
 
     setBulkRunning(false);
     setCancelling(false);
+  };
+
+  const handleRun = () => runRegenerate(targets.map((w) => ({ id: w.id, title: w.title })));
+  const handleRetryFailed = () => {
+    if (!bulkProgress) return;
+    runRegenerate(bulkProgress.failedItems.map((f) => ({ id: f.id, title: f.title })));
   };
 
   const handleCancel = () => {
@@ -1643,6 +1662,33 @@ function MaintenanceTab({
               {t("settings.maintenance.done")}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 失敗 Wiki 一覧 + リトライ */}
+      {bulkProgress && !bulkRunning && bulkProgress.failedItems.length > 0 && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 space-y-2">
+          <div className="text-xs font-semibold text-red-700 dark:text-red-400">
+            {t("settings.maintenance.failedList")} ({bulkProgress.failedItems.length})
+          </div>
+          <ul className="space-y-1 max-h-40 overflow-y-auto">
+            {bulkProgress.failedItems.map((f) => (
+              <li key={f.id} className="text-[11px]">
+                <span className="text-foreground">{f.title}</span>
+                {f.error && (
+                  <span className="text-muted-foreground ml-2">— {f.error}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleRetryFailed}
+            disabled={!onRegenerateWiki}
+          >
+            {t("settings.maintenance.retryFailed")}
+          </Button>
         </div>
       )}
 

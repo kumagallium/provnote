@@ -316,6 +316,8 @@ export const en: Record<string, string> = {
   "settings.maintenance.failed": "failed",
   "settings.maintenance.cancelling": "Cancelling...",
   "settings.maintenance.cancellingHint": "Will stop after the current Wiki finishes. The in-flight LLM call cannot be interrupted.",
+  "settings.maintenance.failedList": "Failed wikis",
+  "settings.maintenance.retryFailed": "Retry failed only",
   "settings.maintenance.current": "Processing",
   "settings.maintenance.done": "Done.",
   "settings.maintenance.unavailable": "Regenerate handler is not available.",
