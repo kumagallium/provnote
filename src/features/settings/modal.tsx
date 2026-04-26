@@ -128,6 +128,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [model, setModel] = useState("");
   const [embeddingModel, setEmbeddingModel] = useState("");
   const [chatSynthesisModel, setChatSynthesisModel] = useState("");
+  const [autoIngestChat, setAutoIngestChat] = useState(true);
   const [profile, setProfile] = useState("");
   const [disabledTools, setDisabledTools] = useState<string[]>([]);
   const [registryUrl, setRegistryUrl] = useState("");
@@ -284,6 +285,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
     setModel(settings.model);
     setEmbeddingModel(settings.embeddingModel ?? "");
     setChatSynthesisModel(settings.chatSynthesisModel ?? "");
+    setAutoIngestChat(settings.autoIngestChat ?? true);
     setProfile(settings.profile);
     setDisabledTools(settings.disabledTools ?? []);
     setRegistryUrl(settings.registryUrl ?? "");
@@ -560,11 +562,11 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
   // ── 保存 ──
   const handleSave = useCallback(() => {
-    saveSettings({ model, embeddingModel, chatSynthesisModel, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont });
+    saveSettings({ model, embeddingModel, chatSynthesisModel, autoIngestChat, profile, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont });
     applyFontMode(latinFont, jpFont);
     setSaved(true);
     setTimeout(() => onClose(), 600);
-  }, [model, embeddingModel, chatSynthesisModel, profile, disabledTools, registryUrl, customLabels, latinFont, jpFont, onClose]);
+  }, [model, embeddingModel, chatSynthesisModel, autoIngestChat, profile, disabledTools, registryUrl, customLabels, latinFont, jpFont, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -835,6 +837,26 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               <p className="text-xs text-muted-foreground mt-1.5">
                 {t("settings.chatSynthesisModelHelp")}
               </p>
+            </div>
+
+            {/* チャットの自動 Wiki 取り込み */}
+            <div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoIngestChat}
+                  onChange={(e) => { setAutoIngestChat(e.target.checked); setSaved(false); }}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="flex-1">
+                  <span className="text-xs font-semibold text-foreground block">
+                    {t("settings.autoIngestChat")}
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5 block">
+                    {t("settings.autoIngestChatHelp")}
+                  </span>
+                </span>
+              </label>
             </div>
 
             {/* ── Storage（デスクトップ版のみ） ── */}

@@ -70,7 +70,7 @@ import {
 } from "./features/ai-assistant";
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -1170,8 +1170,9 @@ function NoteEditorInner({
         aiAssistant.setLoading(false);
         markDirty();
 
-        // Query → Wiki 自動保存: LLM 判定を優先、fallback でヒューリスティック
-        if (onAutoIngestChat) {
+        // Query → Wiki 自動保存: LLM 判定を優先、fallback でヒューリスティック。
+        // ユーザーが Settings でオフにしている場合はスキップ。
+        if (onAutoIngestChat && getAutoIngestChat()) {
           try {
             const allMessages = [
               ...aiAssistant.messages,
