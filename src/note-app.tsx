@@ -2883,6 +2883,202 @@ export function NoteApp() {
     }
   }, [fm.handleRenameMedia]);
 
+  // Wiki 単体の再生成（WikiBanner / Settings の Maintenance タブ両方から呼ばれる）
+  // openAfter=true で再生成後にエディタで開く（バナー経由のとき）
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const regenerateWikiById = useCallback(async (
+    wikiId: string,
+    options?: { model?: string; openAfter?: boolean },
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const fileId = `wiki:${wikiId}`;
+    const doc = fm.getCachedDoc(fileId) ?? (await fm.loadDoc(fileId)) ?? null;
+    if (!doc || !doc.wikiMeta) {
+      return { ok: false, error: "Wiki not found" };
+    }
+
+    const wikiTitle = doc.title;
+    const selectedModel = options?.model || undefined;
+    const openAfter = options?.openAfter ?? false;
+    const toastId = `regen:${wikiId}`;
+    const isSynthesis = doc.wikiMeta.kind === "synthesis";
+
+    setIngestToast((prev) => ({
+      items: [
+        ...(prev?.items ?? []),
+        { id: toastId, status: "generating" as const, noteTitle: `Regenerating "${wikiTitle}"`, detail: selectedModel ? `Model: ${selectedModel}` : undefined },
+      ],
+    }));
+
+    try {
+      if (isSynthesis) {
+        const sourceConceptIds = doc.wikiMeta.derivedFromNotes;
+        const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
+        for (const cId of sourceConceptIds) {
+          const cDoc = await fm.loadDoc(`wiki:${cId}`);
+          if (!cDoc) continue;
+          const detail = extractWikiDetail(cId, cDoc);
+          if (!detail) continue;
+          concepts.push({
+            id: cId,
+            title: cDoc.title,
+            sections: detail.sectionHeadings.map((h, i) => ({
+              heading: h,
+              preview: detail.sectionPreviews[i] ?? "",
+            })),
+            relatedConcepts: [],
+          });
+        }
+
+        if (concepts.length < 2) {
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "Source concepts not found" } : i
+            ),
+          }));
+          return { ok: false, error: "Source concepts not found" };
+        }
+
+        const synthHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (!isTauri()) {
+          const llmModel = getDefaultLLMModel();
+          if (llmModel) {
+            synthHeaders["X-LLM-API-Key"] = JSON.stringify({
+              provider: llmModel.provider, modelId: llmModel.modelId,
+              apiKey: llmModel.apiKey, apiBase: llmModel.apiBase, name: llmModel.name,
+            });
+          }
+        }
+        const synthRes = await fetch(`${apiBase()}/wiki/synthesize`, {
+          method: "POST",
+          headers: synthHeaders,
+          body: JSON.stringify({
+            concepts,
+            existingSynthesisTitles: [],
+            language: "ja",
+            ...(selectedModel ? { model: selectedModel } : {}),
+          }),
+        });
+        const synthResult = synthRes.ok
+          ? await synthRes.json() as { candidates: any[]; model?: string }
+          : { candidates: [] };
+        if (synthResult.candidates && synthResult.candidates.length > 0) {
+          const candidate = synthResult.candidates[0];
+          const newDoc = buildSynthesisDocument(candidate, synthResult.model ?? null, "ja", buildNoteIndex(fm.noteIndex));
+          if (newDoc.wikiMeta) {
+            newDoc.wikiMeta.generatedBy = {
+              model: synthResult.model ?? selectedModel ?? "unknown",
+              version: "1.0.0",
+            };
+          }
+          await fm.handleSaveWikiFile(wikiId, newDoc);
+          embedWikiSections(wikiId, newDoc).catch(() => {});
+          if (openAfter) fm.handleOpenWikiFile(wikiId);
+          const modelLabel = synthResult.model ?? selectedModel ?? "default";
+          wikiLog.append("regenerate", [wikiId], `Regenerated synthesis "${wikiTitle}" with ${modelLabel}`).catch(() => {});
+
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
+            ),
+          }));
+          return { ok: true };
+        } else {
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No synthesis generated" } : i
+            ),
+          }));
+          return { ok: false, error: "No synthesis generated" };
+        }
+      } else {
+        const sourceNoteIds = doc.wikiMeta.derivedFromNotes;
+        const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
+        for (const noteId of sourceNoteIds) {
+          const sDoc = await fm.loadDoc(noteId);
+          if (sDoc) sourceDocs.push({ noteId, doc: sDoc });
+        }
+
+        if (sourceDocs.length === 0) {
+          sourceDocs.push({ noteId: wikiId, doc });
+        }
+
+        const primarySource = sourceDocs[0];
+        const result = await ingestNote(
+          primarySource.noteId,
+          primarySource.doc,
+          [],
+          "ja",
+          selectedModel,
+        );
+
+        if (result.wikis.length > 0) {
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, detail: "Rewriting..." } : i
+            ),
+          }));
+
+          const rewritten = await rewriteAndMerge(
+            doc,
+            result.wikis[0],
+            primarySource.noteId,
+            result.model,
+            "ja",
+            buildNoteIndex(fm.noteIndex),
+          );
+          if (rewritten.wikiMeta) {
+            rewritten.wikiMeta.generatedBy = {
+              model: result.model ?? selectedModel ?? "unknown",
+              version: "1.0.0",
+            };
+          }
+          await fm.handleSaveWikiFile(wikiId, rewritten);
+          embedWikiSections(wikiId, rewritten).catch(() => {});
+          if (openAfter) fm.handleOpenWikiFile(wikiId);
+          const modelLabel = result.model ?? selectedModel ?? "default";
+          wikiLog.append("regenerate", [wikiId], `Regenerated "${wikiTitle}" with ${modelLabel}`).catch(() => {});
+
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
+            ),
+          }));
+          return { ok: true };
+        } else {
+          setIngestToast((prev) => ({
+            items: (prev?.items ?? []).map((i) =>
+              i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No content generated" } : i
+            ),
+          }));
+          return { ok: false, error: "No content generated" };
+        }
+      }
+    } catch (err) {
+      console.error("Wiki の再生成に失敗:", err);
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+        ),
+      }));
+      return { ok: false, error: err instanceof Error ? err.message : "Failed" };
+    }
+  }, [fm]);
+
+  // Settings → Maintenance タブから呼ばれる Wiki サマリー
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const wikiSummariesForSettings = useMemo(() => {
+    return fm.wikiFiles.map((wf) => {
+      const meta = fm.wikiMetas.get(wf.id);
+      const cached = fm.getCachedDoc(`wiki:${wf.id}`);
+      return {
+        id: wf.id,
+        title: cached?.title ?? wf.name ?? wf.id,
+        kind: (meta?.kind ?? "concept") as WikiKind,
+        model: meta?.model,
+      };
+    });
+  }, [fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc]);
+
   // 認証読み込み中
   if (authLoading) {
     return (
@@ -3162,184 +3358,9 @@ export function NoteApp() {
               wikiMeta={fm.activeDoc.wikiMeta}
               loading={ingestToast?.items?.some((i) => i.id?.startsWith("regen:") && i.status === "generating")}
               onRegenerate={async (options) => {
-                if (!fm.activeDoc?.wikiMeta) return;
-                const wikiId = fm.activeFileId!.replace("wiki:", "");
-                const wikiTitle = fm.activeDoc.title;
-                const selectedModel = options?.model || undefined;
-                const toastId = `regen:${wikiId}`;
-
-                const isSynthesis = fm.activeDoc.wikiMeta.kind === "synthesis";
-
-                // トースト: 開始
-                setIngestToast((prev) => ({
-                  items: [
-                    ...(prev?.items ?? []),
-                    { id: toastId, status: "generating" as const, noteTitle: `Regenerating "${wikiTitle}"`, detail: selectedModel ? `Model: ${selectedModel}` : undefined },
-                  ],
-                }));
-
-                try {
-                  if (isSynthesis) {
-                    // Synthesis: 元の Concept から再合成
-                    const sourceConceptIds = fm.activeDoc.wikiMeta.derivedFromNotes;
-                    const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
-                    for (const cId of sourceConceptIds) {
-                      const doc = await fm.loadDoc(`wiki:${cId}`);
-                      if (!doc) continue;
-                      const detail = extractWikiDetail(cId, doc);
-                      if (!detail) continue;
-                      concepts.push({
-                        id: cId,
-                        title: doc.title,
-                        sections: detail.sectionHeadings.map((h, i) => ({
-                          heading: h,
-                          preview: detail.sectionPreviews[i] ?? "",
-                        })),
-                        relatedConcepts: [],
-                      });
-                    }
-
-                    if (concepts.length < 2) {
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "Source concepts not found" } : i
-                        ),
-                      }));
-                      return;
-                    }
-
-                    // Synthesis の再生成は直接 API を呼ぶ（fetchSynthesisCandidates は concepts >= 3 ガードあり）
-                    const synthHeaders: Record<string, string> = { "Content-Type": "application/json" };
-                    if (!isTauri()) {
-                      const llmModel = getDefaultLLMModel();
-                      if (llmModel) {
-                        synthHeaders["X-LLM-API-Key"] = JSON.stringify({
-                          provider: llmModel.provider, modelId: llmModel.modelId,
-                          apiKey: llmModel.apiKey, apiBase: llmModel.apiBase, name: llmModel.name,
-                        });
-                      }
-                    }
-                    const synthRes = await fetch(`${apiBase()}/wiki/synthesize`, {
-                      method: "POST",
-                      headers: synthHeaders,
-                      body: JSON.stringify({
-                        concepts,
-                        existingSynthesisTitles: [],
-                        language: "ja",
-                        ...(selectedModel ? { model: selectedModel } : {}),
-                      }),
-                    });
-                    const synthResult = synthRes.ok
-                      ? await synthRes.json() as { candidates: any[]; model?: string }
-                      : { candidates: [] };
-                    if (synthResult.candidates && synthResult.candidates.length > 0) {
-                      const candidate = synthResult.candidates[0];
-                      const newDoc = buildSynthesisDocument(candidate, synthResult.model ?? null, "ja", buildNoteIndex(fm.noteIndex));
-                      if (newDoc.wikiMeta) {
-                        newDoc.wikiMeta.generatedBy = {
-                          model: synthResult.model ?? selectedModel ?? "unknown",
-                          version: "1.0.0",
-                        };
-                      }
-                      await fm.handleSaveWikiFile(wikiId, newDoc);
-                      embedWikiSections(wikiId, newDoc).catch(() => {});
-                      fm.handleOpenWikiFile(wikiId);
-                      const modelLabel = synthResult.model ?? selectedModel ?? "default";
-                      wikiLog.append("regenerate", [wikiId], `Regenerated synthesis "${wikiTitle}" with ${modelLabel}`).catch(() => {});
-
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
-                        ),
-                      }));
-                    } else {
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No synthesis generated" } : i
-                        ),
-                      }));
-                    }
-                  } else {
-                    // Summary / Concept: 由来ノートから再生成
-                    const sourceNoteIds = fm.activeDoc.wikiMeta.derivedFromNotes;
-                    if (sourceNoteIds.length === 0) {
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No source notes" } : i
-                        ),
-                      }));
-                      return;
-                    }
-
-                    const sourceDocs: { noteId: string; doc: import("./lib/document-types").GraphiumDocument }[] = [];
-                    for (const noteId of sourceNoteIds) {
-                      const doc = await fm.loadDoc(noteId);
-                      if (doc) sourceDocs.push({ noteId, doc });
-                    }
-
-                    // ソースノートが読めない場合（チャット由来など）、Wiki 自身をソースにする
-                    if (sourceDocs.length === 0) {
-                      sourceDocs.push({ noteId: wikiId, doc: fm.activeDoc });
-                    }
-
-                    const primarySource = sourceDocs[0];
-                    const result = await ingestNote(
-                      primarySource.noteId,
-                      primarySource.doc,
-                      [],
-                      "ja",
-                      selectedModel,
-                    );
-
-                    if (result.wikis.length > 0) {
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, detail: "Rewriting..." } : i
-                        ),
-                      }));
-
-                      const rewritten = await rewriteAndMerge(
-                        fm.activeDoc,
-                        result.wikis[0],
-                        primarySource.noteId,
-                        result.model,
-                        "ja",
-                        buildNoteIndex(fm.noteIndex),
-                      );
-                      if (rewritten.wikiMeta) {
-                        rewritten.wikiMeta.generatedBy = {
-                          model: result.model ?? selectedModel ?? "unknown",
-                          version: "1.0.0",
-                        };
-                      }
-                      await fm.handleSaveWikiFile(wikiId, rewritten);
-                      embedWikiSections(wikiId, rewritten).catch(() => {});
-                      fm.handleOpenWikiFile(wikiId);
-                      const modelLabel = result.model ?? selectedModel ?? "default";
-                      wikiLog.append("regenerate", [wikiId], `Regenerated "${wikiTitle}" with ${modelLabel}`).catch(() => {});
-
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: modelLabel } : i
-                        ),
-                      }));
-                    } else {
-                      setIngestToast((prev) => ({
-                        items: (prev?.items ?? []).map((i) =>
-                          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No content generated" } : i
-                        ),
-                      }));
-                    }
-                  }
-                } catch (err) {
-                  console.error("Wiki の再生成に失敗:", err);
-                  // トースト: エラー
-                  setIngestToast((prev) => ({
-                    items: (prev?.items ?? []).map((i) =>
-                      i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
-                    ),
-                  }));
-                }
+                if (!fm.activeDoc?.wikiMeta || !fm.activeFileId) return;
+                const wikiId = fm.activeFileId.replace("wiki:", "");
+                await regenerateWikiById(wikiId, { model: options?.model, openAfter: true });
               }}
               onDelete={() => {
                 if (!fm.activeFileId) return;
@@ -3585,10 +3606,15 @@ export function NoteApp() {
       {showReleaseNotes && (
         <ReleaseNotesPanel onClose={() => setShowReleaseNotes(false)} />
       )}
-      <SettingsModal isOpen={showSettings} onClose={() => {
-        setShowSettings(false);
-        setAgentConfigured(isAgentConfigured());
-      }} />
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => {
+          setShowSettings(false);
+          setAgentConfigured(isAgentConfigured());
+        }}
+        wikiSummaries={wikiSummariesForSettings}
+        onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
+      />
       <Composer
         open={composer.open}
         mode={composer.mode}

@@ -1,6 +1,6 @@
 // 設定モーダル（タブ構成: General / AI Setup）
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Settings as SettingsIcon,
   ChevronDown,
@@ -36,6 +36,7 @@ import {
 } from "../../lib/graphium-root";
 import { useLocale, type Locale } from "../../i18n";
 import { CORE_LABELS, CORE_LABEL_PROV, type CoreLabel } from "../context-label/labels";
+import type { WikiKind } from "../../lib/document-types";
 
 // ── プロバイダー定義 ──
 const PROVIDERS = [
@@ -77,7 +78,29 @@ type ToolsResponse = {
   };
 };
 
-type Tab = "general" | "labels" | "ai-setup";
+type Tab = "general" | "labels" | "ai-setup" | "maintenance";
+
+// Settings → Maintenance タブで使う Wiki サマリー
+export type WikiSummaryForSettings = {
+  id: string;
+  title: string;
+  kind: WikiKind;
+  model?: string;
+};
+
+export type RegenerateWikiHandler = (
+  wikiId: string,
+  options?: { model?: string },
+) => Promise<{ ok: boolean; error?: string }>;
+
+type BulkFailedItem = { id: string; title: string; error?: string };
+type BulkProgress = {
+  done: number;
+  total: number;
+  failed: number;
+  current?: string;
+  failedItems: BulkFailedItem[];
+};
 
 // ラベルタブで使う内部キーと i18n デフォルト名のマッピング
 const LABEL_I18N_KEYS: Record<CoreLabel, string> = {
@@ -91,9 +114,13 @@ const LABEL_I18N_KEYS: Record<CoreLabel, string> = {
 type SettingsModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  /** Maintenance タブの一括 Regenerate 用 Wiki 一覧 */
+  wikiSummaries?: WikiSummaryForSettings[];
+  /** Maintenance タブから 1 件ずつ呼ばれる再生成ハンドラ */
+  onRegenerateWiki?: RegenerateWikiHandler;
 };
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
   const [tab, setTab] = useState<Tab>("general");
 
@@ -131,6 +158,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // ツール
   const [toolsData, setToolsData] = useState<ToolsResponse | null>(null);
+
+  // Maintenance タブ — Wiki 一括 Regenerate
+  const [bulkKinds, setBulkKinds] = useState<Set<WikiKind>>(new Set(["concept", "summary", "synthesis"]));
+  const [bulkModelOverride, setBulkModelOverride] = useState("");
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
+  const cancelBulkRef = useRef(false);
 
   // モデル追加フォーム
   const [showAddForm, setShowAddForm] = useState(false);
@@ -558,7 +592,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
       {/* タブ */}
       <div className="flex border-b border-border px-6">
-        {(["general", "labels", "ai-setup"] as Tab[]).map((tabId) => (
+        {(["general", "labels", "ai-setup", "maintenance"] as Tab[]).map((tabId) => (
           <button
             key={tabId}
             onClick={() => setTab(tabId)}
@@ -1376,6 +1410,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </>}
           </div>
         )}
+
+        {/* ── Maintenance タブ ── */}
+        {tab === "maintenance" && (
+          <MaintenanceTab
+            t={t}
+            wikiSummaries={wikiSummaries ?? []}
+            onRegenerateWiki={onRegenerateWiki}
+            availableModels={models}
+            defaultModel={defaultModel}
+            bulkKinds={bulkKinds}
+            setBulkKinds={setBulkKinds}
+            bulkModelOverride={bulkModelOverride}
+            setBulkModelOverride={setBulkModelOverride}
+            bulkRunning={bulkRunning}
+            setBulkRunning={setBulkRunning}
+            bulkProgress={bulkProgress}
+            setBulkProgress={setBulkProgress}
+            cancelBulkRef={cancelBulkRef}
+          />
+        )}
       </ModalBody>
 
       <ModalFooter>
@@ -1387,5 +1441,274 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </Button>
       </ModalFooter>
     </Modal>
+  );
+}
+
+// ── Maintenance タブ ──
+// Knowledge レイヤのメンテナンス操作。今は Wiki 一括 Regenerate のみ
+type MaintenanceTabProps = {
+  t: (key: string) => string;
+  wikiSummaries: WikiSummaryForSettings[];
+  onRegenerateWiki?: RegenerateWikiHandler;
+  availableModels: ModelInfo[];
+  defaultModel: string;
+  bulkKinds: Set<WikiKind>;
+  setBulkKinds: (s: Set<WikiKind>) => void;
+  bulkModelOverride: string;
+  setBulkModelOverride: (s: string) => void;
+  bulkRunning: boolean;
+  setBulkRunning: (b: boolean) => void;
+  bulkProgress: BulkProgress | null;
+  setBulkProgress: (p: BulkProgress | null) => void;
+  cancelBulkRef: { current: boolean };
+};
+
+function MaintenanceTab({
+  t,
+  wikiSummaries,
+  onRegenerateWiki,
+  availableModels,
+  defaultModel,
+  bulkKinds,
+  setBulkKinds,
+  bulkModelOverride,
+  setBulkModelOverride,
+  bulkRunning,
+  setBulkRunning,
+  bulkProgress,
+  setBulkProgress,
+  cancelBulkRef,
+}: MaintenanceTabProps) {
+  const KINDS: WikiKind[] = ["concept", "summary", "synthesis"];
+  const [cancelling, setCancelling] = useState(false);
+
+  const targets = useMemo(
+    () => wikiSummaries.filter((w) => bulkKinds.has(w.kind)),
+    [wikiSummaries, bulkKinds],
+  );
+
+  const toggleKind = (k: WikiKind) => {
+    const next = new Set(bulkKinds);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    setBulkKinds(next);
+  };
+
+  const runRegenerate = async (items: { id: string; title: string }[]) => {
+    if (!onRegenerateWiki || bulkRunning || items.length === 0) return;
+    const confirmMsg = t("settings.maintenance.confirm").replace("{count}", String(items.length));
+    if (!window.confirm(confirmMsg)) return;
+
+    setBulkRunning(true);
+    setCancelling(false);
+    cancelBulkRef.current = false;
+    setBulkProgress({ done: 0, total: items.length, failed: 0, failedItems: [] });
+
+    let done = 0;
+    let failed = 0;
+    const failedItems: BulkFailedItem[] = [];
+    for (const w of items) {
+      if (cancelBulkRef.current) break;
+      setBulkProgress({ done, total: items.length, failed, current: w.title, failedItems });
+      const result = await onRegenerateWiki(w.id, bulkModelOverride.trim() ? { model: bulkModelOverride.trim() } : undefined);
+      if (!result.ok) {
+        failed += 1;
+        failedItems.push({ id: w.id, title: w.title, error: result.error });
+      }
+      done += 1;
+      setBulkProgress({ done, total: items.length, failed, failedItems });
+    }
+
+    setBulkRunning(false);
+    setCancelling(false);
+  };
+
+  const handleRun = () => runRegenerate(targets.map((w) => ({ id: w.id, title: w.title })));
+  const handleRetryFailed = () => {
+    if (!bulkProgress) return;
+    runRegenerate(bulkProgress.failedItems.map((f) => ({ id: f.id, title: f.title })));
+  };
+
+  const handleCancel = () => {
+    cancelBulkRef.current = true;
+    setCancelling(true);
+  };
+
+  const kindLabel = (k: WikiKind) =>
+    k === "concept" ? t("settings.maintenance.kind.concept")
+    : k === "summary" ? t("settings.maintenance.kind.summary")
+    : t("settings.maintenance.kind.synthesis");
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="text-xs font-semibold text-foreground mb-1">
+          {t("settings.maintenance.regenAll.title")}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t("settings.maintenance.regenAll.help")}
+        </p>
+      </div>
+
+      {/* kind フィルタ */}
+      <div>
+        <label className="text-xs font-semibold text-foreground mb-1 block">
+          {t("settings.maintenance.kindFilter")}
+        </label>
+        <div className="flex gap-2 flex-wrap">
+          {KINDS.map((k) => {
+            const count = wikiSummaries.filter((w) => w.kind === k).length;
+            const checked = bulkKinds.has(k);
+            return (
+              <button
+                key={k}
+                type="button"
+                disabled={bulkRunning}
+                onClick={() => toggleKind(k)}
+                className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                  checked
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                } ${bulkRunning ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {kindLabel(k)} <span className="opacity-70">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* モデル指定（任意） */}
+      <div>
+        <label className="text-xs font-semibold text-foreground mb-1 block">
+          {t("settings.maintenance.modelOverride")}
+        </label>
+        <div className="relative">
+          <select
+            value={bulkModelOverride}
+            onChange={(e) => setBulkModelOverride(e.target.value)}
+            disabled={bulkRunning}
+            className="w-full appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+          >
+            <option value="">
+              {t("settings.maintenance.modelOverrideDefault")}
+              {defaultModel ? ` (${defaultModel})` : ""}
+            </option>
+            {availableModels.map((m) => (
+              <option key={m.id || m.name} value={m.name}>
+                {m.name}
+                {m.provider ? ` — ${m.provider}` : ""}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={14}
+            className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {t("settings.maintenance.modelOverrideHelp")}
+        </p>
+      </div>
+
+      {/* 対象件数 */}
+      <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+        <div className="text-xs">
+          <span className="font-semibold text-foreground">
+            {t("settings.maintenance.target")}: {targets.length}
+          </span>
+          <span className="text-muted-foreground ml-2">
+            / {t("settings.maintenance.total")}: {wikiSummaries.length}
+          </span>
+        </div>
+      </div>
+
+      {/* 進捗表示 */}
+      {bulkProgress && (
+        <div className="rounded-md border border-border bg-background px-3 py-2 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium">
+              {bulkProgress.done} / {bulkProgress.total}
+              {bulkProgress.failed > 0 && (
+                <span className="text-red-500 ml-2">
+                  ({t("settings.maintenance.failed")}: {bulkProgress.failed})
+                </span>
+              )}
+            </span>
+            {bulkRunning && (
+              <Button variant="ghost" size="sm" onClick={handleCancel} disabled={cancelling}>
+                {cancelling ? t("settings.maintenance.cancelling") : t("common.cancel")}
+              </Button>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${(bulkProgress.done / Math.max(1, bulkProgress.total)) * 100}%` }}
+            />
+          </div>
+          {bulkProgress.current && bulkRunning && (
+            <div className="text-[11px] text-muted-foreground truncate">
+              {t("settings.maintenance.current")}: {bulkProgress.current}
+            </div>
+          )}
+          {cancelling && bulkRunning && (
+            <div className="text-[11px] text-amber-600">
+              {t("settings.maintenance.cancellingHint")}
+            </div>
+          )}
+          {!bulkRunning && bulkProgress.done > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              {t("settings.maintenance.done")}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 失敗 Wiki 一覧 + リトライ */}
+      {bulkProgress && !bulkRunning && bulkProgress.failedItems.length > 0 && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 space-y-2">
+          <div className="text-xs font-semibold text-red-700 dark:text-red-400">
+            {t("settings.maintenance.failedList")} ({bulkProgress.failedItems.length})
+          </div>
+          <ul className="space-y-1 max-h-40 overflow-y-auto">
+            {bulkProgress.failedItems.map((f) => (
+              <li key={f.id} className="text-[11px]">
+                <span className="text-foreground">{f.title}</span>
+                {f.error && (
+                  <span className="text-muted-foreground ml-2">— {f.error}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleRetryFailed}
+            disabled={!onRegenerateWiki}
+          >
+            {t("settings.maintenance.retryFailed")}
+          </Button>
+        </div>
+      )}
+
+      {/* 実行 */}
+      <div>
+        <Button
+          size="sm"
+          onClick={handleRun}
+          disabled={bulkRunning || targets.length === 0 || !onRegenerateWiki}
+        >
+          {bulkRunning
+            ? t("settings.maintenance.running")
+            : t("settings.maintenance.regenerate")}
+        </Button>
+        {!onRegenerateWiki && (
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {t("settings.maintenance.unavailable")}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
