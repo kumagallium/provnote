@@ -12,7 +12,11 @@ body {
 
 .lp-root {
   min-height: 100dvh;
-  background: var(--paper, #fafdf7);
+  /* Match the editor's note background exactly. --paper is an oklch value with
+     a slight green chroma; --color-background is the literal #fafdf7 the editor
+     body and BlockNote canvas use. Using --color-background here keeps the LP
+     and the editor visually identical when a user crosses the /app/ boundary. */
+  background: var(--color-background, #fafdf7);
   color: var(--ink, #1d2620);
   font-family: var(--ui, "Inter", system-ui, sans-serif);
   line-height: 1.55;
@@ -132,8 +136,11 @@ body {
 }
 
 .lp-card {
-  background: color-mix(in srgb, var(--paper, #fafdf7) 92%, var(--ink, #1d2620));
-  border: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  /* design.md: cards are pure white (--color-card #ffffff) on the warm
+     off-white body. Previously this used a tinted color-mix that diverged from
+     the rest of the design system. */
+  background: var(--color-card, #ffffff);
+  border: 1px solid var(--color-border, #d5e0d7);
   border-radius: 14px;
   padding: 1.4rem 1.5rem;
 }
@@ -168,8 +175,10 @@ body {
   top: 0;
   z-index: 10;
   backdrop-filter: blur(10px);
-  background: color-mix(in srgb, var(--paper, #fafdf7) 80%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--ink, #1d2620) 6%, transparent);
+  /* Use --color-surface (the editor's sub-panel tone) so the sticky header
+     reads as a separate band from the body, matching the editor convention. */
+  background: color-mix(in srgb, var(--color-surface, #f5f8f5) 88%, transparent);
+  border-bottom: 1px solid var(--color-border-subtle, #dce5dd);
 }
 
 .lp-header-inner {
