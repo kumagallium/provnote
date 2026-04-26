@@ -157,7 +157,10 @@ export function detectActivityType(
   doc: GraphiumDocument,
 ): { type: EditActivityType; agentLabel?: string } {
   if (doc.generatedBy) {
-    const model = doc.generatedBy.model ?? doc.generatedBy.agent;
+    // 旧 crucible-agent 連携は廃止されたので、その文字列が表示されないようマスクする。
+    // 新規データは agent: "ai" になっているが、過去データの後方互換のためここで吸収する。
+    const rawAgent = doc.generatedBy.agent === "crucible-agent" ? "ai" : doc.generatedBy.agent;
+    const model = doc.generatedBy.model ?? rawAgent;
     if (doc.derivedFromNoteId) {
       return { type: "ai_derivation", agentLabel: model };
     }

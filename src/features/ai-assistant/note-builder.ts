@@ -109,8 +109,10 @@ export function buildAiDerivedDocument(params: BuildParams): GraphiumDocument {
     derivedFromNoteId: sourceNoteId,
     derivedFromBlockId: sourceBlockIds[0],
     // AI 生成メタデータ
+    // `agent` は表示用のフォールバック識別子（model が無いときに使われる）。
+    // 旧 crucible-agent 連携は廃止されたので、ブランドに紐付かない "ai" を使う。
     generatedBy: {
-      agent: "crucible-agent",
+      agent: "ai",
       sessionId: agentResponse.session_id,
       model: agentResponse.model ?? undefined,
       tokenUsage: agentResponse.token_usage,
