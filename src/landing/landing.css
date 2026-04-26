@@ -277,12 +277,12 @@ body {
   font-size: 0.98rem;
 }
 
+/* Previously this added a 6%→transparent green gradient to Pillars/GetStarted.
+   The gradient was constrained to the 1080px section box, which made those
+   sections read as visibly narrower than Hero / Problem on wide viewports.
+   Visual rhythm now comes from the eyebrow label and section spacing alone. */
 .lp-section--accent {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--forest, #4b7a52) 6%, transparent),
-    transparent 70%
-  );
+  /* no-op — kept for backward semantic readability of section markup */
 }
 
 .lp-cta-card {
