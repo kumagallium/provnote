@@ -914,7 +914,10 @@ function NoteEditorInner({
     let actLabel: string | undefined;
     if (lastAiInsertRef.current) {
       actType = "ai_generation";
-      actLabel = getSelectedModel?.() ?? "ai";
+      // 挿入された内容はチャット応答由来なので、Chat & Synthesis モデルを優先。
+      // 未設定なら getChatSynthesisLLMModel が default にフォールバックするので
+      // 旧来の挙動（default モデル名を記録）も保たれる。
+      actLabel = getChatSynthesisLLMModel()?.name ?? getSelectedModel?.() ?? "ai";
       lastAiInsertRef.current = false;
     } else {
       const detected = detectActivityType(doc);
