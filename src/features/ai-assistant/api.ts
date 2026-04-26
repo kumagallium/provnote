@@ -2,17 +2,24 @@
 // /api/* エンドポイントを呼び出して AI 機能を提供する
 
 import { apiBase, isTauri } from "../../lib/platform";
-import { getRegistryUrl, getDefaultLLMModel } from "../settings/store";
+import { getRegistryUrl, getDefaultLLMModel, getChatSynthesisLLMModel } from "../settings/store";
 
-// Registry URL・LLM API キーが設定されている場合はヘッダーに含める
-function apiHeaders(extra?: Record<string, string>): Record<string, string> {
+/**
+ * Registry URL・LLM API キーが設定されている場合はヘッダーに含める。
+ * mode="chat" のとき、AI チャット用のモデル（Chat & Synthesis モデル、未設定なら default）の
+ * 認証情報を送る。インフラ系（fetchModels / fetchProfiles）は default のみで十分。
+ */
+function apiHeaders(
+  mode: "default" | "chat" = "default",
+  extra?: Record<string, string>,
+): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   const registryUrl = getRegistryUrl();
   if (registryUrl) h["X-Registry-URL"] = registryUrl;
 
   // Web モード（非 Tauri）: クライアント保持の API キーをヘッダーで送信
   if (!isTauri()) {
-    const model = getDefaultLLMModel();
+    const model = mode === "chat" ? getChatSynthesisLLMModel() : getDefaultLLMModel();
     if (model) {
       h["X-LLM-API-Key"] = JSON.stringify({
         provider: model.provider,
@@ -120,7 +127,7 @@ export async function generateTitle(
 ): Promise<string> {
   const res = await fetch(`${apiBase()}/agent/sessions/title`, {
     method: "POST",
-    headers: apiHeaders(),
+    headers: apiHeaders("chat"),
     body: JSON.stringify({ first_message: firstMessage }),
   });
 
@@ -149,7 +156,7 @@ export async function runAgent(
 ): Promise<AgentRunResponse> {
   const res = await fetch(`${apiBase()}/agent/run`, {
     method: "POST",
-    headers: apiHeaders(),
+    headers: apiHeaders("chat"),
     body: JSON.stringify(req),
     signal,
   });

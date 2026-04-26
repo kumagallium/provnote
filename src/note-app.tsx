@@ -70,7 +70,7 @@ import {
 } from "./features/ai-assistant";
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getSelectedProfile, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -914,7 +914,10 @@ function NoteEditorInner({
     let actLabel: string | undefined;
     if (lastAiInsertRef.current) {
       actType = "ai_generation";
-      actLabel = getSelectedModel?.() ?? "ai";
+      // 挿入された内容はチャット応答由来なので、Chat & Synthesis モデルを優先。
+      // 未設定なら getChatSynthesisLLMModel が default にフォールバックするので
+      // 旧来の挙動（default モデル名を記録）も保たれる。
+      actLabel = getChatSynthesisLLMModel()?.name ?? getSelectedModel?.() ?? "ai";
       lastAiInsertRef.current = false;
     } else {
       const detected = detectActivityType(doc);
@@ -1170,8 +1173,9 @@ function NoteEditorInner({
         aiAssistant.setLoading(false);
         markDirty();
 
-        // Query → Wiki 自動保存: LLM 判定を優先、fallback でヒューリスティック
-        if (onAutoIngestChat) {
+        // Query → Wiki 自動保存: LLM 判定を優先、fallback でヒューリスティック。
+        // ユーザーが Settings でオフにしている場合はスキップ。
+        if (onAutoIngestChat && getAutoIngestChat()) {
           try {
             const allMessages = [
               ...aiAssistant.messages,
@@ -2940,7 +2944,8 @@ export function NoteApp() {
 
         const synthHeaders: Record<string, string> = { "Content-Type": "application/json" };
         if (!isTauri()) {
-          const llmModel = getDefaultLLMModel();
+          // Synthesis は Chat & Synthesis モデル経由（未設定なら default にフォールバック）
+          const llmModel = getChatSynthesisLLMModel();
           if (llmModel) {
             synthHeaders["X-LLM-API-Key"] = JSON.stringify({
               provider: llmModel.provider, modelId: llmModel.modelId,

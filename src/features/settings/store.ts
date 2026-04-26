@@ -30,10 +30,14 @@ export type Settings = {
   model: string;
   /** Embedding 用モデル名（空文字 = チャットモデルと同じ） */
   embeddingModel: string;
-  /** Synthesis（複数 Concept 統合）用モデル名（空文字 = `model` と同じ）。
-   *  Synthesis は上流の Summary/Concept を束ねる最終推論で誤差伝搬の影響を最も受けるため、
-   *  個別に賢いモデルを当てられるようにする */
-  synthesisModel: string;
+  /** AI チャット & Synthesis 用モデル名（空文字 = `model` と同じ）。
+   *  対話的な推論（チャット）と複数 Concept の統合（Synthesis）は、
+   *  バックグラウンド処理（ingest/lint/rewrite）よりも能力を要求する場面があるため、
+   *  個別にもう一段上のモデルを当てられるようにする。 */
+  chatSynthesisModel: string;
+  /** チャット応答を自動的に Wiki に取り込むか（true がデフォルト）。
+   *  wiki-worthy 判定で worthy となった会話のみ ingest される。 */
+  autoIngestChat: boolean;
   /** AI プロファイル名（空文字 = "science"） */
   profile: string;
   /** 無効にしたツール名のリスト（ここに含まれるツールは AI チャットで使わない） */
@@ -51,7 +55,8 @@ export type Settings = {
 const DEFAULT_SETTINGS: Settings = {
   model: "",
   embeddingModel: "",
-  synthesisModel: "",
+  chatSynthesisModel: "",
+  autoIngestChat: true,
   profile: "",
   disabledTools: [],
   registryUrl: "",
@@ -90,7 +95,15 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<Settings> & { font?: string };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { font?: string; synthesisModel?: string };
+    // 旧 `synthesisModel` を `chatSynthesisModel` に吸収（一回限りのマイグレーション）。
+    // 新キーが既に書かれていればそれを優先する。
+    const migratedChatSynth =
+      typeof parsed.chatSynthesisModel === "string"
+        ? parsed.chatSynthesisModel
+        : typeof parsed.synthesisModel === "string"
+          ? parsed.synthesisModel
+          : "";
     // 旧 `font` フィールドを latinFont / jpFont に振り分ける（一回限りのマイグレーション）
     const legacyFont = typeof parsed.font === "string" ? parsed.font : "";
     // 旧 latinFont = "inter" は新デフォルト（""）と等価なので丸める。
@@ -112,6 +125,7 @@ export function loadSettings(): Settings {
       customLabels: migrateCustomLabels(parsed.customLabels),
       latinFont: migratedLatin,
       jpFont: migratedJp,
+      chatSynthesisModel: migratedChatSynth,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -153,16 +167,21 @@ export function getEmbeddingModel(): string {
   return loadSettings().embeddingModel;
 }
 
-/** Synthesis 用モデル名を取得する（空文字 = `model` と同じ） */
-export function getSynthesisModel(): string {
-  return loadSettings().synthesisModel ?? "";
+/** チャット応答の自動 Wiki 取り込みが有効かどうか */
+export function getAutoIngestChat(): boolean {
+  return loadSettings().autoIngestChat;
 }
 
-/** Synthesis 用の LLMModelConfig を取得する。設定がなければ default にフォールバック */
-export function getSynthesisLLMModel(): LLMModelConfig | undefined {
-  const synthName = getSynthesisModel();
-  if (!synthName) return getDefaultLLMModel();
-  const found = getLLMModels().find((m) => m.name === synthName);
+/** AI チャット & Synthesis 用モデル名を取得する（空文字 = `model` と同じ） */
+export function getChatSynthesisModel(): string {
+  return loadSettings().chatSynthesisModel ?? "";
+}
+
+/** AI チャット & Synthesis 用の LLMModelConfig を取得する。設定がなければ default にフォールバック */
+export function getChatSynthesisLLMModel(): LLMModelConfig | undefined {
+  const name = getChatSynthesisModel();
+  if (!name) return getDefaultLLMModel();
+  const found = getLLMModels().find((m) => m.name === name);
   return found ?? getDefaultLLMModel();
 }
 

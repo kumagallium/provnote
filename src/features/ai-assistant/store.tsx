@@ -77,8 +77,10 @@ function buildGeneratedBy(
   prev: AiAssistantState,
   existing: ScopeChat | null | undefined,
 ): ScopeChat["generatedBy"] {
+  // 旧 crucible-agent ブランドは廃止。新規チャットは neutral な "ai" を使う。
+  // 既存 ScopeChat に保存された agent 値はそのまま尊重する（履歴互換）。
   return {
-    agent: existing?.generatedBy?.agent ?? "crucible-agent",
+    agent: existing?.generatedBy?.agent ?? "ai",
     sessionId: prev.sessionId ?? existing?.generatedBy?.sessionId ?? "",
     model: existing?.generatedBy?.model,
     tokenUsage: existing?.generatedBy?.tokenUsage,
