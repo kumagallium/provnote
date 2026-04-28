@@ -1,36 +1,65 @@
 // ──────────────────────────────────────────────
 // コンテキストラベル定義（内部キー方式）
-// thought-provenance-spec.md § 0-A / design-registry.md L-002 に準拠
+// thought-provenance-spec.md § 0-A / design-registry.md L-002 / docs/internal/provenance-layer-design.md に準拠
 //
 // Phase 2 (2026-04-24): 日本語表示文字列から内部キーへ移行。
 //   [手順] → "procedure"、[材料] → "material" ...
 // 表示は i18n 層（getDisplayLabel）で解決する。
-// 旧ノート JSON は document-migration.ts の v2 → v3 変換で正規化する。
+//
+// Phase A (2026-04-28): 3 層構造（Section / Phase / Inline）対応。
+//   - 旧 "result"（Output Entity）→ "output" にリネーム
+//   - Phase 用の新ラベル "plan" / "result" を追加
+//   - LABEL_SCOPE で各ラベルの適用範囲（section/phase/inline）を定義
 // ──────────────────────────────────────────────
 
-// Layer 1: コアラベル（PROV-DM 直結、5 種）
+// Layer 1: コアラベル
+//   Section 層: procedure（見出しブロック）
+//   Phase 層: plan / result（見出しブロック、procedure 配下）
+//   Inline 層: material / tool / attribute / output（テキスト範囲ハイライト）
 export type CoreLabel =
   | "procedure"
+  | "plan"
+  | "result"
   | "material"
   | "tool"
   | "attribute"
-  | "result";
+  | "output";
 
 export const CORE_LABELS: CoreLabel[] = [
   "procedure",
+  "plan",
+  "result",
   "material",
   "tool",
   "attribute",
-  "result",
+  "output",
 ];
+
+// ラベルの適用範囲
+//   section: 見出しブロックに付与され、Activity の境界を作る
+//   phase:   見出しブロックに付与され、procedure 配下で Plan / Execution 文脈を切り替える
+//   inline:  テキスト範囲（mark）に付与され、referent（Entity / Attribute）を同定する
+export type LabelScope = "section" | "phase" | "inline";
+
+export const LABEL_SCOPE: Record<CoreLabel, LabelScope> = {
+  procedure: "section",
+  plan: "phase",
+  result: "phase",
+  material: "inline",
+  tool: "inline",
+  attribute: "inline",
+  output: "inline",
+};
 
 // PROV-DM ロールのマッピング
 export const CORE_LABEL_PROV: Record<CoreLabel, string> = {
   procedure: "prov:Activity",
-  material: "prov:used",     // Entity subtype: material
-  tool: "prov:used",         // Entity subtype: tool
-  attribute: "prov:Entity",  // 親ノードの属性（prov:Entity として出力）
-  result: "prov:wasGeneratedBy",
+  plan: "prov:Plan",
+  result: "prov:Activity",       // Phase=result は Activity 実行記録の文脈（独立ノードは生成しない）
+  material: "prov:used",          // Entity subtype: material
+  tool: "prov:used",              // Entity subtype: tool
+  attribute: "prov:Entity",       // 親ノードの属性（prov:Entity として出力）
+  output: "prov:wasGeneratedBy",  // Activity から生成される Entity
 };
 
 // Entity サブタイプ（MatPROV 互換: material / tool）
@@ -43,16 +72,19 @@ export const LABEL_TO_ENTITY_SUBTYPE: Partial<Record<CoreLabel, EntitySubtype>> 
 // Layer 2: エイリアス（旧表記・英語別名 → コアラベルに正規化）
 // 旧ブラケット日本語は v2 → v3 マイグレーション後は残らないが、
 // エクスポート／他システムからの入力や未移行データへの防御として維持する。
+//
+// NOTE: 旧 "result"（Output Entity 意味）は v3 → v4 マイグレーションで "output" に変換される。
+// 旧ブラケット形式 "[結果]" / "[Output]" 等は **Output Entity** として "output" に正規化する。
 export const ALIAS_MAP: Record<string, CoreLabel> = {
-  // 旧ブラケット日本語（v2 以前のノート・エクスポート）
+  // 旧ブラケット日本語（v2 以前のノート・エクスポート）→ Output Entity 系
   "[手順]": "procedure",
   "[材料]": "material",
   "[ツール]": "tool",
   "[属性]": "attribute",
-  "[結果]": "result",
+  "[結果]": "output",      // 旧 "[結果]" は Output Entity を指していた
   // 旧エイリアス（ブラケット日本語系）
   "[操作]": "procedure",
-  "[産物]": "result",
+  "[産物]": "output",
   "[使用したもの]": "material",
   "[使用するもの]": "material",
   "[条件]": "attribute",
@@ -64,6 +96,9 @@ export const ALIAS_MAP: Record<string, CoreLabel> = {
   "[器具]": "tool",
   "[道具]": "tool",
   "[機器]": "tool",
+  // Phase ラベル（新規、ブラケット日本語）
+  "[計画]": "plan",
+  "[結果セクション]": "result",   // セクション意味の result、衝突回避のため別表記
   // 英語エイリアス（ブラケット付き）
   "[step]": "procedure",
   "[Step]": "procedure",
@@ -88,12 +123,16 @@ export const ALIAS_MAP: Record<string, CoreLabel> = {
   "[attributes]": "attribute",
   "[Parameter]": "attribute",
   "[parameter]": "attribute",
-  "[result]": "result",
-  "[Result]": "result",
-  "[Results]": "result",
-  "[results]": "result",
-  "[output]": "result",
-  "[Output]": "result",
+  // Output Entity 系（旧 result キーから移行）
+  "[result]": "output",
+  "[Result]": "output",
+  "[Results]": "output",
+  "[results]": "output",
+  "[output]": "output",
+  "[Output]": "output",
+  // Phase ラベル（新規、ブラケット英語）
+  "[Plan]": "plan",
+  "[plan]": "plan",
   // 括弧なし小文字エイリアス（外部 API・プロンプト出力の寄り道）
   step: "procedure",
   procedure: "procedure",
@@ -106,9 +145,11 @@ export const ALIAS_MAP: Record<string, CoreLabel> = {
   attribute: "attribute",
   attributes: "attribute",
   parameter: "attribute",
-  result: "result",
-  results: "result",
-  output: "result",
+  output: "output",
+  // NOTE: 裸文字列 "result" / "results" は Phase の result（CoreLabel）と一致するため
+  // ALIAS_MAP に載せない（normalizeLabel が CoreLabel チェックでそのまま返す）。
+  // 旧データ中の Output Entity 意味の "result" は document-migration v3→v4 で "output" に変換される。
+  plan: "plan",
 };
 
 // 構造ラベル（リンク生成に使う特殊ラベル、PROV-DM 直結のコアラベルではない）
@@ -142,6 +183,15 @@ export function classifyLabel(label: string): LabelLayer {
 export function normalizeLabel(label: string): string {
   if ((CORE_LABELS as string[]).includes(label)) return label;
   return ALIAS_MAP[label] ?? label;
+}
+
+// ラベルの適用範囲を取得（CoreLabel のみ。フリーラベル等は undefined）
+export function getLabelScope(label: string): LabelScope | undefined {
+  const normalized = normalizeLabel(label);
+  if ((CORE_LABELS as string[]).includes(normalized)) {
+    return LABEL_SCOPE[normalized as CoreLabel];
+  }
+  return undefined;
 }
 
 // 見出しブロック上の procedure ラベルの PROV 挙動

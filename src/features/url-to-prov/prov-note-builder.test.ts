@@ -147,7 +147,7 @@ describe("buildProvNoteDocument", () => {
         { text: "Sauté", blockType: "heading", level: 2, role: "procedure" },
         { text: "frying pan", role: "tool", blockType: "bulletListItem" },
         { text: "Plate", blockType: "heading", level: 2, role: "procedure" },
-        { text: "finished steak", role: "result", blockType: "bulletListItem" },
+        { text: "finished steak", role: "output", blockType: "bulletListItem" },
       ],
     });
     const page = doc.pages[0];
@@ -186,7 +186,7 @@ describe("buildProvNoteDocument", () => {
         { text: "sliced bamboo", role: "material", blockType: "bulletListItem", derivedFrom: "slice-bamboo" },
         { text: "Plate", blockType: "heading", level: 2, role: "procedure", stepId: "plate",
           dependsOn: ["saute-garlic", "sear-bamboo"] },
-        { text: "steak", role: "result", blockType: "bulletListItem" },
+        { text: "steak", role: "output", blockType: "bulletListItem" },
       ],
     });
     const page = doc.pages[0];

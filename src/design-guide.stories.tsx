@@ -44,7 +44,7 @@ const labelColors = [
   { name: "procedure", color: "#5b8fb9" },
   { name: "material", color: "#4B7A52" },
   { name: "attribute", color: "#c08b3e" },
-  { name: "result", color: "#c26356" },
+  { name: "output", color: "#c26356" },
 ];
 
 function Swatch({ color, size = 40 }: { color: string; size?: number }) {

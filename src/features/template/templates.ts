@@ -250,13 +250,13 @@ const experimentTemplate: TemplateDef = {
         { path: [5], label: "material" },
         { path: [6], label: "tool" },
         { path: [7], label: "attribute" },
-        { path: [9], label: "result" },
+        { path: [9], label: "output" },
         // step 2
         { path: [10], label: "procedure" },
         { path: [12], label: "material" },
         { path: [13], label: "tool" },
         { path: [14], label: "attribute" },
-        { path: [16], label: "result" },
+        { path: [16], label: "output" },
       ],
       provLinks: [
         // step 2 → step 1 (前手順リンク)

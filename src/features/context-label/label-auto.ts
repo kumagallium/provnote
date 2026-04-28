@@ -13,7 +13,7 @@ import type { LinkStore } from "../block-link/store";
 const INHERITABLE_LABELS = new Set([
   "material",
   "tool",
-  "result",
+  "output",
   "attribute",
 ]);
 
@@ -26,7 +26,7 @@ const SPLIT_ONLY_LABELS = new Set([
 const INDENT_TO_ATTRIBUTE_LABELS = new Set([
   "material",
   "tool",
-  "result",
+  "output",
 ]);
 
 /**

@@ -5,13 +5,16 @@
 // 重要: Graphium の prov-generator は以下の規則でグラフを作る（generator.ts 参照）:
 //   - H2 見出しに role: "procedure" → prov:Activity（ステップ）
 //   - その H2 スコープ内にある role: "material" | "tool" → prov:used（Activity から）
-//   - その H2 スコープ内にある role: "result" → prov:wasGeneratedBy（Activity から）
-//   - role: "attribute" は最も近い祖先の material/tool/result に埋め込み、無ければ Activity に埋め込み
+//   - その H2 スコープ内にある role: "output" → prov:wasGeneratedBy（Activity から）
+//   - role: "attribute" は最も近い祖先の material/tool/output に埋め込み、無ければ Activity に埋め込み
 //   - informed_by リンク（次手順→前手順）で手順間を繋ぐと「前手順の結果を次手順が used」になる
 //
 // 平坦な出力では graph が繋がらない。LLM には階層構造 + 依存関係を出させる。
+//
+// NOTE (Phase A): 旧 role "result" は内部キー再編で "output"（Output Entity 意味）に変更。
+//   後方互換のため、ingester は LLM 出力の "result" も受け入れて "output" に正規化する。
 
-export type ProvRole = "material" | "procedure" | "tool" | "attribute" | "result";
+export type ProvRole = "material" | "procedure" | "tool" | "attribute" | "output";
 
 export type ProvBlockType = "paragraph" | "heading" | "bulletListItem" | "numberedListItem";
 
@@ -45,7 +48,7 @@ export type ProvIngesterOutput = {
   blocks: ProvIngesterBlock[];
 };
 
-const VALID_ROLES: ProvRole[] = ["material", "procedure", "tool", "attribute", "result"];
+const VALID_ROLES: ProvRole[] = ["material", "procedure", "tool", "attribute", "output"];
 const VALID_BLOCK_TYPES: ProvBlockType[] = [
   "paragraph",
   "heading",
@@ -98,7 +101,7 @@ Block schema:
 {
   "text": "string — the actual content, no label prefix, no numbering",
   "blockType": "heading" | "bulletListItem" | "numberedListItem" | "paragraph",
-  "role": "material" | "procedure" | "tool" | "attribute" | "result"  // optional
+  "role": "material" | "procedure" | "tool" | "attribute" | "output"  // optional
   "level": 1 | 2 | 3,                    // only when blockType === "heading"
   "children": [ /* nested Block array, same schema */ ],  // optional
 
@@ -119,7 +122,7 @@ Block schema:
 - **tool**: an instrument used by a step but not consumed (pan, oven, potentiostat, XRD, compiler).
   Rarely carries \`derivedFrom\` — only when the tool itself was prepared by an earlier step.
 - **attribute**: a parameter / condition / specification that qualifies a material, tool, or step (quantity, concentration, temperature, time, pH, voltage, scan rate).
-- **result**: an output produced by a step (finished dish, characterization spectrum, measurement value, fabricated device, refined dataset).
+- **output**: an output produced by a step (finished dish, characterization spectrum, measurement value, fabricated device, refined dataset).
 
 Do NOT translate these keys. Do NOT wrap in brackets. Do NOT invent new roles.
 
@@ -133,7 +136,7 @@ Output the note in a reader-friendly shape that mirrors how procedural documents
    - First, a 1-2 sentence **paragraph (no role)** stating what this step does. Reader-facing prose, not bullets.
    - Then, the materials / tools / attributes actually used here, as bulletListItem blocks with roles.
    - Prefer **post-transformation names** in material text when it's derived from a prior step ("sliced garlic", "calcined powder", "amplified DNA"). Pair that with \`derivedFrom: "<stepId>"\` so text and graph agree.
-4. **H1 "Outcome" / "完成" / "Results"** — either (a) a terminal H2 step that assembles / measures / finalizes and carries the \`role: "result"\` block(s), or (b) a plain section summarizing outputs. Final results go here, not scattered across middle steps.
+4. **H1 "Outcome" / "完成" / "Results"** — either (a) a terminal H2 step that assembles / measures / finalizes and carries the \`role: "output"\` block(s), or (b) a plain section summarizing outputs. Final results go here, not scattered across middle steps.
 
 Each H2 step belongs under the H1 "Procedure" section. The H1 headings anchor the document's shape; Graphium uses H2 for scope.
 
@@ -267,7 +270,7 @@ The resulting graph is a **DAG with two parallel chains (bamboo-side, garlic-sid
     { "text": "sautéed garlic", "blockType": "bulletListItem", "role": "material", "derivedFrom": "saute-garlic" },
     { "text": "butter", "blockType": "bulletListItem", "role": "material" },
     { "text": "black pepper", "blockType": "bulletListItem", "role": "material" },
-    { "text": "garlic soy bamboo steak", "blockType": "bulletListItem", "role": "result" }
+    { "text": "garlic soy bamboo steak", "blockType": "bulletListItem", "role": "output" }
   ]
 }
 
@@ -345,7 +348,7 @@ The SAME template (Overview / Materials / Procedure / Outcome with paragraphs + 
     { "text": "three-electrode cell", "blockType": "bulletListItem", "role": "tool" },
     { "text": "10 mV/s", "blockType": "bulletListItem", "role": "attribute" },
     { "text": "0–1 V vs. Ag/AgCl", "blockType": "bulletListItem", "role": "attribute" },
-    { "text": "cyclic voltammogram", "blockType": "bulletListItem", "role": "result" }
+    { "text": "cyclic voltammogram", "blockType": "bulletListItem", "role": "output" }
   ]
 }
 
@@ -359,7 +362,7 @@ The SAME template (Overview / Materials / Procedure / Outcome with paragraphs + 
 6. For each step's materials, identify which are pristine (first introduction, raw from stock) and which are products of an earlier step. Set \`derivedFrom\` on the latter. If a step extends a prior step without a distinct material handoff, add \`dependsOn\`.
 7. \`dependsOn\` / \`derivedFrom\` MUST reference a stepId defined earlier in the document.
 8. The Materials H1 section is READER REFERENCE ONLY — its bullets MUST NOT carry any role (they would become orphan Entities in the graph).
-9. Put \`role: "result"\` blocks in the Outcome section, typically inside the final H2 step. Do NOT scatter result blocks across middle steps unless the source explicitly describes multiple terminal outputs.
+9. Put \`role: "output"\` blocks in the Outcome section, typically inside the final H2 step. Do NOT scatter output blocks across middle steps unless the source explicitly describes multiple terminal outputs.
 10. Prefer post-transformation names for derived materials ("sliced garlic", "dried MnO2 powder") so the text reads naturally and the \`derivedFrom\` link is self-consistent.
 11. Language of \`text\`: ${isJa ? "Japanese" : "match the source language, or English if ambiguous"}.
 12. Do NOT use numbering prefixes ("1. ", "2. ") in step text — use numberedListItem blockType inside a step if ordering within that step matters, or rely on H2 ordering across steps.
@@ -423,7 +426,8 @@ function sanitizeBlocks(input: any[], depth: number): ProvIngesterBlock[] {
     const text = typeof b.text === "string" ? b.text.trim() : "";
     if (!text) continue;
 
-    const rawRole = b.role;
+    // 後方互換: LLM が旧 role "result" を出力した場合は "output" に正規化
+    const rawRole = typeof b.role === "string" && b.role === "result" ? "output" : b.role;
     const role: ProvRole | undefined =
       typeof rawRole === "string" && VALID_ROLES.includes(rawRole as ProvRole)
         ? (rawRole as ProvRole)

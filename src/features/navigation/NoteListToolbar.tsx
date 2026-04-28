@@ -15,7 +15,7 @@ const SORT_KEYS: { key: SortKey; labelKey: string }[] = [
 ];
 
 // データに保存された内部ラベル名でフィルタリング
-const CORE_LABELS = ["procedure", "material", "tool", "attribute", "result"];
+const CORE_LABELS = ["procedure", "plan", "result", "material", "tool", "attribute", "output"];
 
 export function NoteListToolbar({
   sortKey,

@@ -156,7 +156,7 @@ export const NoteStatic: StoryObj = {
       <EditorBlock label="procedure"><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>1. 封入する</h2></EditorBlock>
       <EditorBlock label="material" indent={24}><p>Cu粉末 1g</p></EditorBlock>
       <EditorBlock label="material" indent={24}><p>シリカ管</p></EditorBlock>
-      <EditorBlock label="result" indent={24}><p>封入されたCu粉末</p></EditorBlock>
+      <EditorBlock label="output" indent={24}><p>封入されたCu粉末</p></EditorBlock>
 
       <EditorBlock label="procedure"><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>2. アニールする</h2></EditorBlock>
       <EditorBlock label="attribute" indent={24}><p>温度: 600℃</p></EditorBlock>
@@ -164,7 +164,7 @@ export const NoteStatic: StoryObj = {
       <EditorBlock label="attribute" indent={24}><p>冷却: 炉冷</p></EditorBlock>
 
       <EditorBlock label="procedure"><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>3. 評価する</h2></EditorBlock>
-      <EditorBlock label="result" indent={24}><p>XRD測定により相同定を行う。</p></EditorBlock>
+      <EditorBlock label="output" indent={24}><p>XRD測定により相同定を行う。</p></EditorBlock>
     </div>
   ),
 };
@@ -186,13 +186,13 @@ export const NoteHoverDemo: StoryObj = {
           <HoverBlock id="u1" label="material" indent={24} hoveredId={h} setHoveredId={setH}><p>Cu粉末 1g</p></HoverBlock>
           <HoverBlock id="u2" label="material" indent={24} hoveredId={h} setHoveredId={setH}><p>シリカ管</p></HoverBlock>
           <HoverBlock id="p1" indent={24} hoveredId={h} setHoveredId={setH}><p style={{ color: tokens.mutedFg }}>真空封入管内で封入する。（ラベルなし）</p></HoverBlock>
-          <HoverBlock id="r1" label="result" indent={24} hoveredId={h} setHoveredId={setH}><p>封入されたCu粉末</p></HoverBlock>
+          <HoverBlock id="r1" label="output" indent={24} hoveredId={h} setHoveredId={setH}><p>封入されたCu粉末</p></HoverBlock>
           <HoverBlock id="s2" label="procedure" hoveredId={h} setHoveredId={setH}><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>2. アニールする</h2></HoverBlock>
           <HoverBlock id="st" label="attribute" indent={24} hoveredId={h} setHoveredId={setH}><p>温度: 600℃</p></HoverBlock>
           <HoverBlock id="c1" label="attribute" indent={24} hoveredId={h} setHoveredId={setH}><p>昇温速度: 5℃/min</p></HoverBlock>
           <HoverBlock id="c2" label="attribute" indent={24} hoveredId={h} setHoveredId={setH}><p>冷却: 炉冷</p></HoverBlock>
           <HoverBlock id="s3" label="procedure" hoveredId={h} setHoveredId={setH}><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>3. 評価する</h2></HoverBlock>
-          <HoverBlock id="r2" label="result" indent={24} hoveredId={h} setHoveredId={setH}><p>XRD測定により相同定を行う。</p></HoverBlock>
+          <HoverBlock id="r2" label="output" indent={24} hoveredId={h} setHoveredId={setH}><p>XRD測定により相同定を行う。</p></HoverBlock>
         </div>
       );
     }

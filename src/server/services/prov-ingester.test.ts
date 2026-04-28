@@ -198,7 +198,7 @@ describe("buildProvIngesterSystemPrompt", () => {
   it("英語/日本語どちらの言語でも core role キーが含まれる", () => {
     const en = buildProvIngesterSystemPrompt("en");
     const ja = buildProvIngesterSystemPrompt("ja");
-    for (const role of ["material", "procedure", "tool", "attribute", "result"]) {
+    for (const role of ["material", "procedure", "tool", "attribute", "output"]) {
       expect(en).toContain(role);
       expect(ja).toContain(role);
     }

@@ -22,7 +22,7 @@ const LABEL_COLORS: Record<string, string> = {
   "procedure": "#5b8fb9",
   "material": "#4B7A52",
   "attribute": "#c08b3e",
-  "result": "#c26356",
+  "output": "#c26356",
 };
 function getLabelColor(label: string): string {
   return LABEL_COLORS[label] ?? tokens.mutedFg;
@@ -147,7 +147,7 @@ export const NoteWithIndicators: StoryObj = {
       <EditorBlock label="material" indent={24}><p>Cu粉末 1g</p></EditorBlock>
       <EditorBlock label="material" indent={24}><p>シリカ管</p></EditorBlock>
       <EditorBlock indent={24}><p style={{ color: tokens.mutedFg }}>真空封入管内で封入する。（ラベルなし）</p></EditorBlock>
-      <EditorBlock label="result" indent={24}><p>封入されたCu粉末</p></EditorBlock>
+      <EditorBlock label="output" indent={24}><p>封入されたCu粉末</p></EditorBlock>
 
       <EditorBlock label="procedure"><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>2. アニールする</h2></EditorBlock>
       <EditorBlock label="attribute" indent={24}><p>温度: 600℃</p></EditorBlock>
@@ -155,7 +155,7 @@ export const NoteWithIndicators: StoryObj = {
       <EditorBlock label="attribute" indent={24}><p>冷却: 炉冷</p></EditorBlock>
 
       <EditorBlock label="procedure"><h2 style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.3 }}>3. 評価する</h2></EditorBlock>
-      <EditorBlock label="result" indent={24}><p>XRD測定により相同定を行う。</p></EditorBlock>
+      <EditorBlock label="output" indent={24}><p>XRD測定により相同定を行う。</p></EditorBlock>
     </div>
   ),
 };

@@ -24,6 +24,8 @@ describe("hasLabelAttributes", () => {
   });
 
   it("その他のラベルに対して false を返す", () => {
+    expect(hasLabelAttributes("output")).toBe(false);
+    expect(hasLabelAttributes("plan")).toBe(false);
     expect(hasLabelAttributes("result")).toBe(false);
     expect(hasLabelAttributes("attribute")).toBe(false);
     expect(hasLabelAttributes("material")).toBe(false);
