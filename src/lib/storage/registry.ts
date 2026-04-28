@@ -48,10 +48,9 @@ function pickActive(savedId: string | null, defaultId: string): StorageProvider 
   // 指定された ID が利用不可なら default にフォールバック
   const provider = providers.get(id) ?? providers.get(defaultId);
   if (!provider) throw new Error("ストレージプロバイダーの初期化に失敗しました");
-  // localStorage を最新の選択で更新（フォールバックも反映）
-  if (typeof localStorage !== "undefined" && (savedId === null || savedId !== provider.id)) {
-    localStorage.setItem(STORAGE_KEY, provider.id);
-  }
+  // 暗黙的なフォールバックは localStorage に書かない。
+  // ユーザーが明示的に選択したときだけ setActiveProvider() 経由で永続化する。
+  // （ここで書くと、その後の機能検出で「ユーザーが local を選んだ」と誤認する）
   return provider;
 }
 
