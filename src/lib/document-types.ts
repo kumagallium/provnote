@@ -113,8 +113,10 @@ export type ScopeChat = {
 //   3: labels の値を日本語ブラケット表記（[材料] 等）から内部キー（material 等）に移行
 //   4: 旧内部キー "result"（Output Entity）を "output" にリネーム。
 //      Phase ラベル "plan" / "result" を新設（衝突回避）。
+//   5: block-level inline-type ラベル（material/tool/attribute/output）をインラインハイライト
+//      （Highlight 配列）に移行。LabelStore は heading 用（procedure/plan/result/free*）に純化。
 export type GraphiumDocument = {
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | 5;
   title: string;
   pages: GraphiumPage[];
   /** ノート間リンク（派生先ノートへの参照） */
@@ -159,6 +161,10 @@ export type GraphiumPage = {
   id: string;
   title: string;
   blocks: any[];
+  /**
+   * ブロックラベル（heading 用 = procedure / plan / result / free.* のみ）。
+   * v5 以降、material / tool / attribute / output は highlights に移行する。
+   */
   labels: Record<string, string>;
   /** PROV 層リンク（DAG 制約） */
   provLinks: any[];
@@ -168,6 +174,34 @@ export type GraphiumPage = {
   links?: any[];
   /** インデックステーブル: テーブルブロック ID → { サンプル名 → ノートファイル ID } */
   indexTables?: Record<string, Record<string, string>>;
+  /**
+   * インラインハイライト（v5 で導入）。
+   * material / tool / attribute / output は本文ブロック内のテキスト範囲として保存される。
+   * 1 ハイライト = 1 ブロック内（越境禁止）。
+   */
+  highlights?: InlineHighlight[];
   derivedFromPageId?: string;
   derivedFromBlockId?: string;
+};
+
+/**
+ * インライン referent ハイライト（Phase C, v5）。
+ *
+ * material / tool / attribute / output を「ブロック内のテキスト範囲」として記録する。
+ * 同一 entityId を持つ複数ハイライトは同じ PROV Entity を指す（参照重複の集約）。
+ *
+ * - blockId: ハイライトが属するブロックの ID（ブロック跨ぎ禁止）
+ * - text: 参照テキストのスナップショット（ブロック編集で from/to がずれた場合の復旧手がかり）
+ * - from / to: ブロック content 内の文字オフセット（先頭からの 0-indexed）
+ * - label: コアラベル（material / tool / attribute / output のいずれか）
+ * - entityId: PROV Entity 同一性キー（同じ referent を指す複数ハイライトは同じ id を共有）
+ */
+export type InlineHighlight = {
+  id: string;
+  blockId: string;
+  from: number;
+  to: number;
+  label: "material" | "tool" | "attribute" | "output";
+  entityId: string;
+  text: string;
 };
