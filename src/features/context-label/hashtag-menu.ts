@@ -5,8 +5,10 @@ import {
   CORE_LABELS,
   ALIAS_MAP,
   FREE_LABEL_EXAMPLES,
-  normalizeLabel,
+  LABEL_SCOPE,
+  getLabelScope,
   type CoreLabel,
+  type LabelScope,
 } from "./labels";
 import { getDisplayLabelName } from "../../i18n";
 
@@ -66,4 +68,44 @@ export function buildSuggestionList(): LabelSuggestion[] {
   }
 
   return suggestions;
+}
+
+/**
+ * BlockNote のブロックタイプから、許可される LabelScope セットを返す。
+ * - 見出しブロック（heading）: section / phase スコープのラベルが付与可能
+ * - それ以外（paragraph, bulletListItem, etc.）: free ラベルのみ付与可能
+ *   （inline 系ラベルはハイライト経路で付ける、Phase C 以降）
+ */
+export function getAllowedScopesForBlock(blockType: string | undefined): Set<LabelScope> {
+  if (blockType === "heading") {
+    return new Set<LabelScope>(["section", "phase"]);
+  }
+  // 本文ブロックでは inline 系ラベルを `#` 経由で付与しない（ハイライトに移行）
+  return new Set<LabelScope>();
+}
+
+/**
+ * ブロックの種類に応じて候補をフィルタする。
+ * Phase B (2026-04-29) で導入した context filter:
+ *   - 見出しブロック: section / phase の core/alias を表示
+ *   - 本文ブロック: free ラベルのみ表示（inline 系は出さない）
+ */
+export function filterSuggestionsForBlock(
+  suggestions: LabelSuggestion[],
+  blockType: string | undefined,
+): LabelSuggestion[] {
+  const allowedScopes = getAllowedScopesForBlock(blockType);
+
+  return suggestions.filter((s) => {
+    // free ラベルは常に表示（PROV に乗らないラベル、ユーザー定義）
+    if (s.group === "free") return true;
+
+    // core / alias は LABEL_SCOPE で判定
+    const scope = s.group === "core"
+      ? LABEL_SCOPE[s.label as CoreLabel]
+      : getLabelScope(s.label);
+
+    if (!scope) return false;
+    return allowedScopes.has(scope);
+  });
 }

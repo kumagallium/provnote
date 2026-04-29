@@ -195,14 +195,18 @@ export function getLabelScope(label: string): LabelScope | undefined {
 }
 
 // 見出しブロック上の procedure ラベルの PROV 挙動
-// H1 → セクションマーカー（Activity 生成しない）
-// H2+ → 個別の実験ステップ（Activity 生成する）
-//   H2 = トップレベル Activity、H3 = サブ Activity、H4+ = さらに深いサブ Activity
+//   H1 = トップレベル Activity（ノート本文の最上位手順）
+//   H2 = サブ Activity、H3+ = さらに深いサブ Activity
+//
+// Phase B (2026-04-29): h1 を section-marker から Activity に変更。
+//   ノートタイトルは page metadata にあり、本文 h1 は手順そのものとして使われる。
+//   3 層モデルでは「h1 #step → h2 #plan/#result」が自然な階層なので h1 も Activity 化。
+//   旧 "section-marker" return value は廃止。
 export function getHeadingLabelRole(
   level: number,
   label: string,
-): "section-marker" | "activity" | null {
+): "activity" | null {
   const normalized = normalizeLabel(label);
   if (normalized !== "procedure") return null;
-  return level === 1 ? "section-marker" : "activity";
+  return "activity";
 }
