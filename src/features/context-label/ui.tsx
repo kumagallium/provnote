@@ -259,8 +259,10 @@ export function LabelDropdownPortal() {
           </div>
         )}
 
-        {/* フリーラベル例 */}
-        <DropdownDivider />
+        {/* フリーラベル例（上にコアラベル or 前ステップリンク UI がある時だけ divider） */}
+        {(visibleCoreLabels.length > 0 || (currentLabel === "procedure" && isHeadingBlock(openBlockId))) && (
+          <DropdownDivider />
+        )}
         <DropdownSectionHeader>{t("labelUi.freeLabels")}</DropdownSectionHeader>
         {FREE_LABEL_EXAMPLES.slice(0, 4).map((label) => {
           const active = currentLabel === label;
