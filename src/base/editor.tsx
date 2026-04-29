@@ -14,7 +14,7 @@ import { filterSuggestionItems as _filterSuggestionItems } from "@blocknote/core
 import { FC, useCallback, useEffect, useMemo } from "react";
 import type { CustomBlockEntry } from "./schema";
 import type { SideMenuProps, FormattingToolbarProps } from "@blocknote/react";
-import { buildSuggestionList, getDisplayName } from "@features/context-label/hashtag-menu";
+import { buildSuggestionList, getDisplayName, filterSuggestionsForBlock } from "@features/context-label/hashtag-menu";
 import { BlockSelectionManager } from "@features/block-selection";
 
 type SlashMenuItem = {
@@ -168,7 +168,12 @@ export function SandboxEditor({
       const visible = trimmed.length === 0
         ? labelSuggestions.filter((s) => s.group !== "alias")
         : labelSuggestions;
-      const items = visible.map((s) => ({
+      // Phase B (2026-04-29): 現在ブロックの種類でラベル候補を絞る。
+      //   見出しブロック → section / phase ラベル（procedure / plan / result）
+      //   本文ブロック → free ラベルのみ（inline 系はハイライト経路で付与する）
+      const currentBlock = (editor as any).getTextCursorPosition?.()?.block;
+      const scoped = filterSuggestionsForBlock(visible, currentBlock?.type);
+      const items = scoped.map((s) => ({
         title: s.displayName,
         group: s.group === "core" ? "コアラベル" : s.group === "alias" ? "エイリアス" : "フリーラベル",
         onItemClick: () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { isProvLink, PROV_LINK_TYPES } from "./block-link/link-types";
-import { buildSuggestionList, getDisplayName } from "./context-label/hashtag-menu";
-import { normalizeLabel, classifyLabel, ALIAS_MAP } from "./context-label/labels";
+import { buildSuggestionList, getDisplayName, filterSuggestionsForBlock } from "./context-label/hashtag-menu";
+import { normalizeLabel, classifyLabel, ALIAS_MAP, getHeadingLabelRole } from "./context-label/labels";
 import { generateProvDocument, extractRelations } from "./prov-generator/generator";
 
 // ──────────────────────────────────
@@ -164,5 +164,56 @@ describe("ラベルエイリアス拡張", () => {
 
   it("[パターン] はフリーラベルとして分類される", () => {
     expect(classifyLabel("[パターン]")).toBe("free");
+  });
+});
+
+// ──────────────────────────────────
+// Phase B: h1 #step も Activity 化
+// ──────────────────────────────────
+describe("getHeadingLabelRole (Phase B)", () => {
+  it("h1 #step も activity を返す（旧 section-marker は廃止）", () => {
+    expect(getHeadingLabelRole(1, "procedure")).toBe("activity");
+    expect(getHeadingLabelRole(2, "procedure")).toBe("activity");
+    expect(getHeadingLabelRole(3, "procedure")).toBe("activity");
+  });
+
+  it("procedure 以外は null を返す", () => {
+    expect(getHeadingLabelRole(2, "material")).toBeNull();
+    expect(getHeadingLabelRole(2, "plan")).toBeNull();
+    expect(getHeadingLabelRole(1, "free.purpose")).toBeNull();
+  });
+});
+
+// ──────────────────────────────────
+// Phase B: ハッシュタグメニューの context filter
+// ──────────────────────────────────
+describe("filterSuggestionsForBlock (Phase B)", () => {
+  const allSuggestions = buildSuggestionList();
+
+  it("見出しブロックでは section / phase ラベルのみ表示", () => {
+    const filtered = filterSuggestionsForBlock(allSuggestions, "heading");
+    const coreLabels = filtered.filter((s) => s.group === "core").map((s) => s.label);
+    expect(coreLabels).toContain("procedure");
+    expect(coreLabels).toContain("plan");
+    expect(coreLabels).toContain("result");
+    expect(coreLabels).not.toContain("material");
+    expect(coreLabels).not.toContain("tool");
+    expect(coreLabels).not.toContain("attribute");
+    expect(coreLabels).not.toContain("output");
+  });
+
+  it("本文ブロック（paragraph / bulletListItem）では inline 系も section / phase も出さない、free のみ", () => {
+    const filtered = filterSuggestionsForBlock(allSuggestions, "paragraph");
+    const coreLabels = filtered.filter((s) => s.group === "core");
+    expect(coreLabels).toHaveLength(0);
+
+    const freeLabels = filtered.filter((s) => s.group === "free");
+    expect(freeLabels.length).toBeGreaterThan(0);
+  });
+
+  it("undefined ブロックタイプも本文扱い（free のみ）", () => {
+    const filtered = filterSuggestionsForBlock(allSuggestions, undefined);
+    const coreLabels = filtered.filter((s) => s.group === "core");
+    expect(coreLabels).toHaveLength(0);
   });
 });
