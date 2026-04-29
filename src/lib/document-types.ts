@@ -111,8 +111,10 @@ export type ScopeChat = {
 //   1: 初期形式（links フィールドを prov / knowledge で混在管理）
 //   2: links を provLinks / knowledgeLinks に分離
 //   3: labels の値を日本語ブラケット表記（[材料] 等）から内部キー（material 等）に移行
+//   4: 旧内部キー "result"（Output Entity）を "output" にリネーム。
+//      Phase ラベル "plan" / "result" を新設（衝突回避）。
 export type GraphiumDocument = {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   title: string;
   pages: GraphiumPage[];
   /** ノート間リンク（派生先ノートへの参照） */

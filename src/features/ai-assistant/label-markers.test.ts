@@ -20,7 +20,7 @@ describe("extractLabelMarkersFromBlocks", () => {
     expect(labels).toEqual([
       { path: [0], label: "procedure" },
       { path: [1], label: "material" },
-      { path: [3], label: "result" },
+      { path: [3], label: "output" },
     ]);
     expect(out[0].content[0].text).toBe("試料 A と B を混合");
     expect(out[1].content[0].text).toBe("試料 A");

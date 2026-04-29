@@ -80,12 +80,12 @@ const labels: Record<string, string> = {
   [ids.step1]: "procedure",
   [ids.used1a]: "material",
   [ids.used1b]: "material",
-  [ids.result1]: "result",
+  [ids.result1]: "output",
   [ids.step2]: "procedure",
   [ids.cond2a]: "attribute",
   [ids.cond2b]: "attribute",
   [ids.step3]: "procedure",
-  [ids.result3]: "result",
+  [ids.result3]: "output",
 };
 
 // 前手順リンク（PROV 層）

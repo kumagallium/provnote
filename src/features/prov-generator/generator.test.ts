@@ -62,7 +62,7 @@ const curryLabels = new Map([
   ["h2-fry", "procedure"],
   ["cond-fire", "attribute"],
   ["h2-simmer", "procedure"],
-  ["result-curry", "result"],
+  ["result-curry", "output"],
 ]);
 
 const curryLinks = [
@@ -383,10 +383,10 @@ const hierarchyLabels = new Map([
   ["used-mat1", "material"],
   ["h3-a1", "procedure"],
   ["used-mat2", "material"],
-  ["result-a1", "result"],
+  ["result-a1", "output"],
   ["h3-a2", "procedure"],
   ["param-a2", "attribute"],
-  ["result-a2", "result"],
+  ["result-a2", "output"],
   ["h2-b", "procedure"],
   ["used-mat3", "material"],
 ]);
@@ -596,7 +596,7 @@ describe("Phase 3: テーブル構造化属性", () => {
     ];
     const labels = new Map([
       ["h2-eval", "procedure"],
-      ["res-table", "result"],
+      ["res-table", "output"],
     ]);
 
     const doc = generateProvDocument({ blocks, labels, links: [] });
@@ -716,7 +716,7 @@ describe("孤立リンク（G-ORPHAN-LINK）", () => {
       ["h2-fry", "procedure"],
       ["cond-fire", "attribute"],
       ["h2-simmer", "procedure"],
-      ["result-curry", "result"],
+      ["result-curry", "output"],
     ]);
     const linksWithOrphan = [
       { id: "link-1", sourceBlockId: "h2-fry", targetBlockId: "h2-cut", type: "informed_by" as const, layer: "prov" as const, createdBy: "human" as const },
@@ -744,7 +744,7 @@ describe("孤立リンク（G-ORPHAN-LINK）", () => {
       ["h2-fry", "procedure"],
       ["cond-fire", "attribute"],
       ["h2-simmer", "procedure"],
-      ["result-curry", "result"],
+      ["result-curry", "output"],
     ]);
     const linksWithOrphan = [
       { id: "link-1", sourceBlockId: "h2-fry", targetBlockId: "h2-cut", type: "informed_by" as const, layer: "prov" as const, createdBy: "human" as const },
@@ -763,7 +763,7 @@ describe("孤立リンク（G-ORPHAN-LINK）", () => {
       ["h2-cut", "procedure"],
       ["used-vegs", "material"],
       ["h2-simmer", "procedure"],
-      ["result-curry", "result"],
+      ["result-curry", "output"],
     ]);
     const linksWithOrphanSource = [
       { id: "link-1", sourceBlockId: "h2-fry", targetBlockId: "h2-cut", type: "informed_by" as const, layer: "prov" as const, createdBy: "human" as const },
@@ -865,7 +865,7 @@ describe("メディアブロック → PROV Entity", () => {
     ];
     const labels = new Map([
       ["h2-eval", "procedure"],
-      ["res-para", "result"],
+      ["res-para", "output"],
     ]);
 
     const doc = generateProvDocument({ blocks, labels, links: [] });
@@ -1083,7 +1083,7 @@ describe("メディアブロック → PROV Entity", () => {
     ];
     const labels = new Map([
       ["h2-observe", "procedure"],
-      ["res-label", "result"],
+      ["res-label", "output"],
     ]);
 
     const doc = generateProvDocument({ blocks, labels, links: [] });
@@ -1165,7 +1165,7 @@ describe("子ブロック（インデント）→ 親 Entity の属性", () => {
     ];
     const labels = new Map([
       ["h2-eval", "procedure"],
-      ["res-para", "result"],
+      ["res-para", "output"],
     ]);
 
     const doc = generateProvDocument({ blocks, labels, links: [] });
@@ -1247,7 +1247,7 @@ describe("子ブロック（インデント）→ 親 Entity の属性", () => {
     ];
     const labels = new Map([
       ["h2-step", "procedure"],
-      ["res-para", "result"],
+      ["res-para", "output"],
       ["child-labeled", "attribute"],
     ]);
 

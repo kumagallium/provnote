@@ -114,12 +114,16 @@ import { normalizeLabel } from "../features/context-label/labels";
 
 // 内部キー → i18n キー（ブラケット付き表示名）
 const LABEL_DISPLAY_MAP: Record<string, string> = {
-  // コアラベル
+  // コアラベル: Section 層
   procedure: "label.step.bracketed",
+  // コアラベル: Phase 層
+  plan: "label.plan.bracketed",
+  result: "label.result.bracketed",
+  // コアラベル: Inline 層
   material: "label.material.bracketed",
   tool: "label.tool.bracketed",
   attribute: "label.attr.bracketed",
-  result: "label.result.bracketed",
+  output: "label.output.bracketed",
   // 構造ラベル
   "prev-procedure": "label.prevStep.bracketed",
   // フリーラベル例（内部キーは "free.xxx"）

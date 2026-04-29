@@ -95,8 +95,15 @@ function stripMarkerFromBlock(block: any): { block: any; label: CoreLabel | null
   return { block: { ...block, content: newContent }, label };
 }
 
+// 旧マーカー名 → 新内部キーのエイリアス（Phase A 後方互換）
+// 旧プロンプトを覚えた AI が `[[label:output]]` を出力した場合、これを Output Entity として扱う。
+const LEGACY_MARKER_ALIASES: Record<string, CoreLabel> = {
+  result: "output",
+};
+
 function normalizeMarkerLabel(raw: string): CoreLabel | null {
   const lower = raw.toLowerCase();
+  if (LEGACY_MARKER_ALIASES[lower]) return LEGACY_MARKER_ALIASES[lower];
   return CORE_LABEL_SET.has(lower) ? (lower as CoreLabel) : null;
 }
 
@@ -120,7 +127,7 @@ export function buildLabeledOutputInstruction(language: "en" | "ja" | string): s
 - \`[[label:material]]\` — 材料・試薬・原料
 - \`[[label:tool]]\` — 装置・器具
 - \`[[label:attribute]]\` — 条件・パラメータ
-- \`[[label:result]]\` — 結果・成果物・観察
+- \`[[label:output]]\` — 結果・成果物・観察
 
 ### 構造ルール（重要）
 1. **手順は必ず H2 見出し（\`## \`）にする**。番号リストや箇条書きに \`[[label:procedure]]\` を付けても Activity ノードにならず、エッジが張られません。
@@ -140,19 +147,19 @@ export function buildLabeledOutputInstruction(language: "en" | "ja" | string): s
 - [[label:tool]] メノウ乳鉢・乳棒
 - [[label:tool]] ガラス試料ホルダー
 - [[label:attribute]] 粒径目安: 10 µm 以下
-- [[label:result]] 充填済み試料ホルダー
+- [[label:output]] 充填済み試料ホルダー
 
 ## [[label:procedure]] XRD 測定
 - [[label:material]] 充填済み試料ホルダー
 - [[label:tool]] X 線回折装置
 - [[label:attribute]] X 線源: Cu Kα
 - [[label:attribute]] 走査範囲: 10°–90° (2θ)
-- [[label:result]] 回折パターン (.xy)
+- [[label:output]] 回折パターン (.xy)
 
 ## [[label:procedure]] 相同定
 - [[label:material]] 回折パターン
 - [[label:tool]] ICDD PDF データベース
-- [[label:result]] 同定された相
+- [[label:output]] 同定された相
 \`\`\`
 
 ### NG パターン
@@ -173,7 +180,7 @@ When your answer includes experimental procedure, materials, tools, conditions, 
 - \`[[label:material]]\` — Material / reagent / input
 - \`[[label:tool]]\` — Tool / instrument / equipment
 - \`[[label:attribute]]\` — Condition / parameter
-- \`[[label:result]]\` — Result / output / observation
+- \`[[label:output]]\` — Result / output / observation
 
 ### Structure rules (important)
 1. **Procedures MUST be on H2 headings** (\`## \`). Putting \`[[label:procedure]]\` on numbered list items or bullets will NOT create an Activity node, so no edges will be drawn.
@@ -193,19 +200,19 @@ Flow from powder XRD measurement to phase identification.
 - [[label:tool]] Agate mortar and pestle
 - [[label:tool]] Glass sample holder
 - [[label:attribute]] Target particle size: ≤ 10 µm
-- [[label:result]] Filled sample holder
+- [[label:output]] Filled sample holder
 
 ## [[label:procedure]] XRD measurement
 - [[label:material]] Filled sample holder
 - [[label:tool]] X-ray diffractometer
 - [[label:attribute]] X-ray source: Cu Kα
 - [[label:attribute]] Scan range: 10°–90° (2θ)
-- [[label:result]] Diffraction pattern (.xy)
+- [[label:output]] Diffraction pattern (.xy)
 
 ## [[label:procedure]] Phase identification
 - [[label:material]] Diffraction pattern
 - [[label:tool]] ICDD PDF database
-- [[label:result]] Identified phases
+- [[label:output]] Identified phases
 \`\`\`
 
 ### Anti-patterns

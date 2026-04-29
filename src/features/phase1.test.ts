@@ -98,10 +98,14 @@ describe("# オートコンプリート候補", () => {
   it("候補リストにコアラベルが含まれる", () => {
     const suggestions = buildSuggestionList();
     const coreItems = suggestions.filter((s) => s.group === "core");
-    expect(coreItems).toHaveLength(5);
+    expect(coreItems).toHaveLength(7);
     expect(coreItems.map((s) => s.label)).toContain("procedure");
+    expect(coreItems.map((s) => s.label)).toContain("plan");
+    expect(coreItems.map((s) => s.label)).toContain("result");
     expect(coreItems.map((s) => s.label)).toContain("material");
     expect(coreItems.map((s) => s.label)).toContain("tool");
+    expect(coreItems.map((s) => s.label)).toContain("attribute");
+    expect(coreItems.map((s) => s.label)).toContain("output");
   });
 
   it("候補リストにエイリアスが含まれる", () => {
@@ -138,13 +142,13 @@ describe("ラベルエイリアス拡張", () => {
     expect(normalizeLabel("[材料]")).toBe("material");
     expect(normalizeLabel("[ツール]")).toBe("tool");
     expect(normalizeLabel("[属性]")).toBe("attribute");
-    expect(normalizeLabel("[結果]")).toBe("result");
+    expect(normalizeLabel("[結果]")).toBe("output");
   });
 
   it("英語短縮エイリアスが内部キーに正規化される", () => {
     expect(normalizeLabel("[step]")).toBe("procedure");
     expect(normalizeLabel("[mat]")).toBe("material");
-    expect(normalizeLabel("[result]")).toBe("result");
+    expect(normalizeLabel("[result]")).toBe("output");
     expect(normalizeLabel("[attr]")).toBe("attribute");
   });
 

@@ -57,10 +57,12 @@ describe("t()", () => {
 describe("getDisplayLabel()", () => {
   it("内部キーをロケールに応じた表示ラベルに変換する（英語）", () => {
     expect(getDisplayLabel("procedure")).toBe("[Step]");
+    expect(getDisplayLabel("plan")).toBe("[Plan]");
+    expect(getDisplayLabel("result")).toBe("[Result]");
     expect(getDisplayLabel("material")).toBe("[Input]");
     expect(getDisplayLabel("tool")).toBe("[Tool]");
     expect(getDisplayLabel("attribute")).toBe("[Parameter]");
-    expect(getDisplayLabel("result")).toBe("[Output]");
+    expect(getDisplayLabel("output")).toBe("[Output]");
     expect(getDisplayLabel("prev-procedure")).toBe("[Prior step]");
   });
 
@@ -79,8 +81,10 @@ describe("getDisplayLabel()", () => {
   it("日本語ロケールでは日本語の表示ラベルを返す", () => {
     syncLocale("ja");
     expect(getDisplayLabel("procedure")).toBe("[ステップ]");
+    expect(getDisplayLabel("plan")).toBe("[計画]");
+    expect(getDisplayLabel("result")).toBe("[結果]");
     expect(getDisplayLabel("material")).toBe("[インプット]");
-    expect(getDisplayLabel("result")).toBe("[アウトプット]");
+    expect(getDisplayLabel("output")).toBe("[アウトプット]");
   });
 });
 
@@ -89,9 +93,11 @@ describe("getDisplayLabel()", () => {
 describe("getDisplayLabelName()", () => {
   it("括弧付きの表示名から括弧を除去する", () => {
     expect(getDisplayLabelName("procedure")).toBe("Step");
+    expect(getDisplayLabelName("plan")).toBe("Plan");
+    expect(getDisplayLabelName("result")).toBe("Result");
     expect(getDisplayLabelName("material")).toBe("Input");
     expect(getDisplayLabelName("attribute")).toBe("Parameter");
-    expect(getDisplayLabelName("result")).toBe("Output");
+    expect(getDisplayLabelName("output")).toBe("Output");
     expect(getDisplayLabelName("prev-procedure")).toBe("Prior step");
   });
 

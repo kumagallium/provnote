@@ -72,9 +72,11 @@ const LEGACY_LABEL_KEY_MAP: Record<string, string> = {
   "[材料]": "material",
   "[ツール]": "tool",
   "[属性]": "attribute",
-  "[結果]": "result",
+  "[結果]": "output",
   "[使用したもの]": "material",
   "[条件]": "attribute",
+  // Phase A: 旧内部キー "result" → "output"（Output Entity 意味）
+  result: "output",
 };
 
 function migrateCustomLabels(customLabels: CustomLabels | undefined): CustomLabels {

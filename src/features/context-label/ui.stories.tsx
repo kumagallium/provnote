@@ -21,7 +21,7 @@ const LABEL_COLORS: Record<string, string> = {
   "procedure": "#5b8fb9",
   "material": "#4B7A52",
   "attribute": "#c08b3e",
-  "result": "#c26356",
+  "output": "#c26356",
 };
 function getLabelColor(label: string): string {
   return LABEL_COLORS[label] ?? tokens.mutedFg;

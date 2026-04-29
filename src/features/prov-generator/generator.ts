@@ -317,10 +317,11 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
-  // ── result → Entity + wasGeneratedBy 関係 ──
+  // ── output → Entity + wasGeneratedBy 関係 ──
   // Phase 3: テーブルの場合は行ごとに個別 Entity に展開
+  // NOTE: PROV ノード ID 接頭辞は歴史的経緯で `result_` のまま維持（後方互換）。
   for (const lb of labeledBlocks) {
-    if (lb.coreLabel === "result") {
+    if (lb.coreLabel === "output") {
       if (lb.block.type === "table") {
         const parsed = parseStructuredTable(lb.block);
         if (parsed && parsed.rows.length > 0) {
@@ -373,7 +374,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
 
   // ── attribute → 親ノードの graphium:attributes に埋め込み ──
   // 独立ノードは作らず、親の Entity/Activity のプロパティとして格納
-  // ※ result ノード生成後に実行する（result_ ノードを参照するため）
+  // ※ output ノード生成後に実行する（result_ ノードを参照するため）
   for (const lb of labeledBlocks) {
     if (lb.coreLabel === "attribute") {
       // メディアブロックの場合はファイル名・URL・タイプを取得
@@ -406,7 +407,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   // その Entity の属性として埋め込む。
 
   const MEDIA_BLOCK_TYPES = ["image", "video", "audio", "file", "pdf"];
-  const ENTITY_LABEL_SET: CoreLabel[] = ["material", "tool", "result"];
+  const ENTITY_LABEL_SET: CoreLabel[] = ["material", "tool", "output"];
 
   // ラベルなしメディアブロックの祖先を探して属性として埋め込む
   const embeddedMediaIds = new Set<string>();
@@ -497,7 +498,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         }
       } else {
         // 新規メディア Entity を生成
-        const prefix = coreLabel === "result" ? "result_media" : "entity_media";
+        const prefix = coreLabel === "output" ? "result_media" : "entity_media";
         const entityId = `${prefix}_${block.id}`;
         const mediaName = block.props.name
           || decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
@@ -526,7 +527,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   // メディア Entity の PROV 関係を生成
   for (const [, info] of mediaEntityMap) {
     for (const actId of info.activityIds) {
-      if (info.coreLabel === "result") {
+      if (info.coreLabel === "output") {
         relations.push({ "@type": "prov:wasGeneratedBy", from: info.entityId, to: actId });
       } else {
         relations.push({ "@type": "prov:used", from: actId, to: info.entityId });
@@ -692,7 +693,7 @@ function coreToProvRole(label: CoreLabel, block: any): string | null {
     case "material": return "prov:Entity";
     case "tool": return "prov:Entity";
     case "attribute": return null; // 親ノードのプロパティとして埋め込む
-    case "result": return "prov:Entity";
+    case "output": return "prov:Entity";
     default: return null;
   }
 }
@@ -779,7 +780,7 @@ function findParentLabeledNodeId(
     case "material":
     case "tool":
       return `entity_${parentId}`;
-    case "result":
+    case "output":
       return `result_${parentId}`;
     case "procedure":
       return null;

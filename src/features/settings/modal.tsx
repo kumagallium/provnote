@@ -104,10 +104,12 @@ type BulkProgress = {
 // ラベルタブで使う内部キーと i18n デフォルト名のマッピング
 const LABEL_I18N_KEYS: Record<CoreLabel, string> = {
   procedure: "label.step",
+  plan: "label.plan",
+  result: "label.result",
   material: "label.material",
   tool: "label.tool",
   attribute: "label.attr",
-  result: "label.result",
+  output: "label.output",
 };
 
 type SettingsModalProps = {

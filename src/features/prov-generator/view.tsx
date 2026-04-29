@@ -593,7 +593,7 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
       <LegendDot color={THEME.activity.bg} shape="circle" label={getDisplayLabelName("procedure")} />
       <LegendDot color={THEME.entity.bg} shape="square" label={getDisplayLabelName("material")} />
       <LegendDot color={THEME.tool.bg} shape="diamond" label={getDisplayLabelName("tool")} />
-      <LegendDot color={THEME.result.bg} shape="square" label={getDisplayLabelName("result")} />
+      <LegendDot color={THEME.result.bg} shape="square" label={getDisplayLabelName("output")} />
       <LegendDot color={THEME.parameter.bg} shape="square" label={getDisplayLabelName("attribute")} />
 
       <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
