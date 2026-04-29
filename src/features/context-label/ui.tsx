@@ -20,9 +20,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CORE_LABELS,
   FREE_LABEL_EXAMPLES,
+  LABEL_SCOPE,
   classifyLabel,
   getHeadingLabelRole,
   STRUCTURAL_LABELS,
+  type CoreLabel,
 } from "./labels";
 // label-attributes は将来のステータス機能で再利用
 import { useLabelStore } from "./store";
@@ -50,6 +52,37 @@ const LABEL_COLORS: Record<string, string> = {
 
 function getLabelColor(label: string): string {
   return LABEL_COLORS[label] ?? "#6b7280";
+}
+
+/**
+ * 指定 blockId のブロックが見出し（heading）かを DOM から判定する。
+ * BlockNote は h1-h6 を heading ブロック種別として描画するので、
+ * data-id 属性のラッパー内に h1-h6 タグがあれば heading とみなす。
+ */
+function isHeadingBlock(blockId: string): boolean {
+  if (typeof document === "undefined") return false;
+  const wrapper =
+    document.querySelector(`[data-id="${blockId}"]`) ??
+    document.querySelector(`[data-prov-label-anchor="${blockId}"]`)?.closest("[data-id]");
+  if (!wrapper) return false;
+  return !!wrapper.querySelector("h1, h2, h3, h4, h5, h6");
+}
+
+/**
+ * Phase C (2026-04-29): ラベルバッジドロップダウンも # メニューと同じ context filter をかける。
+ *   - 見出しブロック: section / phase ラベル（procedure / plan / result）のみ
+ *   - 本文ブロック: コアラベルは出さない（inline 系はハイライト経路で付与する、Phase C-2 以降）
+ *   - 既に inline-type ラベルが付いた既存ブロックは、それを保持できるよう "現在のラベル" は表示する
+ */
+function getVisibleCoreLabels(blockId: string, currentLabel: string | undefined): CoreLabel[] {
+  const heading = isHeadingBlock(blockId);
+  const allowedScopes = heading ? new Set(["section", "phase"]) : new Set<string>();
+  return CORE_LABELS.filter((label) => {
+    if (allowedScopes.has(LABEL_SCOPE[label])) return true;
+    // 既存の inline-type ラベルが本文に付いている場合は、外せるように現在のラベルだけ残す
+    if (currentLabel === label) return true;
+    return false;
+  });
 }
 
 // ──────────────────────────────────
@@ -135,12 +168,16 @@ export function LabelDropdownPortal() {
     closeDropdown();
   };
 
+  const visibleCoreLabels = getVisibleCoreLabels(openBlockId, currentLabel);
+
   return (
     <Dropdown position={pos} onClose={closeDropdown} minWidth={200}>
       <div className="py-1.5">
-        {/* コアラベル */}
-        <DropdownSectionHeader>{t("labelUi.coreLabels")}</DropdownSectionHeader>
-        {CORE_LABELS.map((label) => {
+        {/* コアラベル（context filter 適用：見出しは section/phase、本文は core 非表示） */}
+        {visibleCoreLabels.length > 0 && (
+          <DropdownSectionHeader>{t("labelUi.coreLabels")}</DropdownSectionHeader>
+        )}
+        {visibleCoreLabels.map((label) => {
           const active = currentLabel === label;
           const color = getLabelColor(label);
           return (
@@ -156,32 +193,36 @@ export function LabelDropdownPortal() {
           );
         })}
 
-        {/* 前手順リンク */}
-        <DropdownDivider />
-        <DropdownSectionHeader className="text-[#5b8fb9]">
-          {t("labelUi.prevStepLink")}
-        </DropdownSectionHeader>
-        <button
-          onClick={() => {
-            // 見出し候補を取得してモード切替
-            const candidates: { blockId: string; text: string; level: number }[] = [];
-            document.querySelectorAll('[data-node-type="blockOuter"]').forEach((el) => {
-              const blockId = el.getAttribute("data-id");
-              if (!blockId || blockId === openBlockId) return;
-              const h2 = el.querySelector("h2");
-              const h1 = el.querySelector("h1");
-              if (h2) candidates.push({ blockId, text: h2.textContent || "", level: 2 });
-              else if (h1) candidates.push({ blockId, text: h1.textContent || "", level: 1 });
-            });
-            setHeadingCandidates(candidates);
-            setPrevStepMode(true);
-          }}
-          className="flex items-center w-full text-left px-3 py-1.5 text-sm bg-info/10 text-[#5b8fb9] rounded mx-1.5 cursor-pointer border-none"
-          style={{ width: "calc(100% - 12px)" }}
-        >
-          <span className="mr-1">→</span>
-          {t("labelUi.selectPrevStep")}
-        </button>
+        {/* 前手順リンク（procedure ラベル付きの見出しブロックでのみ表示） */}
+        {currentLabel === "procedure" && isHeadingBlock(openBlockId) && (
+          <>
+            <DropdownDivider />
+            <DropdownSectionHeader className="text-[#5b8fb9]">
+              {t("labelUi.prevStepLink")}
+            </DropdownSectionHeader>
+            <button
+              onClick={() => {
+                // 見出し候補を取得してモード切替
+                const candidates: { blockId: string; text: string; level: number }[] = [];
+                document.querySelectorAll('[data-node-type="blockOuter"]').forEach((el) => {
+                  const blockId = el.getAttribute("data-id");
+                  if (!blockId || blockId === openBlockId) return;
+                  const h2 = el.querySelector("h2");
+                  const h1 = el.querySelector("h1");
+                  if (h2) candidates.push({ blockId, text: h2.textContent || "", level: 2 });
+                  else if (h1) candidates.push({ blockId, text: h1.textContent || "", level: 1 });
+                });
+                setHeadingCandidates(candidates);
+                setPrevStepMode(true);
+              }}
+              className="flex items-center w-full text-left px-3 py-1.5 text-sm bg-info/10 text-[#5b8fb9] rounded mx-1.5 cursor-pointer border-none"
+              style={{ width: "calc(100% - 12px)" }}
+            >
+              <span className="mr-1">→</span>
+              {t("labelUi.selectPrevStep")}
+            </button>
+          </>
+        )}
 
         {/* 前手順: 見出し選択サブメニュー */}
         {prevStepMode && (
@@ -218,8 +259,10 @@ export function LabelDropdownPortal() {
           </div>
         )}
 
-        {/* フリーラベル例 */}
-        <DropdownDivider />
+        {/* フリーラベル例（上にコアラベル or 前ステップリンク UI がある時だけ divider） */}
+        {(visibleCoreLabels.length > 0 || (currentLabel === "procedure" && isHeadingBlock(openBlockId))) && (
+          <DropdownDivider />
+        )}
         <DropdownSectionHeader>{t("labelUi.freeLabels")}</DropdownSectionHeader>
         {FREE_LABEL_EXAMPLES.slice(0, 4).map((label) => {
           const active = currentLabel === label;
