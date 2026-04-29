@@ -193,32 +193,36 @@ export function LabelDropdownPortal() {
           );
         })}
 
-        {/* 前手順リンク */}
-        <DropdownDivider />
-        <DropdownSectionHeader className="text-[#5b8fb9]">
-          {t("labelUi.prevStepLink")}
-        </DropdownSectionHeader>
-        <button
-          onClick={() => {
-            // 見出し候補を取得してモード切替
-            const candidates: { blockId: string; text: string; level: number }[] = [];
-            document.querySelectorAll('[data-node-type="blockOuter"]').forEach((el) => {
-              const blockId = el.getAttribute("data-id");
-              if (!blockId || blockId === openBlockId) return;
-              const h2 = el.querySelector("h2");
-              const h1 = el.querySelector("h1");
-              if (h2) candidates.push({ blockId, text: h2.textContent || "", level: 2 });
-              else if (h1) candidates.push({ blockId, text: h1.textContent || "", level: 1 });
-            });
-            setHeadingCandidates(candidates);
-            setPrevStepMode(true);
-          }}
-          className="flex items-center w-full text-left px-3 py-1.5 text-sm bg-info/10 text-[#5b8fb9] rounded mx-1.5 cursor-pointer border-none"
-          style={{ width: "calc(100% - 12px)" }}
-        >
-          <span className="mr-1">→</span>
-          {t("labelUi.selectPrevStep")}
-        </button>
+        {/* 前手順リンク（procedure ラベル付きの見出しブロックでのみ表示） */}
+        {currentLabel === "procedure" && isHeadingBlock(openBlockId) && (
+          <>
+            <DropdownDivider />
+            <DropdownSectionHeader className="text-[#5b8fb9]">
+              {t("labelUi.prevStepLink")}
+            </DropdownSectionHeader>
+            <button
+              onClick={() => {
+                // 見出し候補を取得してモード切替
+                const candidates: { blockId: string; text: string; level: number }[] = [];
+                document.querySelectorAll('[data-node-type="blockOuter"]').forEach((el) => {
+                  const blockId = el.getAttribute("data-id");
+                  if (!blockId || blockId === openBlockId) return;
+                  const h2 = el.querySelector("h2");
+                  const h1 = el.querySelector("h1");
+                  if (h2) candidates.push({ blockId, text: h2.textContent || "", level: 2 });
+                  else if (h1) candidates.push({ blockId, text: h1.textContent || "", level: 1 });
+                });
+                setHeadingCandidates(candidates);
+                setPrevStepMode(true);
+              }}
+              className="flex items-center w-full text-left px-3 py-1.5 text-sm bg-info/10 text-[#5b8fb9] rounded mx-1.5 cursor-pointer border-none"
+              style={{ width: "calc(100% - 12px)" }}
+            >
+              <span className="mr-1">→</span>
+              {t("labelUi.selectPrevStep")}
+            </button>
+          </>
+        )}
 
         {/* 前手順: 見出し選択サブメニュー */}
         {prevStepMode && (
