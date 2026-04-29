@@ -9,7 +9,8 @@ import {
   getDefaultReactSlashMenuItems,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteSchema, defaultBlockSpecs, defaultStyleSpecs } from "@blocknote/core";
+import { inlineLabelStyleSpecs } from "@features/inline-label/styles";
 import { filterSuggestionItems as _filterSuggestionItems } from "@blocknote/core/extensions";
 import { FC, useCallback, useEffect, useMemo } from "react";
 import type { CustomBlockEntry } from "./schema";
@@ -86,6 +87,10 @@ export function SandboxEditor({
     blockSpecs: {
       ...defaultBlockSpecs,
       ...customSpecs,
+    } as any,
+    styleSpecs: {
+      ...defaultStyleSpecs,
+      ...inlineLabelStyleSpecs,
     } as any,
   });
 
