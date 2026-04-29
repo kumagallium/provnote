@@ -36,11 +36,16 @@ import { Input } from "@ui/form-field";
 // 色定義
 // ──────────────────────────────────
 const LABEL_COLORS: Record<string, string> = {
+  // Section
   procedure: "#5b8fb9",
+  // Phase（procedure と関連性のある寒色系の薄め）
+  plan: "#7aa6c4",
+  result: "#9b7fb8",
+  // Inline
   material: "#4B7A52",
   tool: "#c08b3e",
   attribute: "#c08b3e",
-  result: "#c26356",
+  output: "#c26356",
 };
 
 function getLabelColor(label: string): string {
