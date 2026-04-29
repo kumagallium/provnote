@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.4.0](https://github.com/kumagallium/Graphium/compare/v0.3.12...v0.4.0) - 2026-04-29
+- [fix] Restore index-table create-note icon after note open by @kumagallium in https://github.com/kumagallium/Graphium/pull/178
+- feat(storage): server-side filesystem storage for self-host (G-DOCKER-SYNC) by @kumagallium in https://github.com/kumagallium/Graphium/pull/180
+- Phase A: 3-layer label structure (Section / Phase / Inline) by @kumagallium in https://github.com/kumagallium/Graphium/pull/182
+- feat(positioning): brand the GH Pages build as preview, surface desktop/Docker CTA by @kumagallium in https://github.com/kumagallium/Graphium/pull/181
+
 ## [v0.3.12](https://github.com/kumagallium/Graphium/compare/v0.3.11...v0.3.12) - 2026-04-28
 - refactor: drop Google Drive OAuth, go local-first by @kumagallium in https://github.com/kumagallium/Graphium/pull/176
 
