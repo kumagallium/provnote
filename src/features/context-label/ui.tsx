@@ -20,9 +20,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CORE_LABELS,
   FREE_LABEL_EXAMPLES,
+  LABEL_SCOPE,
   classifyLabel,
   getHeadingLabelRole,
   STRUCTURAL_LABELS,
+  type CoreLabel,
 } from "./labels";
 // label-attributes は将来のステータス機能で再利用
 import { useLabelStore } from "./store";
@@ -50,6 +52,37 @@ const LABEL_COLORS: Record<string, string> = {
 
 function getLabelColor(label: string): string {
   return LABEL_COLORS[label] ?? "#6b7280";
+}
+
+/**
+ * 指定 blockId のブロックが見出し（heading）かを DOM から判定する。
+ * BlockNote は h1-h6 を heading ブロック種別として描画するので、
+ * data-id 属性のラッパー内に h1-h6 タグがあれば heading とみなす。
+ */
+function isHeadingBlock(blockId: string): boolean {
+  if (typeof document === "undefined") return false;
+  const wrapper =
+    document.querySelector(`[data-id="${blockId}"]`) ??
+    document.querySelector(`[data-prov-label-anchor="${blockId}"]`)?.closest("[data-id]");
+  if (!wrapper) return false;
+  return !!wrapper.querySelector("h1, h2, h3, h4, h5, h6");
+}
+
+/**
+ * Phase C (2026-04-29): ラベルバッジドロップダウンも # メニューと同じ context filter をかける。
+ *   - 見出しブロック: section / phase ラベル（procedure / plan / result）のみ
+ *   - 本文ブロック: コアラベルは出さない（inline 系はハイライト経路で付与する、Phase C-2 以降）
+ *   - 既に inline-type ラベルが付いた既存ブロックは、それを保持できるよう "現在のラベル" は表示する
+ */
+function getVisibleCoreLabels(blockId: string, currentLabel: string | undefined): CoreLabel[] {
+  const heading = isHeadingBlock(blockId);
+  const allowedScopes = heading ? new Set(["section", "phase"]) : new Set<string>();
+  return CORE_LABELS.filter((label) => {
+    if (allowedScopes.has(LABEL_SCOPE[label])) return true;
+    // 既存の inline-type ラベルが本文に付いている場合は、外せるように現在のラベルだけ残す
+    if (currentLabel === label) return true;
+    return false;
+  });
 }
 
 // ──────────────────────────────────
@@ -135,12 +168,16 @@ export function LabelDropdownPortal() {
     closeDropdown();
   };
 
+  const visibleCoreLabels = getVisibleCoreLabels(openBlockId, currentLabel);
+
   return (
     <Dropdown position={pos} onClose={closeDropdown} minWidth={200}>
       <div className="py-1.5">
-        {/* コアラベル */}
-        <DropdownSectionHeader>{t("labelUi.coreLabels")}</DropdownSectionHeader>
-        {CORE_LABELS.map((label) => {
+        {/* コアラベル（context filter 適用：見出しは section/phase、本文は core 非表示） */}
+        {visibleCoreLabels.length > 0 && (
+          <DropdownSectionHeader>{t("labelUi.coreLabels")}</DropdownSectionHeader>
+        )}
+        {visibleCoreLabels.map((label) => {
           const active = currentLabel === label;
           const color = getLabelColor(label);
           return (
