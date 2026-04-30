@@ -328,6 +328,12 @@
   z-index: 30 !important;
 }
 
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) は SideMenu (z-index: 30) の上に出す。
+   インラインラベル付与の操作中、右マージンのラベルバッジに被って隠れる問題への対処。 */
+.bn-toolbar {
+  z-index: 40 !important;
+}
+
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
 body[data-label-dropdown-open="true"] .bn-side-menu {
   opacity: 1 !important;
