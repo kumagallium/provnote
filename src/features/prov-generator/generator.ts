@@ -732,21 +732,6 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   //    `prov:Plan` を付けるのは誤用）。phase はメタ属性 `graphium:phase` で表現。
   for (const agg of aggregatedList) {
     if (agg.label === "attribute") continue; // Parameter は後段で処理
-    // 孤立ノード防止 (Phase E, 2026-04-30):
-    // Activity (procedure 見出し) 配下でない inline span は Entity ノード化しない。
-    // edge を張る相手が無い→ノードだけ存在する状態は PROV グラフとして無意味。
-    // 例: ## 概要 や ## 材料一覧 配下のハイライト、料理レシピの冒頭の材料リスト等。
-    const actIds = getActivityIdsForScope(agg.blockId);
-    if (actIds.length === 0) {
-      warnings.push(
-        createWarning(
-          "orphan-inline",
-          agg.blockId,
-          `インラインラベル "${agg.text || agg.entityId}" (${agg.label}) は procedure 配下にないためグラフから除外しました`,
-        ),
-      );
-      continue;
-    }
     const phase = getPhaseForBlock(agg.blockId);
     const nodeId = nodeIdFor(agg);
     if (!nodes.find((n) => n["@id"] === nodeId)) {
@@ -764,7 +749,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       nodes.push(node);
     }
     // 同 entityId の複数ブロック分は edge を重ねる
-    for (const actId of actIds) {
+    for (const actId of getActivityIdsForScope(agg.blockId)) {
       if (agg.label === "output") {
         relations.push({ "@type": "prov:wasGeneratedBy", from: nodeId, to: actId });
       } else {
@@ -841,18 +826,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       }
     } else {
       // 同ブロック内に Entity が無い → 親 Activity に attach
-      const actIds = getActivityIdsForScope(agg.blockId);
-      if (actIds.length === 0) {
-        warnings.push(
-          createWarning(
-            "orphan-inline",
-            agg.blockId,
-            `Parameter "${agg.text || agg.entityId}" は procedure 配下にないためグラフから除外しました`,
-          ),
-        );
-        continue;
-      }
-      for (const actId of actIds) {
+      for (const actId of getActivityIdsForScope(agg.blockId)) {
         const actNode = nodes.find((n) => n["@id"] === actId);
         if (actNode) {
           if (!actNode.attributes) actNode.attributes = [];
