@@ -634,6 +634,6 @@ export const en: Record<string, string> = {
   "composer.submit": "Send",
   "composer.kbd.submit": "to send",
   "composer.kbd.close": "to close",
-  "composer.insertProv.systemHint": "Turn the following description into a numbered procedure. Use one block per step and start each step with the action verb. Label each block's role in brackets at the start of the line: [Step], [Input], [Tool], or [Output].",
+  "composer.insertProv.systemHint": "Turn the following description into procedural steps. Make each step an H2 heading (## ...) prefixed with [[label:procedure]]. In the body of each step, mark inputs with [[m]]...[[/m]], tools with [[t]]...[[/t]], parameters with [[a]]...[[/a]], and outputs with [[o]]...[[/o]] around the relevant text spans. Do NOT prefix body blocks with legacy [Step]/[Input]/[Tool]/[Output] labels.",
   "aiChat.runFailed": "AI request failed",
 };

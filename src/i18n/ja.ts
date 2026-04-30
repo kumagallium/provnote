@@ -634,6 +634,6 @@ export const ja: Record<string, string> = {
   "composer.submit": "送信",
   "composer.kbd.submit": "で送信",
   "composer.kbd.close": "で閉じる",
-  "composer.insertProv.systemHint": "次の説明を実験・作業の手順に分解して、1 手順 = 1 ブロックで書き出してください。各ブロックの役割を行頭に [手順] / [材料] / [ツール] / [結果] のいずれかのラベルで示してください。",
+  "composer.insertProv.systemHint": "次の説明を実験・作業の手順に分解してください。各手順は H2 見出し (## ...) として書き、見出し先頭に [[label:procedure]] を付けてください。手順本文では、材料は [[m]]...[[/m]]、道具は [[t]]...[[/t]]、条件は [[a]]...[[/a]]、結果は [[o]]...[[/o]] でテキスト範囲を囲んで示してください（ブロック先頭の [手順]/[材料]/[ツール]/[結果] ラベルは使わないでください）。",
   "aiChat.runFailed": "AI 実行に失敗しました",
 };
