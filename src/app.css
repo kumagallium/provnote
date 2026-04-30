@@ -328,10 +328,11 @@
   z-index: 30 !important;
 }
 
-/* FormattingToolbar (テキスト選択時のフローティングメニュー) は SideMenu (z-index: 30) の上に出す。
-   インラインラベル付与の操作中、右マージンのラベルバッジに被って隠れる問題への対処。 */
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) は他の浮動 UI より上に出す。
+   ラベルバッジ (prov-indicator.tsx で z-[9997]) や block-link badge と被ると
+   インラインラベルボタンが隠れるので、それらより上の 9998 を割り当てる。 */
 .bn-toolbar {
-  z-index: 40 !important;
+  z-index: 9998 !important;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
