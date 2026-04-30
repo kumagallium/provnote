@@ -8,7 +8,25 @@
 // （LLM が依存判定をサボっても最低限手順が繋がる保険）
 
 import type { GraphiumDocument } from "../../lib/document-types";
+import { LATEST_DOCUMENT_VERSION } from "../../lib/document-migration";
 import { normalizeLabel, CORE_LABELS, type CoreLabel } from "../context-label/labels";
+
+// Phase E (2026-04-30): material/tool/attribute/output は block-level ラベルから
+// インラインハイライト（BlockNote inline style）に移行。
+// ProvIngester は LLM 出力の role: "material" 等を、ブロック内テキスト全体に適用する
+// inline style として書き戻す。
+const INLINE_SCOPE_LABELS = new Set<CoreLabel>(["material", "tool", "attribute", "output"]);
+const INLINE_LABEL_TO_STYLE_KEY: Record<string, string> = {
+  material: "inlineMaterial",
+  tool: "inlineTool",
+  attribute: "inlineAttribute",
+  output: "inlineOutput",
+};
+
+function makeInlineEntityId(label: CoreLabel): string {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `ent_${label}_${rand}`;
+}
 
 export type ProvIngesterBlock = {
   text: string;
@@ -82,7 +100,7 @@ export function buildProvNoteDocument(params: BuildProvNoteParams): GraphiumDocu
   const provLinks = buildProvLinks(procedures, dependencies);
 
   return {
-    version: 3,
+    version: LATEST_DOCUMENT_VERSION,
     title: params.title,
     pages: [
       {
@@ -202,7 +220,11 @@ function convertBlock(b: ProvIngesterBlock, ctx: BuildContext): any | null {
     coreLabel = null;
   }
 
-  if (coreLabel) ctx.labels[id] = coreLabel;
+  // Phase E: inline-scope ラベル (material/tool/attribute/output) は labels マップに登録せず、
+  // 後段でブロック content にインライン style として書き戻す。procedure だけ block-level に残す。
+  if (coreLabel && !INLINE_SCOPE_LABELS.has(coreLabel)) {
+    ctx.labels[id] = coreLabel;
+  }
 
   if (isProcedureHeading) {
     ctx.currentProcedureBlockId = id;
@@ -243,11 +265,17 @@ function convertBlock(b: ProvIngesterBlock, ctx: BuildContext): any | null {
     }
   }
 
+  // Phase E: inline-scope ラベルが付いたブロックは、テキスト全体に inline style を当てる
+  const styles: Record<string, unknown> =
+    coreLabel && INLINE_SCOPE_LABELS.has(coreLabel)
+      ? { [INLINE_LABEL_TO_STYLE_KEY[coreLabel]]: makeInlineEntityId(coreLabel) }
+      : {};
+
   return {
     id,
     type: blockType,
     props,
-    content: [{ type: "text", text, styles: {} }],
+    content: [{ type: "text", text, styles }],
     children,
   };
 }

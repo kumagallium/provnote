@@ -80,12 +80,14 @@ Graphium derives the graph from (1) block order, (2) heading hierarchy, (3) role
 - An **H2 heading with role: "procedure"** becomes a **prov:Activity** (a step) and opens a scope.
 - Inside that H2 scope:
   - material / tool → Activity \`prov:used\` Entity
-  - result → Entity \`prov:wasGeneratedBy\` Activity
+  - output → Entity \`prov:wasGeneratedBy\` Activity
 - **attribute** attaches to its nearest labeled ancestor (via \`children\`), else to the enclosing Activity.
 - **A material with \`derivedFrom: "<stepId>"\`** tells Graphium: "this material is the product of that prior step." Graphium will link **step-containing-this-material \`wasInformedBy\` <stepId>**.
 - **A procedure with \`dependsOn: ["<stepId>", ...]\`** tells Graphium this step extends those prior steps. Same \`wasInformedBy\` link is produced.
 
 Without \`derivedFrom\` / \`dependsOn\`, steps remain disconnected — so **always populate these whenever a step actually consumes a prior step's product**.
+
+NOTE (Phase E, 2026-04-30): The wire format you produce is unchanged — keep emitting role-tagged blocks. Graphium converts \`role: "material" / "tool" / "attribute" / "output"\` into inline highlights (BlockNote inline style) on each block's text automatically. \`role: "procedure"\` remains a block-level label on the H2 heading.
 
 ## Output Format
 

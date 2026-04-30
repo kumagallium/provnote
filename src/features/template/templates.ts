@@ -133,26 +133,30 @@ const planTemplate: TemplateDef = {
 // ── 実験テンプレート ─────────────────────────────────────────
 //
 // # （試料名: S-01 など）
-// ## Overview              (paragraph)
-// ## Procedure
-//   ### 手順1               (procedure, stepId=step-1)
-//     #### 計画              (no role)
-//       - material
-//       - tool
-//       - attribute
-//     #### 結果・考察         (no role)
-//       - result
-//   ### 手順2               (procedure, stepId=step-2, informed_by step-1)
-//     #### 計画              (no role)
-//       - material
-//       - tool
-//       - attribute
-//     #### 結果・考察         (no role)
-//       - result
+// ## Overview                   (paragraph)
+// ## [[label:procedure]] 手順1   (Activity)
+//   ### 計画                    (no role)
+//     - <inlineMaterial> 材料
+//     - <inlineTool> 道具
+//     - <inlineAttribute> 条件
+//   ### 結果・考察               (no role)
+//     - <inlineOutput> 結果
+// ## [[label:procedure]] 手順2   (Activity, informed_by 手順1)
+//   ... 同様
 //
-// 注: BlockNote のデフォルト heading は level 1-3 のみサポート。
-//     #### 計画 / 結果・考察 は level 3 で代用し、視覚階層は太字 paragraph で補う。
-//     procedure scope は level 2 を使う（prov-generator の仕様）。
+// Phase E (2026-04-30): block-level material/tool/attribute/output ラベルは廃止し、
+// インラインハイライト（BlockNote inline style）に移行。procedure ラベルだけ block-level
+// として残る（H2 見出し = Activity）。
+//
+// 注: BlockNote のデフォルト heading は level 1-3 のみサポート。procedure scope は
+//     level 2 を使う（prov-generator の仕様）。
+
+// 各 bullet の placeholder テキスト全体に当てるインライン style 用の entityId 発番
+function makeStepEntityId(role: "material" | "tool" | "attribute" | "output", step: number): string {
+  // step ごとに異なる id を返すため step インデックスを seed に含める
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `ent_${role}_step${step}_${rand}`;
+}
 const experimentTemplate: TemplateDef = {
   id: "experiment",
   source: "official",
@@ -161,9 +165,26 @@ const experimentTemplate: TemplateDef = {
   tagKeys: ["template.tag.run", "template.tag.prov"],
   focusPath: [0],
   build: (t) => {
-    // Step 1 / Step 2 を生成するヘルパー
-    const buildStep = (stepLabel: string) => [
-      // [0] H2 手順 (procedure, stepId)
+    // Step n の bullet placeholder テキスト全体に inline style を当てるヘルパー
+    // BlockNote inline style 名: inlineMaterial / inlineTool / inlineAttribute / inlineOutput
+    const inlineBullet = (
+      role: "material" | "tool" | "attribute" | "output",
+      step: number,
+      placeholder: string,
+    ) => {
+      const styleKey = `inline${role[0].toUpperCase()}${role.slice(1)}`;
+      return {
+        type: "bulletListItem" as const,
+        content: [
+          { type: "text", text: placeholder, styles: { [styleKey]: makeStepEntityId(role, step) } },
+        ],
+        children: [],
+      };
+    };
+
+    // Step n を生成するヘルパー（step は 1-indexed）
+    const buildStep = (stepLabel: string, step: number) => [
+      // [0] H2 手順 (procedure)
       {
         type: "heading",
         props: { level: 2 },
@@ -177,24 +198,12 @@ const experimentTemplate: TemplateDef = {
         content: [{ type: "text", text: t("template.experiment.planHeading"), styles: {} }],
         children: [],
       },
-      // [2] bullet material
-      {
-        type: "bulletListItem",
-        content: [{ type: "text", text: t("template.experiment.materialPlaceholder"), styles: {} }],
-        children: [],
-      },
-      // [3] bullet tool
-      {
-        type: "bulletListItem",
-        content: [{ type: "text", text: t("template.experiment.toolPlaceholder"), styles: {} }],
-        children: [],
-      },
-      // [4] bullet attribute
-      {
-        type: "bulletListItem",
-        content: [{ type: "text", text: t("template.experiment.attributePlaceholder"), styles: {} }],
-        children: [],
-      },
+      // [2] bullet material (inline highlight)
+      inlineBullet("material", step, t("template.experiment.materialPlaceholder")),
+      // [3] bullet tool (inline highlight)
+      inlineBullet("tool", step, t("template.experiment.toolPlaceholder")),
+      // [4] bullet attribute (inline highlight)
+      inlineBullet("attribute", step, t("template.experiment.attributePlaceholder")),
       // [5] H3 結果・考察
       {
         type: "heading",
@@ -202,12 +211,8 @@ const experimentTemplate: TemplateDef = {
         content: [{ type: "text", text: t("template.experiment.resultHeading"), styles: {} }],
         children: [],
       },
-      // [6] bullet result
-      {
-        type: "bulletListItem",
-        content: [{ type: "text", text: t("template.experiment.resultPlaceholder"), styles: {} }],
-        children: [],
-      },
+      // [6] bullet output (inline highlight)
+      inlineBullet("output", step, t("template.experiment.resultPlaceholder")),
     ];
 
     // フラット展開: 各ステップは 7 ブロック
@@ -216,8 +221,8 @@ const experimentTemplate: TemplateDef = {
     // [2] paragraph (overview body)
     // [3..9]   step 1 (7 blocks)
     // [10..16] step 2 (7 blocks)
-    const step1 = buildStep(t("template.experiment.step1"));
-    const step2 = buildStep(t("template.experiment.step2"));
+    const step1 = buildStep(t("template.experiment.step1"), 1);
+    const step2 = buildStep(t("template.experiment.step2"), 2);
 
     return {
       blocks: [
@@ -245,18 +250,9 @@ const experimentTemplate: TemplateDef = {
         ...step2,
       ],
       labels: [
-        // step 1
+        // procedure ラベルだけ block-level に残す（H2 見出し = Activity）
         { path: [3], label: "procedure" },
-        { path: [5], label: "material" },
-        { path: [6], label: "tool" },
-        { path: [7], label: "attribute" },
-        { path: [9], label: "output" },
-        // step 2
         { path: [10], label: "procedure" },
-        { path: [12], label: "material" },
-        { path: [13], label: "tool" },
-        { path: [14], label: "attribute" },
-        { path: [16], label: "output" },
       ],
       provLinks: [
         // step 2 → step 1 (前手順リンク)

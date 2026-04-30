@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildProvNoteDocument } from "./prov-note-builder";
+import { LATEST_DOCUMENT_VERSION } from "../../lib/document-migration";
 
 describe("buildProvNoteDocument", () => {
   const baseParams = {
@@ -20,9 +21,9 @@ describe("buildProvNoteDocument", () => {
     expect(doc.sourceFetchedAt).toBe(baseParams.sourceFetchedAt);
   });
 
-  it("version は 3、pages は 1 ページ", () => {
+  it("version は LATEST、pages は 1 ページ", () => {
     const doc = buildProvNoteDocument({ ...baseParams, blocks: [] });
-    expect(doc.version).toBe(3);
+    expect(doc.version).toBe(LATEST_DOCUMENT_VERSION);
     expect(doc.pages).toHaveLength(1);
     expect(doc.pages[0].id).toBe("main");
   });
@@ -37,7 +38,7 @@ describe("buildProvNoteDocument", () => {
     expect(hasLink).toBe(true);
   });
 
-  it("平坦なブロックに UUID を振り、core role を labels に登録する", () => {
+  it("Phase E: procedure は block-level labels、material は inline highlight になる", () => {
     const doc = buildProvNoteDocument({
       ...baseParams,
       blocks: [
@@ -49,12 +50,15 @@ describe("buildProvNoteDocument", () => {
     const page = doc.pages[0];
     expect(page.blocks).toHaveLength(4); // source header + 3 blocks
     const [, heading, material, para] = page.blocks;
+    // procedure は block-level label として残る（H2 = Activity）
     expect(page.labels[heading.id]).toBe("procedure");
-    expect(page.labels[material.id]).toBe("material");
+    // material は inline highlight として content に書き戻される (block-level label には登録されない)
+    expect(page.labels[material.id]).toBeUndefined();
+    expect(material.content[0].styles.inlineMaterial).toMatch(/^ent_material_/);
     expect(page.labels[para.id]).toBeUndefined();
   });
 
-  it("ネストした children を BlockNote の block.children にマップし、labels は全階層平坦に記録", () => {
+  it("ネストした children も全て inline highlight として content に焼き込まれる", () => {
     const doc = buildProvNoteDocument({
       ...baseParams,
       blocks: [
@@ -73,17 +77,18 @@ describe("buildProvNoteDocument", () => {
     const page = doc.pages[0];
     const material = page.blocks[2];
     expect(material.type).toBe("bulletListItem");
+    expect(material.content[0].styles.inlineMaterial).toMatch(/^ent_material_/);
     expect(material.children).toHaveLength(2);
 
-    // material + 2 attribute + procedure heading が labels に全て平坦に入る
-    expect(page.labels[material.id]).toBe("material");
+    // attribute も inline highlight 化（block-level label には入らない）
+    expect(page.labels[material.id]).toBeUndefined();
     for (const child of material.children) {
-      expect(page.labels[child.id]).toBe("attribute");
+      expect(page.labels[child.id]).toBeUndefined();
+      expect(child.content[0].styles.inlineAttribute).toMatch(/^ent_attribute_/);
     }
   });
 
-  it("role のエイリアス（'materials'）は正規化される", () => {
-    // procedure スコープ内に置いて、剥がしセーフガードに消されないようにする
+  it("role のエイリアス（'materials'）は正規化されて inline highlight になる", () => {
     const doc = buildProvNoteDocument({
       ...baseParams,
       blocks: [
@@ -94,16 +99,17 @@ describe("buildProvNoteDocument", () => {
     const material = doc.pages[0].blocks.find(
       (b: any) => b.content[0].text === "egg",
     );
-    expect(doc.pages[0].labels[material.id]).toBe("material");
+    expect(material.content[0].styles.inlineMaterial).toMatch(/^ent_material_/);
   });
 
-  it("role が core でなければ labels に入らない", () => {
+  it("role が core でなければ inline style もラベルも付かない", () => {
     const doc = buildProvNoteDocument({
       ...baseParams,
       blocks: [{ text: "x", role: "unknown-role", blockType: "paragraph" }],
     });
     const contentBlock = doc.pages[0].blocks[1];
     expect(doc.pages[0].labels[contentBlock.id]).toBeUndefined();
+    expect(contentBlock.content[0].styles).toEqual({});
   });
 
   it("heading の props.level が設定される", () => {
@@ -249,17 +255,20 @@ describe("buildProvNoteDocument", () => {
     });
     const page = doc.pages[0];
 
-    // スコープ外の 3 つのブロックにはラベルが付いていない
+    // スコープ外の 3 つのブロックには label / inline style どちらも付かない
     const pantryBamboo = page.blocks.find((b: any) => b.content[0].text === "pantry bamboo");
     const pantryGarlic = page.blocks.find((b: any) => b.content[0].text === "pantry garlic");
     const oldPan = page.blocks.find((b: any) => b.content[0].text === "old frying pan");
     expect(page.labels[pantryBamboo.id]).toBeUndefined();
+    expect(pantryBamboo.content[0].styles).toEqual({});
     expect(page.labels[pantryGarlic.id]).toBeUndefined();
+    expect(pantryGarlic.content[0].styles).toEqual({});
     expect(page.labels[oldPan.id]).toBeUndefined();
+    expect(oldPan.content[0].styles).toEqual({});
 
-    // スコープ内の material はちゃんとラベルが付く
+    // スコープ内の material は inline highlight 化される
     const scopedMaterial = page.blocks.find((b: any) => b.content[0].text === "bamboo shoots");
-    expect(page.labels[scopedMaterial.id]).toBe("material");
+    expect(scopedMaterial.content[0].styles.inlineMaterial).toMatch(/^ent_material_/);
 
     // テキストはそのまま残る（ブロック自体は削除しない）
     expect(pantryBamboo).toBeDefined();
@@ -281,9 +290,9 @@ describe("buildProvNoteDocument", () => {
     expect(doc.pages[0].provLinks).toHaveLength(0);
   });
 
-  it("スコープ外の attribute は剥がさない（親探索で吸収されるため）", () => {
+  it("スコープ外の attribute は inline highlight として残す（親探索で吸収されるため）", () => {
     // attribute は prov-generator が祖先探索で親 Entity に埋め込むため、
-    // スコープ外でも PROV グラフが汚れない。ラベルは残す。
+    // スコープ外でも PROV グラフが汚れにくい。inline style は残す（block-level label には載らない）。
     const doc = buildProvNoteDocument({
       ...baseParams,
       blocks: [
@@ -293,7 +302,8 @@ describe("buildProvNoteDocument", () => {
     });
     const page = doc.pages[0];
     const attrBlock = page.blocks.find((b: any) => b.content[0].text === "serves 4");
-    expect(page.labels[attrBlock.id]).toBe("attribute");
+    expect(page.labels[attrBlock.id]).toBeUndefined();
+    expect(attrBlock.content[0].styles.inlineAttribute).toMatch(/^ent_attribute_/);
   });
 
   it("未定義 stepId / 自己参照は無視される", () => {
