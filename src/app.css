@@ -328,21 +328,29 @@
   z-index: 30 !important;
 }
 
-/* FormattingToolbar (テキスト選択時のフローティングメニュー) は他の浮動 UI より上に出す。
-   ラベルバッジ (prov-indicator.tsx で z-[9997]) や block-link badge と被ると
-   インラインラベルボタンが隠れる。BlockNote の Floating UI ポジショナの祖先
-   要素にも stacking context が作られるため、toolbar 本体と祖先 .bn-formatting-toolbar
-   の両方に高 z-index を当てる。 */
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) を確実に最前面に出す。
+   - z-index を全 stacking context より上に
+   - 背景を不透明に（半透明だと裏のラベルバッジが透けて見える）
+   - 表示中は SideMenu のラベルバッジを隠す（位置的に被るため、明示的に避ける）*/
 .bn-toolbar,
 .bn-formatting-toolbar,
 [data-floating-ui-portal] .bn-toolbar,
 [data-floating-ui-portal] .bn-formatting-toolbar {
   z-index: 10001 !important;
+  background-color: var(--bn-colors-menu-background, #ffffff) !important;
+  opacity: 1 !important;
 }
 
 /* Floating UI が portal を作る場合、ポジショナのラッパーも上に出す */
 [data-floating-ui-portal] {
   z-index: 10001 !important;
+}
+
+/* ── FormattingToolbar 表示中はラベルバッジを隠す ──
+   .bn-container の中に :has(.bn-formatting-toolbar) が出現したら、
+   その配下の SideMenu バッジを非表示にする */
+.bn-container:has(.bn-formatting-toolbar) .bn-side-menu {
+  visibility: hidden !important;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
