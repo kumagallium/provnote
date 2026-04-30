@@ -21,7 +21,10 @@
 import { useCallback } from "react";
 import { useLabelStore } from "../context-label/store";
 import { useLinkStore } from "../block-link/store";
-import { useMediaInlineLabelStoreOptional } from "../inline-label/media-store";
+import {
+  useMediaInlineLabelStoreOptional,
+  makeMediaEntityId,
+} from "../inline-label/media-store";
 import {
   cleanupBlockMetadata,
   copyLabelsByIdMap,
@@ -66,13 +69,19 @@ export function useBlockLifecycle(): BlockLifecycle {
     (idMap: ReadonlyMap<string, string>) => {
       copyLabelsByIdMap(idMap, labelStore);
       copyLinksByIdMap(idMap, linkStore);
-      // メディアインラインラベルの ID 移植
+      // メディアインラインラベルの ID 移植（Phase E: コピペでは entityId を再発番）
+      // 同 (oldEntityId) ペアは新 ID を共有させて、コピー範囲内の論理的同一性は維持する。
       if (mediaInlineLabelStore) {
+        const entityRemap = new Map<string, string>();
         for (const [oldId, newId] of idMap) {
           const entry = mediaInlineLabelStore.getLabel(oldId);
-          if (entry) {
-            mediaInlineLabelStore.setLabel(newId, { ...entry });
+          if (!entry) continue;
+          let newEntityId = entityRemap.get(entry.entityId);
+          if (!newEntityId) {
+            newEntityId = makeMediaEntityId(entry.label);
+            entityRemap.set(entry.entityId, newEntityId);
           }
+          mediaInlineLabelStore.setLabel(newId, { ...entry, entityId: newEntityId });
         }
       }
     },
