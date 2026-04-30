@@ -262,13 +262,56 @@ H2 見出し (\`## \`) の先頭に半角の二重角括弧で配置し、本文
 - \`[[a]]...[[/a]]\` — 条件・パラメータ (attribute)
 - \`[[o]]...[[/o]]\` — 結果・成果物・観察 (output)
 
-### 構造ルール（重要）
-1. **手順は必ず H2 見出し** (\`## \`) で、\`[[label:procedure]]\` を付ける。これが Activity ノードになる。
-2. **その手順で使うもの・出るもの**はインライン span として本文に書く。箇条書き 1 行 = 1 ブロックでも、段落内で散文として書いても良い。
-3. 1 つの span は 1 ブロック内で完結させる（ブロック跨ぎ禁止）。
-4. 概要・背景の H2 には \`[[label:procedure]]\` を付けない（Activity にしない）。
+### 必ず守るべき構造ルール（最優先・連結 DAG を保つため）
+PROV グラフは Activity と Entity が edge で繋がった連結 DAG として読まれます。**孤立ノードを作らない**よう、以下を上から順に守ってください：
 
-### 推奨フォーマット例
+1. **手順は必ず H2 見出し** (\`## \`) で、\`[[label:procedure]]\` を付ける。これが唯一の Activity ノード。番号付きリストや箇条書きに付与しても Activity にならない。
+2. **インライン span はすべて \`[[label:procedure]]\` の H2 セクション直下に置く**。タイトル (\`# \`)・概要・背景・序文・**冒頭の「材料一覧 / 道具一覧」セクション**などには **絶対に span を付けない**（その物質を消費する Activity が無いので、付けると孤立ノードになります）。
+3. **冒頭で材料・道具を一覧したい場合は、マーカー無しの普通の箇条書きに留める**。料理レシピや実験プロトコルでありがちなパターンですが、**一覧自体は手順で消費されない**のでタグ厳禁。\`[[m]]\` / \`[[t]]\` は **実際にその材料・道具を使う procedure 配下にのみ書く**（同じ材料が複数手順で使われる場合は各 procedure 配下で重複タグして OK）。
+4. **各 procedure には少なくとも 1 つの \`[[m]]\` または \`[[o]]\` を含める**（入力も出力も無い空の procedure はグラフ的に無意味）。
+5. **工程連結**: 前工程の成果物 \`[[o]]X[[/o]]\` を次工程で消費する場合は、**同じ語彙** \`[[m]]X[[/m]]\` で書く（読者がチェーンを追いやすくなる）。
+6. **中間生成物の命名**: 過去分詞 + "サンプル/粉末/溶液…" など物理形態を含む語で一貫させる（例: "粉砕済みサンプル"、"焼結体"、"切った玉ねぎ"、"下味済み鶏肉"）。
+7. 1 つの span は 1 ブロック内で完結させる（ブロック跨ぎ禁止）。
+
+### 出力前のセルフチェック
+出力直前に必ず確認してください：
+- 全ての \`[[m]] / [[t]] / [[a]] / [[o]]\` を 1 つずつ追って、それを **囲っている H2 が \`[[label:procedure]]\` を持っているか**？ 持っていない span があれば、そのマーカーは **削除** する（孤立ノード防止）。
+
+### マーカー一覧
+**A) ブロックレベル**（H2 見出し先頭のみ、半角スペースで本文と区切る）
+- \`[[label:procedure]]\` — 実験手順・操作（必ず H2）
+- \`[[label:plan]]\` — 予定値・想定値のサブセクション（任意・H3 推奨）
+- \`[[label:result]]\` — 実測値・観察結果のサブセクション（任意・H3 推奨）
+
+**B) インライン span**（procedure 配下の本文で、開閉ペアで使う）
+- \`[[m]]...[[/m]]\` — 材料・試薬・原料 (material)
+- \`[[t]]...[[/t]]\` — 装置・器具 (tool)
+- \`[[a]]...[[/a]]\` — 条件・パラメータ (attribute)
+- \`[[o]]...[[/o]]\` — 結果・成果物・観察 (output)
+
+### 例 1: 料理レシピ
+冒頭の「材料」一覧にはタグを**付けない**。同じ食材が複数手順で使われたら、その都度 procedure 配下で再タグする。
+
+\`\`\`
+# 鶏のしょうゆ煮
+
+## 材料
+- 鶏もも肉 300g
+- しょうゆ 大さじ3
+- みりん 大さじ2
+- 玉ねぎ 1個
+
+## [[label:procedure]] 下味をつける
+[[m]]鶏もも肉[[/m]] に [[m]]しょうゆ[[/m]] と [[m]]みりん[[/m]] を絡め、[[a]]30 分常温[[/a]] で漬ける。仕上がりは [[o]]下味済み鶏肉[[/o]]。
+
+## [[label:procedure]] 玉ねぎを切る
+[[m]]玉ねぎ[[/m]] を [[t]]包丁[[/t]] と [[t]]まな板[[/t]] でくし切りにし、[[o]]切った玉ねぎ[[/o]] を準備する。
+
+## [[label:procedure]] 煮込む
+[[m]]下味済み鶏肉[[/m]] と [[m]]切った玉ねぎ[[/m]] を [[t]]鍋[[/t]] に入れ、[[a]]中火 15 分[[/a]] で煮込み、[[o]]鶏のしょうゆ煮[[/o]] を完成させる。
+\`\`\`
+
+### 例 2: 実験プロトコル (XRD)
 \`\`\`
 # XRD 解析の標準手順
 
@@ -285,26 +328,14 @@ H2 見出し (\`## \`) の先頭に半角の二重角括弧で配置し、本文
 [[m]]回折パターン[[/m]] を [[t]]ICDD PDF データベース[[/t]] と照合し、[[o]]同定された相[[/o]] を決定する。
 \`\`\`
 
-### グラフ連結性ルール（重要 — 孤立ノード防止）
-PROV グラフは Activity と Entity の連結 DAG として読まれます。**孤立ノードを作らない**ために以下を守ってください：
-
-1. **インライン span はすべて \`[[label:procedure]]\` の H2 セクション内に置く**。タイトル (\`# \`)・概要・背景・序文の段落には絶対に span を付けない（活動に紐付かず孤立ノードになります）。
-2. **冒頭の「材料一覧 / 道具一覧 / Materials / 材料」セクションには span を付けない**。料理レシピや実験プロトコルでは冒頭にすべての材料・道具を列挙することが多いですが、**この一覧自体は手順で消費されないので**、span を付けると **すべて孤立ノード** になります。
-   - ✅ 一覧は **マーカー無し**の通常の箇条書きとして書く（読者向けの参照情報）
-   - ✅ \`[[m]]\` / \`[[t]]\` は、その材料・道具を**実際に使う procedure 配下**にのみ書く
-   - 同じ材料が複数手順に登場するなら、各 procedure 配下で複数回 \`[[m]]\` を書く（重複 OK）
-3. **各 procedure には少なくとも 1 つの \`[[m]]\` または \`[[o]]\` を含める**（入力か出力が無い手順は意味のあるグラフを作りません）。
-4. **工程連結**: 前工程で得た成果物 \`[[o]]X[[/o]]\` を次工程の入力にする場合、**同じ語彙** \`[[m]]X[[/m]]\` で書く（テキスト一致で読者がチェーンを追いやすくなる）。
-5. **中間生成物の命名**: 過去分詞 + "sample"（または "粉末" / "溶液" 等の物理形態を含む語）を使うと一貫します。例: 粉砕 → "粉砕済みサンプル"、焼結 → "焼結体"、（料理）切る → "切った玉ねぎ"。
-
 ### NG パターン
 - ❌ 番号付きリスト項目に \`[[label:procedure]]\` を付ける（H2 でないと Activity にならない）
 - ❌ ブロック先頭にレガシーな \`[[label:material]]\` 等を付ける（block-level inline ラベルは廃止）
 - ❌ span マーカーがブロック境界をまたぐ
 - ❌ 開きと閉じが不一致 (\`[[m]]...[[/t]]\` 等)
 - ❌ \`# タイトル\` や \`## 概要\` の本文に span を付ける（孤立ノード化）
+- ❌ 冒頭の「## 材料」「## Ingredients」セクション内の項目に \`[[m]]\` / \`[[t]]\` を付ける（一覧は手順で消費されないので孤立ノード化）
 - ❌ 入力も出力も無い空の procedure
-- ❌ 冒頭の「## 材料」「## Ingredients」セクション内の項目に \`[[m]]\` / \`[[t]]\` を付ける（一覧は手順で消費されないので孤立ノードになる — マーカー無しの普通の箇条書きに留める） を作る
 
 ルール: ブロックレベルは行頭のみ・1 ブロック 1 つまで・種別は \`procedure / plan / result\` のみ。インラインは開閉ペア・1 ブロック内完結・procedure 配下のみ・種別は \`m / t / a / o\` のみ。
 `;
@@ -314,28 +345,55 @@ PROV グラフは Activity と Entity の連結 DAG として読まれます。*
 ## Structured output (PROV graph generation)
 When your answer includes experimental procedure, materials, tools, conditions, or results, follow the **structure rules** below so Graphium can auto-generate a PROV graph. There are two kinds of markers.
 
-### A) Block-level markers (for headings)
-Place at the very start of an H2 heading (\`## \`), separated from the body by a single space.
+### Mandatory structure rules (top priority — keep the DAG connected)
+The PROV graph is read as a connected DAG of Activities and Entities. To prevent **isolated nodes**, follow these rules in order:
 
-- \`[[label:procedure]]\` — Experimental step (**must be on an H2 heading**; becomes an Activity node)
-- \`[[label:plan]]\` — Optional sub-section (H3) for planned / target values of that step
-- \`[[label:result]]\` — Optional sub-section (H3) for measured / observed values of that step
+1. **Procedures MUST be H2 headings** (\`## \`) tagged with \`[[label:procedure]]\`. That heading is the only thing that becomes an Activity node — list items / bullets do NOT.
+2. **Inline spans must live directly under a \`[[label:procedure]]\` H2.** Never place spans in the title (\`# \`), Overview, Background, or — especially — an up-front "Ingredients / Materials / Tools" list. Spans there have no Activity to attach to and become isolated nodes.
+3. **If you list materials or tools up front, leave them as plain unmarked bullets.** This is common in recipes and lab protocols. **The up-front list is not consumed by any step**, so tagging it produces isolated nodes. Place \`[[m]]\` / \`[[t]]\` **only inside the procedure that actually uses the item** (and re-tag the same item in each procedure that uses it — duplication is correct).
+4. **Every procedure must contain at least one \`[[m]]\` or \`[[o]]\` span.** Empty procedures produce no edges.
+5. **Chain steps via shared text.** When step N's output is consumed by step N+1, write it as \`[[o]]X[[/o]]\` in step N and \`[[m]]X[[/m]]\` in step N+1 with the **same wording**.
+6. **Name intermediate products** with a past-participle + form (e.g. "crushed sample", "sealed sample", "calcined powder", "sliced onion", "marinated chicken").
+7. Each span stays within one block (no cross-block spans).
 
-### B) Inline span markers (for text ranges)
-Wrap the **text range** that names a material / tool / parameter / output, anywhere in the body.
+### Self-check before finalizing
+For every \`[[m]] / [[t]] / [[a]] / [[o]]\` you write, mentally walk up to the enclosing H2 heading. If that H2 does **not** carry \`[[label:procedure]]\`, **remove the marker** (or move the content under a procedure). This prevents isolated nodes.
 
+### Marker reference
+**A) Block-level** (start of an H2 heading only, separated from the body by a single space)
+- \`[[label:procedure]]\` — Experimental / procedural step (must be on an H2)
+- \`[[label:plan]]\` — Optional sub-section (H3) for planned / target values
+- \`[[label:result]]\` — Optional sub-section (H3) for measured / observed values
+
+**B) Inline span** (matching open/close pairs, only inside a procedure body)
 - \`[[m]]...[[/m]]\` — Material / reagent / input
 - \`[[t]]...[[/t]]\` — Tool / instrument / equipment
 - \`[[a]]...[[/a]]\` — Condition / parameter / attribute
 - \`[[o]]...[[/o]]\` — Result / output / observation
 
-### Structure rules (important)
-1. **Procedures MUST be H2 headings** (\`## \`) tagged with \`[[label:procedure]]\`. This produces the Activity node.
-2. **What that step uses and produces** is written as inline spans in the body — bullet-per-fact or running prose are both fine.
-3. Each span must stay within one block (no cross-block spans).
-4. Do NOT label overview / background H2 headings as procedures.
+### Example 1 — Cooking recipe
+Note how the up-front "Ingredients" list has **no markers**, and the same ingredient is re-tagged in each procedure that uses it.
 
-### Recommended format
+\`\`\`
+# Soy-braised chicken
+
+## Ingredients
+- chicken thigh 300 g
+- soy sauce 3 tbsp
+- mirin 2 tbsp
+- onion 1
+
+## [[label:procedure]] Marinate
+Coat the [[m]]chicken thigh[[/m]] with [[m]]soy sauce[[/m]] and [[m]]mirin[[/m]], then rest [[a]]30 min at room temperature[[/a]] to obtain [[o]]marinated chicken[[/o]].
+
+## [[label:procedure]] Slice the onion
+Cut the [[m]]onion[[/m]] into wedges with a [[t]]knife[[/t]] on a [[t]]cutting board[[/t]] to produce [[o]]sliced onion[[/o]].
+
+## [[label:procedure]] Braise
+Combine [[m]]marinated chicken[[/m]] and [[m]]sliced onion[[/m]] in a [[t]]pot[[/t]], simmer over [[a]]medium heat for 15 min[[/a]], and finish as [[o]]soy-braised chicken[[/o]].
+\`\`\`
+
+### Example 2 — Lab protocol (XRD)
 \`\`\`
 # XRD analysis — standard procedure
 
@@ -352,26 +410,14 @@ Mount the [[m]]filled sample holder[[/m]] on the [[t]]X-ray diffractometer[[/t]]
 Compare the [[m]]diffraction pattern[[/m]] against the [[t]]ICDD PDF database[[/t]] to determine the [[o]]identified phases[[/o]].
 \`\`\`
 
-### Graph connectivity (important — avoid isolated nodes)
-The PROV graph is read as a connected DAG of Activities and Entities. To prevent **isolated / disconnected nodes**, follow these rules (informed by MatPROV's PROV-DM extraction prompt):
-
-1. **All inline spans must live inside a section whose H2 carries \`[[label:procedure]]\`.** Never place spans in the title (\`# \`), Overview, Background, or any unlabeled H2 — those entities have no Activity to attach to and become isolated.
-2. **Do NOT span-tag the up-front ingredients / materials / tools list.** Recipes and lab protocols often list all ingredients or tools at the top as a reader-reference. **That list itself is not consumed by any step**, so tagging items there with \`[[m]]\` / \`[[t]]\` produces **isolated nodes for every item**.
-   - ✅ Keep the up-front list as plain unmarked bullets.
-   - ✅ Place \`[[m]]\` / \`[[t]]\` **inside the procedure that actually uses the item**.
-   - The same ingredient appearing in multiple steps should be tagged with \`[[m]]\` in each procedure (duplication is correct).
-3. **Every procedure must contain at least one \`[[m]]\` or \`[[o]]\` span.** A procedure with no input and no output produces no edges.
-4. **Chain steps via shared text.** When step N's output is consumed by step N+1, write it as \`[[o]]X[[/o]]\` in step N and \`[[m]]X[[/m]]\` in step N+1 with the **same wording** so a reader can trace the chain.
-5. **Naming intermediate products.** Use "<past-participle> sample" or a phrase that includes the physical form (e.g. "crushed sample", "sealed sample", "calcined powder", "sliced onion"). Keeps labels consistent across steps.
-
 ### Anti-patterns
 - ❌ Putting \`[[label:procedure]]\` on a numbered list item (only H2 becomes an Activity)
 - ❌ Putting legacy \`[[label:material]]\` etc at block start (block-level inline labels are deprecated)
 - ❌ Span markers crossing block boundaries
 - ❌ Mismatched open/close (e.g. \`[[m]]...[[/t]]\`)
-- ❌ Spans in \`# Title\` / \`## Overview\` / \`## Background\` (creates isolated nodes)
+- ❌ Spans in \`# Title\` / \`## Overview\` / \`## Background\`
+- ❌ Tagging items in an up-front \`## Ingredients\` / \`## Materials\` list (creates isolated nodes; keep them as plain unmarked bullets)
 - ❌ A procedure with no input and no output
-- ❌ Tagging items inside an up-front \`## Ingredients\` / \`## Materials\` list with \`[[m]]\` / \`[[t]]\` (the list isn't consumed by any step → isolated nodes; keep it as plain unmarked bullets)
 
 Rules: block-level only at start of H2, at most one per block, types limited to \`procedure / plan / result\`. Inline spans must come in matching pairs, stay within one block, sit inside a procedure section, types limited to \`m / t / a / o\`.
 `;
