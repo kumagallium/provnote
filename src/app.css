@@ -347,10 +347,14 @@
 }
 
 /* ── FormattingToolbar 表示中はラベルバッジを隠す ──
-   .bn-container の中に :has(.bn-formatting-toolbar) が出現したら、
-   その配下の SideMenu バッジを非表示にする */
-.bn-container:has(.bn-formatting-toolbar) .bn-side-menu {
+   FormattingToolbar は portal で document.body 直下に出る場合がある。
+   body 全体で :has() を使い、トップレベルでも検出できるようにする。
+   - SideMenu のバッジ
+   - prov-indicator.tsx の浮動バッジ（fixed positioned, document.body portal）両方を非表示に */
+body:has(.bn-formatting-toolbar) .bn-side-menu,
+body:has(.bn-formatting-toolbar) [data-prov-label-anchor] {
   visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
