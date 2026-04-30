@@ -285,13 +285,23 @@ H2 見出し (\`## \`) の先頭に半角の二重角括弧で配置し、本文
 [[m]]回折パターン[[/m]] を [[t]]ICDD PDF データベース[[/t]] と照合し、[[o]]同定された相[[/o]] を決定する。
 \`\`\`
 
+### グラフ連結性ルール（重要 — 孤立ノード防止）
+PROV グラフは Activity と Entity の連結 DAG として読まれます。**孤立ノードを作らない**ために以下を守ってください：
+
+1. **インライン span はすべて \`[[label:procedure]]\` の H2 セクション内に置く**。タイトル (\`# \`)・概要・背景・序文の段落には絶対に span を付けない（活動に紐付かず孤立ノードになります）。
+2. **各 procedure には少なくとも 1 つの \`[[m]]\` または \`[[o]]\` を含める**（入力か出力が無い手順は意味のあるグラフを作りません）。
+3. **工程連結**: 前工程で得た成果物 \`[[o]]X[[/o]]\` を次工程の入力にする場合、**同じ語彙** \`[[m]]X[[/m]]\` で書く（テキスト一致で読者がチェーンを追いやすくなる）。
+4. **中間生成物の命名**: 過去分詞 + "sample"（または "粉末" / "溶液" 等の物理形態を含む語）を使うと一貫します。例: 粉砕 → "粉砕済みサンプル"、焼結 → "焼結体"。
+
 ### NG パターン
 - ❌ 番号付きリスト項目に \`[[label:procedure]]\` を付ける（H2 でないと Activity にならない）
 - ❌ ブロック先頭にレガシーな \`[[label:material]]\` 等を付ける（block-level inline ラベルは廃止）
 - ❌ span マーカーがブロック境界をまたぐ
 - ❌ 開きと閉じが不一致 (\`[[m]]...[[/t]]\` 等)
+- ❌ \`# タイトル\` や \`## 概要\` の本文に span を付ける（孤立ノード化）
+- ❌ 入力も出力も無い空の procedure を作る
 
-ルール: ブロックレベルは行頭のみ・1 ブロック 1 つまで・種別は \`procedure / plan / result\` のみ。インラインは開閉ペア・1 ブロック内完結・種別は \`m / t / a / o\` のみ。
+ルール: ブロックレベルは行頭のみ・1 ブロック 1 つまで・種別は \`procedure / plan / result\` のみ。インラインは開閉ペア・1 ブロック内完結・procedure 配下のみ・種別は \`m / t / a / o\` のみ。
 `;
   }
   return `
@@ -337,12 +347,22 @@ Mount the [[m]]filled sample holder[[/m]] on the [[t]]X-ray diffractometer[[/t]]
 Compare the [[m]]diffraction pattern[[/m]] against the [[t]]ICDD PDF database[[/t]] to determine the [[o]]identified phases[[/o]].
 \`\`\`
 
+### Graph connectivity (important — avoid isolated nodes)
+The PROV graph is read as a connected DAG of Activities and Entities. To prevent **isolated / disconnected nodes**, follow these rules (informed by MatPROV's PROV-DM extraction prompt):
+
+1. **All inline spans must live inside a section whose H2 carries \`[[label:procedure]]\`.** Never place spans in the title (\`# \`), Overview, Background, or any unlabeled H2 — those entities have no Activity to attach to and become isolated.
+2. **Every procedure must contain at least one \`[[m]]\` or \`[[o]]\` span.** A procedure with no input and no output produces no edges.
+3. **Chain steps via shared text.** When step N's output is consumed by step N+1, write it as \`[[o]]X[[/o]]\` in step N and \`[[m]]X[[/m]]\` in step N+1 with the **same wording** so a reader can trace the chain.
+4. **Naming intermediate products.** Use "<past-participle> sample" or a phrase that includes the physical form (e.g. "crushed sample", "sealed sample", "calcined powder"). Keeps labels consistent across steps.
+
 ### Anti-patterns
 - ❌ Putting \`[[label:procedure]]\` on a numbered list item (only H2 becomes an Activity)
 - ❌ Putting legacy \`[[label:material]]\` etc at block start (block-level inline labels are deprecated)
 - ❌ Span markers crossing block boundaries
 - ❌ Mismatched open/close (e.g. \`[[m]]...[[/t]]\`)
+- ❌ Spans in \`# Title\` / \`## Overview\` / \`## Background\` (creates isolated nodes)
+- ❌ A procedure with no input and no output
 
-Rules: block-level only at start of H2, at most one per block, types limited to \`procedure / plan / result\`. Inline spans must come in matching pairs, stay within one block, types limited to \`m / t / a / o\`.
+Rules: block-level only at start of H2, at most one per block, types limited to \`procedure / plan / result\`. Inline spans must come in matching pairs, stay within one block, sit inside a procedure section, types limited to \`m / t / a / o\`.
 `;
 }
