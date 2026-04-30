@@ -1560,3 +1560,135 @@ describe("Plan / Result phase スコーピング (Phase D-2)", () => {
     expect(used.some((u: any) => u["@id"] === "inline_material_ent_nacl_plan")).toBe(true);
   });
 });
+
+// ──────────────────────────────────────────────
+// Phase D-3-β: メディアブロックのインラインラベル
+// ──────────────────────────────────────────────
+describe("メディアブロック × インラインラベル (Phase D-3-β)", () => {
+  it("image ブロックに mediaInlineLabels で output ラベルを付与 → prov:wasGeneratedBy + mediaUrl/mediaType", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "img-1",
+        type: "image",
+        props: { url: "https://example.com/run.png", name: "run.png" },
+        content: undefined,
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const mediaInlineLabels = new Map([
+      ["img-1", { label: "output" as const, entityId: "ent_run_png" }],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [], mediaInlineLabels });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_output_ent_run_png");
+    expect(ent).toBeDefined();
+    expect(ent!["@type"]).toBe("prov:Entity");
+    expect(ent!["rdfs:label"]).toBe("run.png");
+    expect((ent as any)["graphium:mediaUrl"]).toBe("https://example.com/run.png");
+    expect((ent as any)["graphium:mediaType"]).toBe("image");
+    // output Entity は LABEL_TO_ENTITY_SUBTYPE 対象外（material / tool のみ subtype を持つ）
+    expect(ent!["prov:wasGeneratedBy"]?.["@id"]).toBe("activity_h-step");
+  });
+
+  it("video ブロックに material ラベル → prov:used、attribute ラベルなしメディアは祖先 attribute から除外", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "vid-1",
+        type: "video",
+        props: { url: "https://example.com/sample.mp4", name: "sample.mp4" },
+        content: undefined,
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const mediaInlineLabels = new Map([
+      ["vid-1", { label: "material" as const, entityId: "ent_vid" }],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [], mediaInlineLabels });
+
+    // material → prov:used
+    const stepAct = doc["@graph"].find((n) => n["@id"] === "activity_h-step");
+    const used = (stepAct as any)["prov:used"] ?? [];
+    expect(used.some((u: any) => u["@id"] === "inline_material_ent_vid")).toBe(true);
+
+    // 祖先の attribute としても重複登録されていない
+    const acts = doc["@graph"].filter((n) => n["@type"] === "prov:Activity");
+    for (const a of acts) {
+      const attrs = (a as any)["graphium:attributes"] ?? [];
+      expect(attrs.find((x: any) => x["graphium:blockId"] === "vid-1")).toBeUndefined();
+    }
+  });
+
+  it("pdf に attribute ラベル → 親 Activity の attribute に attach", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "pdf-1",
+        type: "pdf",
+        props: { url: "https://example.com/manual.pdf", name: "manual.pdf" },
+        content: undefined,
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const mediaInlineLabels = new Map([
+      ["pdf-1", { label: "attribute" as const, entityId: "ent_man" }],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [], mediaInlineLabels });
+
+    const stepAct = doc["@graph"].find((n) => n["@id"] === "activity_h-step");
+    const attrs = (stepAct as any)["graphium:attributes"] ?? [];
+    expect(attrs.some((a: any) => a["rdfs:label"] === "manual.pdf")).toBe(true);
+  });
+
+  it("mediaInlineLabels が無い場合は従来の [材料] パラグラフ配下の画像 → entity_media_<id> が機能する（後方互換）", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "mat-para",
+        type: "paragraph",
+        content: [{ type: "text", text: "Cu粉末" }],
+        children: [],
+      },
+      {
+        id: "img-1",
+        type: "image",
+        props: { url: "https://example.com/x.png", name: "x.png" },
+        children: [],
+      },
+    ];
+    const labels = new Map([
+      ["h-step", "procedure"],
+      ["mat-para", "material"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+    expect(doc["@graph"].find((n) => n["@id"] === "entity_media_img-1")).toBeDefined();
+  });
+});

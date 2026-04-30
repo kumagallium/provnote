@@ -180,8 +180,33 @@ export type GraphiumPage = {
    * 1 ハイライト = 1 ブロック内（越境禁止）。
    */
   highlights?: InlineHighlight[];
+  /**
+   * メディアブロックのインラインラベル（Phase D-3-β, 2026-04-30 で導入）。
+   *
+   * 画像・動画・音声・PDF・ファイルブロックは BlockNote の inline style を持てないため、
+   * 同等の UX（フローティングメニュー）でラベル付けする経路として、blockId → ラベル
+   * の対応を**サイドストア**として保存する。
+   *
+   * 設計メモ（docs/internal/provenance-layer-design.md §8.6）では block.props 直接保存
+   * を理想形としているが、BlockNote 標準ブロック (image/video/audio/file) のスキーマ
+   * 拡張は影響範囲が大きいため、本実装ではサイドストア方式を採用している。UX は
+   * テキストハイライトと完全に一致する。
+   */
+  mediaInlineLabels?: Record<string, MediaInlineLabel>;
   derivedFromPageId?: string;
   derivedFromBlockId?: string;
+};
+
+/**
+ * メディアブロック用インラインラベル（Phase D-3-β）。
+ *
+ * - blockId: image / video / audio / file / pdf ブロックの ID
+ * - label: コアラベル（material / tool / attribute / output）
+ * - entityId: PROV Entity 同一性キー（テキストハイライトと共通の名前空間）
+ */
+export type MediaInlineLabel = {
+  label: "material" | "tool" | "attribute" | "output";
+  entityId: string;
 };
 
 /**
