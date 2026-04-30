@@ -328,33 +328,28 @@
   z-index: 30 !important;
 }
 
-/* FormattingToolbar (テキスト選択時のフローティングメニュー) を確実に最前面に出す。
-   - z-index を全 stacking context より上に
-   - 背景を不透明に（半透明だと裏のラベルバッジが透けて見える）
-   - 表示中は SideMenu のラベルバッジを隠す（位置的に被るため、明示的に避ける）*/
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) の構成。
+   横長になって右マージンのラベルバッジに被るのを防ぐため、横幅を絞って多段折り返しにする。
+   背景を不透明にし、z-index も保険として上げておく（重なり防止の二重対策）。 */
 .bn-toolbar,
-.bn-formatting-toolbar,
-[data-floating-ui-portal] .bn-toolbar,
-[data-floating-ui-portal] .bn-formatting-toolbar {
+.bn-formatting-toolbar {
   z-index: 10001 !important;
   background-color: var(--bn-colors-menu-background, #ffffff) !important;
   opacity: 1 !important;
+  /* 横幅を絞って多段化。子要素はインライン flex で並べる前提 */
+  max-width: min(420px, calc(100vw - 32px)) !important;
+  flex-wrap: wrap !important;
+  row-gap: 4px !important;
 }
 
-/* Floating UI が portal を作る場合、ポジショナのラッパーも上に出す */
 [data-floating-ui-portal] {
   z-index: 10001 !important;
 }
 
-/* ── FormattingToolbar 表示中はラベルバッジを隠す ──
-   FormattingToolbar は portal で document.body 直下に出る場合がある。
-   body 全体で :has() を使い、トップレベルでも検出できるようにする。
-   - SideMenu のバッジ
-   - prov-indicator.tsx の浮動バッジ（fixed positioned, document.body portal）両方を非表示に */
-body:has(.bn-formatting-toolbar) .bn-side-menu,
-body:has(.bn-formatting-toolbar) [data-prov-label-anchor] {
-  visibility: hidden !important;
-  pointer-events: none !important;
+/* インラインラベルボタンの押しやすさ（h-7 ≒ 28px、最低タップ領域確保） */
+.bn-toolbar button[data-test^="inlineLabel-"],
+.bn-toolbar button[data-test="aiButton"] {
+  min-height: 28px !important;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
