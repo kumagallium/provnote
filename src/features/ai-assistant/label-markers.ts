@@ -289,9 +289,13 @@ H2 見出し (\`## \`) の先頭に半角の二重角括弧で配置し、本文
 PROV グラフは Activity と Entity の連結 DAG として読まれます。**孤立ノードを作らない**ために以下を守ってください：
 
 1. **インライン span はすべて \`[[label:procedure]]\` の H2 セクション内に置く**。タイトル (\`# \`)・概要・背景・序文の段落には絶対に span を付けない（活動に紐付かず孤立ノードになります）。
-2. **各 procedure には少なくとも 1 つの \`[[m]]\` または \`[[o]]\` を含める**（入力か出力が無い手順は意味のあるグラフを作りません）。
-3. **工程連結**: 前工程で得た成果物 \`[[o]]X[[/o]]\` を次工程の入力にする場合、**同じ語彙** \`[[m]]X[[/m]]\` で書く（テキスト一致で読者がチェーンを追いやすくなる）。
-4. **中間生成物の命名**: 過去分詞 + "sample"（または "粉末" / "溶液" 等の物理形態を含む語）を使うと一貫します。例: 粉砕 → "粉砕済みサンプル"、焼結 → "焼結体"。
+2. **冒頭の「材料一覧 / 道具一覧 / Materials / 材料」セクションには span を付けない**。料理レシピや実験プロトコルでは冒頭にすべての材料・道具を列挙することが多いですが、**この一覧自体は手順で消費されないので**、span を付けると **すべて孤立ノード** になります。
+   - ✅ 一覧は **マーカー無し**の通常の箇条書きとして書く（読者向けの参照情報）
+   - ✅ \`[[m]]\` / \`[[t]]\` は、その材料・道具を**実際に使う procedure 配下**にのみ書く
+   - 同じ材料が複数手順に登場するなら、各 procedure 配下で複数回 \`[[m]]\` を書く（重複 OK）
+3. **各 procedure には少なくとも 1 つの \`[[m]]\` または \`[[o]]\` を含める**（入力か出力が無い手順は意味のあるグラフを作りません）。
+4. **工程連結**: 前工程で得た成果物 \`[[o]]X[[/o]]\` を次工程の入力にする場合、**同じ語彙** \`[[m]]X[[/m]]\` で書く（テキスト一致で読者がチェーンを追いやすくなる）。
+5. **中間生成物の命名**: 過去分詞 + "sample"（または "粉末" / "溶液" 等の物理形態を含む語）を使うと一貫します。例: 粉砕 → "粉砕済みサンプル"、焼結 → "焼結体"、（料理）切る → "切った玉ねぎ"。
 
 ### NG パターン
 - ❌ 番号付きリスト項目に \`[[label:procedure]]\` を付ける（H2 でないと Activity にならない）
@@ -299,7 +303,8 @@ PROV グラフは Activity と Entity の連結 DAG として読まれます。*
 - ❌ span マーカーがブロック境界をまたぐ
 - ❌ 開きと閉じが不一致 (\`[[m]]...[[/t]]\` 等)
 - ❌ \`# タイトル\` や \`## 概要\` の本文に span を付ける（孤立ノード化）
-- ❌ 入力も出力も無い空の procedure を作る
+- ❌ 入力も出力も無い空の procedure
+- ❌ 冒頭の「## 材料」「## Ingredients」セクション内の項目に \`[[m]]\` / \`[[t]]\` を付ける（一覧は手順で消費されないので孤立ノードになる — マーカー無しの普通の箇条書きに留める） を作る
 
 ルール: ブロックレベルは行頭のみ・1 ブロック 1 つまで・種別は \`procedure / plan / result\` のみ。インラインは開閉ペア・1 ブロック内完結・procedure 配下のみ・種別は \`m / t / a / o\` のみ。
 `;
@@ -351,9 +356,13 @@ Compare the [[m]]diffraction pattern[[/m]] against the [[t]]ICDD PDF database[[/
 The PROV graph is read as a connected DAG of Activities and Entities. To prevent **isolated / disconnected nodes**, follow these rules (informed by MatPROV's PROV-DM extraction prompt):
 
 1. **All inline spans must live inside a section whose H2 carries \`[[label:procedure]]\`.** Never place spans in the title (\`# \`), Overview, Background, or any unlabeled H2 — those entities have no Activity to attach to and become isolated.
-2. **Every procedure must contain at least one \`[[m]]\` or \`[[o]]\` span.** A procedure with no input and no output produces no edges.
-3. **Chain steps via shared text.** When step N's output is consumed by step N+1, write it as \`[[o]]X[[/o]]\` in step N and \`[[m]]X[[/m]]\` in step N+1 with the **same wording** so a reader can trace the chain.
-4. **Naming intermediate products.** Use "<past-participle> sample" or a phrase that includes the physical form (e.g. "crushed sample", "sealed sample", "calcined powder"). Keeps labels consistent across steps.
+2. **Do NOT span-tag the up-front ingredients / materials / tools list.** Recipes and lab protocols often list all ingredients or tools at the top as a reader-reference. **That list itself is not consumed by any step**, so tagging items there with \`[[m]]\` / \`[[t]]\` produces **isolated nodes for every item**.
+   - ✅ Keep the up-front list as plain unmarked bullets.
+   - ✅ Place \`[[m]]\` / \`[[t]]\` **inside the procedure that actually uses the item**.
+   - The same ingredient appearing in multiple steps should be tagged with \`[[m]]\` in each procedure (duplication is correct).
+3. **Every procedure must contain at least one \`[[m]]\` or \`[[o]]\` span.** A procedure with no input and no output produces no edges.
+4. **Chain steps via shared text.** When step N's output is consumed by step N+1, write it as \`[[o]]X[[/o]]\` in step N and \`[[m]]X[[/m]]\` in step N+1 with the **same wording** so a reader can trace the chain.
+5. **Naming intermediate products.** Use "<past-participle> sample" or a phrase that includes the physical form (e.g. "crushed sample", "sealed sample", "calcined powder", "sliced onion"). Keeps labels consistent across steps.
 
 ### Anti-patterns
 - ❌ Putting \`[[label:procedure]]\` on a numbered list item (only H2 becomes an Activity)
@@ -362,6 +371,7 @@ The PROV graph is read as a connected DAG of Activities and Entities. To prevent
 - ❌ Mismatched open/close (e.g. \`[[m]]...[[/t]]\`)
 - ❌ Spans in \`# Title\` / \`## Overview\` / \`## Background\` (creates isolated nodes)
 - ❌ A procedure with no input and no output
+- ❌ Tagging items inside an up-front \`## Ingredients\` / \`## Materials\` list with \`[[m]]\` / \`[[t]]\` (the list isn't consumed by any step → isolated nodes; keep it as plain unmarked bullets)
 
 Rules: block-level only at start of H2, at most one per block, types limited to \`procedure / plan / result\`. Inline spans must come in matching pairs, stay within one block, sit inside a procedure section, types limited to \`m / t / a / o\`.
 `;
