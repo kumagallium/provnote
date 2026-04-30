@@ -370,6 +370,18 @@ The SAME template (Overview / Materials / Procedure / Outcome with paragraphs + 
 12. Do NOT use numbering prefixes ("1. ", "2. ") in step text — use numberedListItem blockType inside a step if ordering within that step matters, or rely on H2 ordering across steps.
 13. Nest attributes as \`children\` of the material / tool they describe; step-wide attributes (heat level, total duration) go as direct bulletListItem children of the H2.
 14. Never fabricate dependencies that aren't implied by the source text.
+15. **Every \`role: "procedure"\` H2 MUST contain at least one block with \`role: "material"\`, \`"tool"\`, or \`"output"\`.** A procedure with no inputs and no outputs produces no graph edges and is useless. If you cannot identify any concrete material / tool / output for a step, drop the step entirely or merge it into an adjacent step.
+
+## Self-check before emitting JSON
+
+Before you finalize the JSON, walk through your output and confirm:
+
+1. **Every role-tagged block lives under a procedure scope.** For each block carrying \`role: "material" | "tool" | "attribute" | "output"\`, trace upward: it must be a child (or sibling-after) of an H2 that has \`role: "procedure"\`. If a role-tagged block sits under the up-front Materials / Ingredients H1, **remove its \`role\`** — it would otherwise become an isolated graph node.
+2. **No empty procedures.** Every \`role: "procedure"\` H2 must include at least one material / tool / output bullet underneath. Drop or merge any that don't.
+3. **Dependency chain integrity.** Every \`derivedFrom\` and every entry in \`dependsOn\` resolves to a \`stepId\` defined earlier in the document. No forward references, no typos.
+4. **Pristine vs derived split is correct.** Re-check each material: if it is the literal product of an earlier step, set \`derivedFrom\`; if it is fresh from inventory, leave it without \`derivedFrom\`. The same raw ingredient appearing in multiple steps is fine — duplicate the bullet, do NOT use \`derivedFrom\` for it.
+
+If any check fails, fix the JSON before emitting.
 `;
 }
 
