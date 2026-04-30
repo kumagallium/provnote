@@ -328,6 +328,29 @@
   z-index: 30 !important;
 }
 
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) を確実に最前面に出す。
+   背景を不透明にし、z-index も上げる。 */
+.bn-toolbar,
+.bn-formatting-toolbar {
+  z-index: 10001 !important;
+  background-color: var(--bn-colors-menu-background, #ffffff) !important;
+  opacity: 1 !important;
+}
+
+[data-floating-ui-portal] {
+  z-index: 10001 !important;
+}
+
+/* ── FormattingToolbar 表示中はラベルバッジを薄く表示 ──
+   消すと「ラベルが消えた」と不安になるので、薄く残して toolbar 操作を妨げない。
+   操作後（選択解除）すぐ元の透明度に戻る */
+body:has(.bn-formatting-toolbar) .bn-side-menu,
+body:has(.bn-formatting-toolbar) [data-prov-label-anchor] {
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease;
+}
+
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
 body[data-label-dropdown-open="true"] .bn-side-menu {
   opacity: 1 !important;
