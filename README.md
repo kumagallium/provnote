@@ -44,19 +44,6 @@ Download the desktop app to save notes as plain JSON files on your filesystem. P
 > **Other platforms**
 > The desktop build currently ships only for macOS Apple Silicon. If you are on Windows, Linux, or Intel macOS, please use the [browser version on GitHub Pages](https://kumagallium.github.io/Graphium/) (no install) or self-host with the [Docker setup](#option-2-run-with-docker--editor-only) described below. Bringing the desktop app back to other platforms is on the roadmap; see [issues](https://github.com/kumagallium/Graphium/issues) if you'd like to help test.
 
-<details>
-<summary><b>macOS: "Graphium is damaged" error</b></summary>
-
-The app is not code-signed yet. macOS may block it on first launch. To fix this, run in Terminal after installing:
-
-```bash
-xattr -cr /Applications/Graphium.app
-```
-
-Then open the app normally.
-
-</details>
-
 ### Mobile (iPhone / Android)
 
 Graphium works as a **Progressive Web App (PWA)** on mobile browsers. No app store download needed — just add it to your home screen for an app-like experience.
