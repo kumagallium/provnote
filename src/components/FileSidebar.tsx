@@ -117,18 +117,30 @@ export function FileSidebar({
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
 
   // ラベルカウント（ユニークな preview 数 = ギャラリーの行数）
+  // Phase D-3-α: インライン由来のラベル種別 (inlineLabelTypes) も含めてカウントする。
+  //   block-level ラベルは preview 文字列単位でユニーク化（同ブロックの複数 preview を 1 とみなす）。
+  //   インライン由来は1ノート＝1カウントとして noteId をキーに使う。
   const labelCounts = useMemo(() => {
     if (!noteIndex) return new Map<string, number>();
-    const previewSets = new Map<string, Set<string>>();
+    const keySets = new Map<string, Set<string>>();
+    const ensure = (label: string): Set<string> => {
+      let s = keySets.get(label);
+      if (!s) { s = new Set(); keySets.set(label, s); }
+      return s;
+    };
     for (const note of noteIndex.notes) {
       for (const l of note.labels) {
-        if (!previewSets.has(l.label)) previewSets.set(l.label, new Set());
-        previewSets.get(l.label)!.add(l.preview);
+        ensure(l.label).add(`block::${l.preview}`);
+      }
+      if (note.inlineLabelTypes) {
+        for (const t of note.inlineLabelTypes) {
+          ensure(t).add(`inline::${note.noteId}`);
+        }
       }
     }
     const counts = new Map<string, number>();
-    for (const [label, previews] of previewSets) {
-      counts.set(label, previews.size);
+    for (const [label, keys] of keySets) {
+      counts.set(label, keys.size);
     }
     return counts;
   }, [noteIndex]);
