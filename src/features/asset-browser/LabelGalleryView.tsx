@@ -312,19 +312,17 @@ export function LabelGalleryView({
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<GroupedRow | null>(null);
 
-  // ラベルに一致するブロックを全ノートから収集
-  // Phase D-3-α: block-level ラベルに加え、inlineLabelTypes に含まれるノートも
-  // （preview を持たないシンセティックエントリとして）対象にする。インライン
-  // ハイライトの個別 preview はインデックスに保存していないため、まずは
-  // ノートタイトル単位で「そのラベルを含むノート」が見つかる動線だけ確保する。
+  // ラベルに一致するエントリを全ノートから収集
+  // Phase D-3-α: block-level ラベル (preview = ブロックテキスト) と
+  // インライン referent (text = ハイライトされた文字列) をどちらも 1 行として扱う。
+  // 後段の "preview でグループ化" によって "NaCl 5件" のような referent ベースの
+  // 集計が自動的に成り立つ。
   const entries = useMemo(() => {
     if (!noteIndex) return [];
     const result: LabelEntry[] = [];
     for (const note of noteIndex.notes) {
-      const blockLabelBlockIds = new Set<string>();
       for (const l of note.labels) {
         if (l.label === label) {
-          blockLabelBlockIds.add(l.blockId);
           result.push({
             noteId: note.noteId,
             noteTitle: note.title,
@@ -335,20 +333,18 @@ export function LabelGalleryView({
           });
         }
       }
-      // インライン由来: block-level ラベルが既にあれば重複扱いでスキップ
-      if (
-        blockLabelBlockIds.size === 0 &&
-        note.inlineLabelTypes &&
-        note.inlineLabelTypes.includes(label as any)
-      ) {
-        result.push({
-          noteId: note.noteId,
-          noteTitle: note.title,
-          blockId: "",
-          label,
-          preview: note.title || "(inline)",
-          modifiedAt: note.modifiedAt,
-        });
+      if (note.inlineLabels) {
+        for (const il of note.inlineLabels) {
+          if (il.label !== label) continue;
+          result.push({
+            noteId: note.noteId,
+            noteTitle: note.title,
+            blockId: il.blockId,
+            label: il.label,
+            preview: il.text,
+            modifiedAt: note.modifiedAt,
+          });
+        }
       }
     }
     return result;

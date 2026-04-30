@@ -197,7 +197,7 @@ describe("buildIndexEntry", () => {
   });
 
   // Phase D-3-α: インラインハイライト + メディアインラインラベルの集計
-  it("インライン style のハイライト種別を inlineLabelTypes に集計する", () => {
+  it("inline style ハイライトを (blockId, label, text, entityId) の単位でエントリ化する", () => {
     const doc = mockDoc({
       pages: [
         {
@@ -208,24 +208,9 @@ describe("buildIndexEntry", () => {
               id: "p1",
               type: "paragraph",
               content: [
-                { type: "text", text: "NaCl", styles: { inlineMaterial: "ent_n" } },
+                { type: "text", text: "NaCl", styles: { inlineMaterial: "ent_nacl" } },
                 { type: "text", text: " を使う", styles: {} },
-              ],
-            },
-            {
-              id: "p2",
-              type: "paragraph",
-              content: [
-                { type: "text", text: "ピペット", styles: { inlineTool: "ent_p" } },
-              ],
-              children: [
-                {
-                  id: "p2c",
-                  type: "paragraph",
-                  content: [
-                    { type: "text", text: "80°C", styles: { inlineAttribute: "ent_t" } },
-                  ],
-                },
+                { type: "text", text: "ピペット", styles: { inlineTool: "ent_pip" } },
               ],
             },
           ],
@@ -236,20 +221,51 @@ describe("buildIndexEntry", () => {
       ],
     });
     const entry = buildIndexEntry("file-1", doc);
-    expect(entry.inlineLabelTypes).toBeDefined();
-    expect(new Set(entry.inlineLabelTypes!)).toEqual(
-      new Set(["material", "tool", "attribute"]),
+    expect(entry.inlineLabels).toBeDefined();
+    expect(entry.inlineLabels).toEqual(
+      expect.arrayContaining([
+        { blockId: "p1", label: "material", text: "NaCl", entityId: "ent_nacl" },
+        { blockId: "p1", label: "tool", text: "ピペット", entityId: "ent_pip" },
+      ]),
     );
   });
 
-  it("mediaInlineLabels (Phase D-3-β サイドストア) も inlineLabelTypes に合流する", () => {
+  it("同 (label, entityId) の連続ハイライトはブロック内で text を連結する", () => {
     const doc = mockDoc({
       pages: [
         {
           id: "page-1",
           title: "Main",
           blocks: [
-            { id: "img-1", type: "image", props: { url: "x.png" }, content: undefined },
+            {
+              id: "p1",
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Na", styles: { inlineMaterial: "ent_x" } },
+                { type: "text", text: "Cl", styles: { inlineMaterial: "ent_x" } },
+              ],
+            },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabels).toEqual([
+      { blockId: "p1", label: "material", text: "NaCl", entityId: "ent_x" },
+    ]);
+  });
+
+  it("mediaInlineLabels (Phase D-3-β サイドストア) も inlineLabels にエントリ化する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            { id: "img-1", type: "image", props: { url: "x.png", name: "diagram.png" }, content: undefined },
           ],
           labels: {},
           provLinks: [],
@@ -261,12 +277,17 @@ describe("buildIndexEntry", () => {
       ],
     });
     const entry = buildIndexEntry("file-1", doc);
-    expect(entry.inlineLabelTypes).toContain("output");
+    expect(entry.inlineLabels).toContainEqual({
+      blockId: "img-1",
+      label: "output",
+      text: "diagram.png",
+      entityId: "ent_x",
+    });
   });
 
-  it("インラインラベルがゼロなら inlineLabelTypes は undefined のまま", () => {
+  it("インラインラベルがゼロなら inlineLabels は undefined のまま", () => {
     const entry = buildIndexEntry("file-1", mockDoc());
-    expect(entry.inlineLabelTypes).toBeUndefined();
+    expect(entry.inlineLabels).toBeUndefined();
   });
 });
 

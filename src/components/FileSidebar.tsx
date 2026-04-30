@@ -116,10 +116,10 @@ export function FileSidebar({
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
 
-  // ラベルカウント（ユニークな preview 数 = ギャラリーの行数）
-  // Phase D-3-α: インライン由来のラベル種別 (inlineLabelTypes) も含めてカウントする。
-  //   block-level ラベルは preview 文字列単位でユニーク化（同ブロックの複数 preview を 1 とみなす）。
-  //   インライン由来は1ノート＝1カウントとして noteId をキーに使う。
+  // ラベルカウント（ギャラリーの行数 = 同ラベル内のユニーク preview / text 数）
+  // Phase D-3-α: インライン由来のハイライト text もユニーク集計に合流する。
+  //   block-level: preview 文字列単位
+  //   インライン: ハイライト text 単位（複数ノートにまたがる同一 text は 1 行に集約される）
   const labelCounts = useMemo(() => {
     if (!noteIndex) return new Map<string, number>();
     const keySets = new Map<string, Set<string>>();
@@ -132,9 +132,9 @@ export function FileSidebar({
       for (const l of note.labels) {
         ensure(l.label).add(`block::${l.preview}`);
       }
-      if (note.inlineLabelTypes) {
-        for (const t of note.inlineLabelTypes) {
-          ensure(t).add(`inline::${note.noteId}`);
+      if (note.inlineLabels) {
+        for (const il of note.inlineLabels) {
+          ensure(il.label).add(`inline::${il.text}`);
         }
       }
     }
