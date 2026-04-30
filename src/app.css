@@ -328,28 +328,27 @@
   z-index: 30 !important;
 }
 
-/* FormattingToolbar (テキスト選択時のフローティングメニュー) の構成。
-   横長になって右マージンのラベルバッジに被るのを防ぐため、横幅を絞って多段折り返しにする。
-   背景を不透明にし、z-index も保険として上げておく（重なり防止の二重対策）。 */
+/* FormattingToolbar (テキスト選択時のフローティングメニュー) を確実に最前面に出す。
+   背景を不透明にし、z-index も上げる。 */
 .bn-toolbar,
 .bn-formatting-toolbar {
   z-index: 10001 !important;
   background-color: var(--bn-colors-menu-background, #ffffff) !important;
   opacity: 1 !important;
-  /* 横幅を絞って多段化。子要素はインライン flex で並べる前提 */
-  max-width: min(420px, calc(100vw - 32px)) !important;
-  flex-wrap: wrap !important;
-  row-gap: 4px !important;
 }
 
 [data-floating-ui-portal] {
   z-index: 10001 !important;
 }
 
-/* インラインラベルボタンの押しやすさ（h-7 ≒ 28px、最低タップ領域確保） */
-.bn-toolbar button[data-test^="inlineLabel-"],
-.bn-toolbar button[data-test="aiButton"] {
-  min-height: 28px !important;
+/* ── FormattingToolbar 表示中はラベルバッジを薄く表示 ──
+   消すと「ラベルが消えた」と不安になるので、薄く残して toolbar 操作を妨げない。
+   操作後（選択解除）すぐ元の透明度に戻る */
+body:has(.bn-formatting-toolbar) .bn-side-menu,
+body:has(.bn-formatting-toolbar) [data-prov-label-anchor] {
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
