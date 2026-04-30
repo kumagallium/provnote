@@ -98,4 +98,106 @@ describe("buildLabeledOutputInstruction", () => {
     const text = buildLabeledOutputInstruction("fr");
     expect(text).toContain("PROV graph");
   });
+
+  // Phase E: インライン span マーカーをプロンプトで教える
+  it("ja でインライン span マーカー [[m]] / [[/o]] を指示する", () => {
+    const text = buildLabeledOutputInstruction("ja");
+    expect(text).toContain("[[m]]");
+    expect(text).toContain("[[/m]]");
+    expect(text).toContain("[[t]]");
+    expect(text).toContain("[[a]]");
+    expect(text).toContain("[[o]]");
+  });
+
+  it("en でインライン span マーカーを指示する", () => {
+    const text = buildLabeledOutputInstruction("en");
+    expect(text).toContain("[[m]]");
+    expect(text).toContain("[[t]]");
+    expect(text).toContain("[[a]]");
+    expect(text).toContain("[[o]]");
+  });
+});
+
+describe("extractLabelMarkersFromBlocks: インライン span (Phase E)", () => {
+  it("[[m]]NaCl[[/m]] を inlineMaterial style に変換する", () => {
+    const blocks = [
+      tBlock(""),
+      // 別のブロックに対象のテキスト
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "[[m]]NaCl[[/m]] を使う", styles: {} }],
+        children: [],
+      },
+    ];
+    const { blocks: out } = extractLabelMarkersFromBlocks(blocks);
+    const segs = out[1].content;
+    expect(segs).toHaveLength(2);
+    expect(segs[0].text).toBe("NaCl");
+    expect(segs[0].styles.inlineMaterial).toMatch(/^ent_material_/);
+    expect(segs[1].text).toBe(" を使う");
+    expect(segs[1].styles.inlineMaterial).toBeUndefined();
+  });
+
+  it("複数の span を含むテキストを正しく分割する", () => {
+    const blocks = [
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: "[[m]]NaCl[[/m]] を [[t]]ピペット[[/t]] で 80°C 投入し [[o]]溶液[[/o]] を得る",
+            styles: { bold: true },
+          },
+        ],
+        children: [],
+      },
+    ];
+    const { blocks: out } = extractLabelMarkersFromBlocks(blocks);
+    const segs = out[0].content;
+    // span 3 つ + 間に挟まる平文 3 つで合計 6 セグメント
+    expect(segs).toHaveLength(6);
+    expect(segs[0].text).toBe("NaCl");
+    expect(segs[0].styles.inlineMaterial).toMatch(/^ent_material_/);
+    expect(segs[0].styles.bold).toBe(true);
+    expect(segs[1].text).toBe(" を ");
+    expect(segs[2].text).toBe("ピペット");
+    expect(segs[2].styles.inlineTool).toMatch(/^ent_tool_/);
+    expect(segs[4].text).toBe("溶液");
+    expect(segs[4].styles.inlineOutput).toMatch(/^ent_output_/);
+    expect(segs[5].text).toBe(" を得る");
+  });
+
+  it("span マーカーが無いテキストはそのまま保持する", () => {
+    const blocks = [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "普通の文", styles: {} }],
+        children: [],
+      },
+    ];
+    const { blocks: out } = extractLabelMarkersFromBlocks(blocks);
+    expect(out[0].content).toHaveLength(1);
+    expect(out[0].content[0].text).toBe("普通の文");
+    expect(out[0].content[0].styles.inlineMaterial).toBeUndefined();
+  });
+
+  it("ブロックレベル + インライン span の併用", () => {
+    const blocks = [
+      {
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "[[label:procedure]] [[m]]NaCl[[/m]] 添加", styles: {} }],
+        children: [],
+      },
+    ];
+    const { blocks: out, labels } = extractLabelMarkersFromBlocks(blocks);
+    expect(labels).toEqual([{ path: [0], label: "procedure" }]);
+    const segs = out[0].content;
+    // 先頭の "[[label:procedure]] " が剥がれた結果、残りは "[[m]]NaCl[[/m]] 添加"
+    // → "NaCl"(material) + " 添加" の 2 セグメント
+    expect(segs).toHaveLength(2);
+    expect(segs[0].text).toBe("NaCl");
+    expect(segs[0].styles.inlineMaterial).toMatch(/^ent_material_/);
+    expect(segs[1].text).toBe(" 添加");
+  });
 });
