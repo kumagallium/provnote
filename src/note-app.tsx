@@ -492,6 +492,8 @@ function NoteEditorInner({
     setRightTab((prev) => prev === tab ? null : tab);
     if (tab !== "history") setHighlightBlockIds([]);
   }, []);
+  // PROV パネル自動オープンを 1 ノートあたり 1 回に絞るための記憶
+  const provAutoOpenedRef = useRef(false);
   const t = useT();
   const [title, setTitle] = useState(initialDoc?.title || tStatic("editor.newNote"));
 
@@ -996,6 +998,28 @@ function NoteEditorInner({
     initialDoc?.documentProvenance,
     mediaInlineLabelStore.labels,
   );
+
+  // ノート切り替え時に自動オープンフラグをリセット（次のノートで再度 1 度だけ発火する）
+  useEffect(() => {
+    provAutoOpenedRef.current = false;
+  }, [fileId]);
+
+  // PROV パネル自動オープン（Phase D-3-α 続き）
+  // procedure 見出しが付いて Activity が生成されたタイミングで右パネルを 1 度だけ開く。
+  // - 骨格 (Activity) が無い間は開かない（漂遊 Entity だけのグラフは無意味なので）
+  // - ユーザーが手動で閉じた後は再オープンしない（押し付けがましくならないように）
+  // - block ラベル / インラインラベル / メディアラベルどの経路でも procedure 経由で
+  //   Activity が立ち上がれば同じ条件で発火する
+  useEffect(() => {
+    if (provAutoOpenedRef.current) return;
+    if (rightTab !== null) return;
+    const hasActivity =
+      provDoc?.["@graph"].some((n) => n["@type"] === "prov:Activity") ?? false;
+    if (hasActivity) {
+      setRightTab("prov");
+      provAutoOpenedRef.current = true;
+    }
+  }, [provDoc, rightTab]);
 
   // ── PDF エクスポートハンドラー ──
   const handleExportPdf = useCallback(async () => {
