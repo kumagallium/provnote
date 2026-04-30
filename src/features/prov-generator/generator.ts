@@ -27,6 +27,8 @@ export type ProvJsonLdNode = {
   "rdfs:label": string;
   "prov:used"?: { "@id": string }[];
   "prov:wasGeneratedBy"?: { "@id": string };
+  /** Phase D-2: actual Entity から planned Entity への specialization 関係 */
+  "prov:specializationOf"?: { "@id": string }[];
   "graphium:attributes"?: ProvAttribute[];
   "graphium:blockId"?: string;
   [key: `graphium:${string}`]: any;
@@ -213,8 +215,15 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   }
 
   // ── スコープ解決 ──
+  // Phase D-2 (2026-04-30): Activity スコープに加え、Plan/Result phase のスコープも追跡。
+  //   - phase 見出し (#plan / #result) は Activity スコープを **作らない**（Activity は procedure のみ）
+  //   - phase 見出しは「現在の Activity 内における phase コンテキスト」を切り替えるだけ
+  //   - 同レベル以上の見出しが現れたら phase もクリア（procedure と同じ pop ルール）
+  type Phase = "plan" | "result" | undefined;
   const blockToActivityId = new Map<string, string>();
+  const blockToPhase = new Map<string, Phase>();
   const scopeStack: { level: number; activityId: string }[] = [];
+  const phaseStack: { level: number; phase: Phase }[] = [];
   for (const block of flatBlocks) {
     if (block.type === "heading") {
       const level = block.props?.level ?? 2;
@@ -224,12 +233,17 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       while (scopeStack.length > 0 && scopeStack[scopeStack.length - 1].level >= level) {
         scopeStack.pop();
       }
+      while (phaseStack.length > 0 && phaseStack[phaseStack.length - 1].level >= level) {
+        phaseStack.pop();
+      }
 
       if (normalized === "procedure") {
         const role = getHeadingLabelRole(level, normalized);
         if (role === "activity") {
           scopeStack.push({ level, activityId: `activity_${block.id}` });
         }
+      } else if (normalized === "plan" || normalized === "result") {
+        phaseStack.push({ level, phase: normalized });
       }
     }
     const currentActivityId = scopeStack.length > 0
@@ -238,12 +252,22 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     if (currentActivityId) {
       blockToActivityId.set(block.id, currentActivityId);
     }
+    const currentPhase = phaseStack.length > 0
+      ? phaseStack[phaseStack.length - 1].phase
+      : undefined;
+    if (currentPhase) {
+      blockToPhase.set(block.id, currentPhase);
+    }
   }
 
   function getActivityIdsForScope(blockId: string): string[] {
     const scopeActId = blockToActivityId.get(blockId);
     if (!scopeActId) return [];
     return [scopeActId];
+  }
+
+  function getPhaseForBlock(blockId: string): Phase {
+    return blockToPhase.get(blockId);
   }
 
   /** メディアブロックの場合にラベル・mediaType・mediaUrl を返すヘルパー */
@@ -636,18 +660,35 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
 
   const aggregatedList = Array.from(aggregatedByKey.values());
 
+  // ── Phase D-2 (2026-04-30): Plan / Result phase スコーピング ──
+  //   - `#plan` 見出し配下のインライン Entity → Plan Entity (`@type: "prov:Plan"`)
+  //     ノード ID は `inline_<label>_<entityId>_plan` で execution Entity と分離
+  //   - `#result` 見出し or 未指定 → 既存の Activity 実行 Entity (`prov:Entity`)
+  //   - 同 entityId が plan / execution 両方に出現 → execution → plan に
+  //     `prov:specializationOf` エッジを張る（actual は planned の specialization）
+  function nodeIdFor(agg: AggregatedEntity): string {
+    const phase = getPhaseForBlock(agg.blockId);
+    const suffix = phase === "plan" ? "_plan" : "";
+    return `inline_${agg.label}_${agg.entityId}${suffix}`;
+  }
+
   // 1) Input / Tool / Output → Entity ノード + edge
   for (const agg of aggregatedList) {
     if (agg.label === "attribute") continue; // Parameter は後段で処理
-    const nodeId = `inline_${agg.label}_${agg.entityId}`;
+    const phase = getPhaseForBlock(agg.blockId);
+    const nodeId = nodeIdFor(agg);
+    const isPlan = phase === "plan";
     if (!nodes.find((n) => n["@id"] === nodeId)) {
-      nodes.push({
+      const node: InternalNode = {
         "@id": nodeId,
-        "@type": "prov:Entity",
+        "@type": isPlan ? "prov:Plan" : "prov:Entity",
         label: agg.text || agg.entityId,
         blockId: agg.blockId,
         entitySubtype: LABEL_TO_ENTITY_SUBTYPE[agg.label],
-      });
+      };
+      // graphium:phase をメタとして残す（クエリやフィルタ用）
+      (node as any)["graphium:phase"] = isPlan ? "plan" : (phase ?? "execution");
+      nodes.push(node);
     }
     // 同 entityId の複数ブロック分は edge を重ねる
     for (const actId of getActivityIdsForScope(agg.blockId)) {
@@ -655,6 +696,34 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         relations.push({ "@type": "prov:wasGeneratedBy", from: nodeId, to: actId });
       } else {
         relations.push({ "@type": "prov:used", from: actId, to: nodeId });
+      }
+    }
+  }
+
+  // 1b) specializationOf: execution Entity が plan Entity と同 entityId / 同 label の場合、
+  //    execution → plan の specializationOf エッジを張る（actual は planned の特殊化）
+  const planEntityKeys = new Set<string>();
+  for (const agg of aggregatedList) {
+    if (agg.label === "attribute") continue;
+    if (getPhaseForBlock(agg.blockId) === "plan") {
+      planEntityKeys.add(`${agg.label}::${agg.entityId}`);
+    }
+  }
+  if (planEntityKeys.size > 0) {
+    for (const agg of aggregatedList) {
+      if (agg.label === "attribute") continue;
+      if (getPhaseForBlock(agg.blockId) === "plan") continue;
+      const key = `${agg.label}::${agg.entityId}`;
+      if (planEntityKeys.has(key)) {
+        const fromId = `inline_${agg.label}_${agg.entityId}`;
+        const toId = `inline_${agg.label}_${agg.entityId}_plan`;
+        // 重複防止
+        const exists = relations.some(
+          (r) => r["@type"] === "prov:specializationOf" && r.from === fromId && r.to === toId,
+        );
+        if (!exists) {
+          relations.push({ "@type": "prov:specializationOf", from: fromId, to: toId });
+        }
       }
     }
   }
@@ -673,7 +742,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     if (sameBlockEntities.length > 0) {
       let bestDist = Number.POSITIVE_INFINITY;
       for (const other of sameBlockEntities) {
-        const otherNodeId = `inline_${other.label}_${other.entityId}`;
+        const otherNodeId = nodeIdFor(other);
         // 範囲距離: 重なりは 0、それ以外は最短ギャップ
         const overlap = !(agg.charEnd <= other.charStart || other.charEnd <= agg.charStart);
         const dist = overlap
@@ -776,6 +845,11 @@ function buildProvJsonLd(
       "rdfs:label": n.label,
       "graphium:blockId": n.blockId,
     };
+    // Phase D-2: graphium:phase ("plan" | "execution") を追跡用に転写
+    const internalPhase = (n as any)["graphium:phase"];
+    if (typeof internalPhase === "string") {
+      jsonLdNode["graphium:phase"] = internalPhase;
+    }
     // Entity サブタイプ（material / tool）
     if (n.entitySubtype) {
       jsonLdNode["graphium:entityType"] = n.entitySubtype;
@@ -828,6 +902,14 @@ function buildProvJsonLd(
       case "prov:wasGeneratedBy": {
         // wasGeneratedBy: Entity → Activity（from=Entity, to=Activity）
         sourceNode["prov:wasGeneratedBy"] = { "@id": rel.to };
+        break;
+      }
+      case "prov:specializationOf": {
+        // Phase D-2: actual Entity (from) は planned Entity (to) の specialization
+        if (!sourceNode["prov:specializationOf"]) {
+          sourceNode["prov:specializationOf"] = [];
+        }
+        sourceNode["prov:specializationOf"]!.push({ "@id": rel.to });
         break;
       }
       // graphium:hasAttribute は廃止 — 属性は graphium:attributes に直接埋め込み
