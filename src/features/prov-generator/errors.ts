@@ -5,7 +5,8 @@
 
 export type ProvWarningType =
   | "unknown-label"          // 未知のラベル → Layer 3 扱い
-  | "broken-link";           // 前手順リンク先が存在しない
+  | "broken-link"            // 前手順リンク先が存在しない
+  | "orphan-inline";         // procedure 配下に無い inline span（Activity 不在 → 孤立ノード回避のため除外）
 
 export type ProvWarning = {
   type: ProvWarningType;

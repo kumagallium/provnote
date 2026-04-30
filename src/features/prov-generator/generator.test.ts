@@ -1422,7 +1422,7 @@ describe("インラインハイライト → PROV Entity / Attribute (Phase D-1)
     expect(ent!["rdfs:label"]).toBe("NaCl");
   });
 
-  it("Activity スコープ外（procedure 見出し前）のインラインは Activity edge を持たない", () => {
+  it("Activity スコープ外（procedure 見出し前）のインラインは Entity 化されず arphan-inline 警告が出る (Phase E 更新)", () => {
     const blocks = [
       {
         id: "p-orphan",
@@ -1441,12 +1441,10 @@ describe("インラインハイライト → PROV Entity / Attribute (Phase D-1)
     const labels = new Map([["h-step", "procedure"]]);
     const doc = generateProvDocument({ blocks, labels, links: [] });
 
-    const ent = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_orph");
-    expect(ent).toBeDefined();
-    // Activity 側の prov:used に含まれない
-    const act = doc["@graph"].find((n) => n["@id"] === "activity_h-step") as any;
-    const used = act?.["prov:used"] ?? [];
-    expect(used.some((u: any) => u["@id"] === "inline_material_ent_orph")).toBe(false);
+    // Phase E (2026-04-30): 孤立ノードは PROV グラフに不要なため Entity 化しない
+    expect(doc["@graph"].find((n) => n["@id"] === "inline_material_ent_orph")).toBeUndefined();
+    const w = doc["graphium:warnings"] ?? [];
+    expect(w.some((x: any) => x.type === "orphan-inline" && x.blockId === "p-orphan")).toBe(true);
   });
 });
 
@@ -1690,5 +1688,128 @@ describe("メディアブロック × インラインラベル (Phase D-3-β)", 
     ]);
     const doc = generateProvDocument({ blocks, labels, links: [] });
     expect(doc["@graph"].find((n) => n["@id"] === "entity_media_img-1")).toBeDefined();
+  });
+});
+
+// ──────────────────────────────────────────────
+// Phase E: 孤立ノード防止
+// procedure 配下にないインラインラベルは Entity 化せず warning に記録する
+// ──────────────────────────────────────────────
+describe("孤立ノード防止 (Phase E)", () => {
+  const styled = (text: string, styles: Record<string, string | boolean> = {}) => ({
+    type: "text",
+    text,
+    styles,
+  });
+
+  it("procedure 不在のノートでは inline material は Entity 化されず warning が出る", () => {
+    const blocks = [
+      {
+        id: "h-overview",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "概要" }],
+        children: [],
+      },
+      {
+        id: "p-list",
+        type: "paragraph",
+        content: [styled("玉ねぎ", { inlineMaterial: "ent_onion" })],
+        children: [],
+      },
+    ];
+    // h-overview にラベルなし → procedure 不在
+    const labels = new Map<string, string>();
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    // Entity ノードが作られていないこと
+    expect(doc["@graph"].find((n) => n["@id"] === "inline_material_ent_onion")).toBeUndefined();
+    // warning が orphan-inline で記録されていること
+    const w = doc["graphium:warnings"] ?? [];
+    expect(w.some((x: any) => x.type === "orphan-inline" && x.blockId === "p-list")).toBe(true);
+  });
+
+  it("procedure 配下なら従来どおり Entity 化される（回帰防止）", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "炒める" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [styled("玉ねぎ", { inlineMaterial: "ent_onion" })],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+    expect(doc["@graph"].find((n) => n["@id"] === "inline_material_ent_onion")).toBeDefined();
+  });
+
+  it("冒頭の材料一覧 (procedure 不在) は孤立ノードにならない — レシピ典型ケース", () => {
+    const blocks = [
+      // ## 材料 (label なし、procedure ではない)
+      {
+        id: "h-mat",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "材料" }],
+        children: [],
+      },
+      {
+        id: "li-1",
+        type: "bulletListItem",
+        content: [styled("玉ねぎ", { inlineMaterial: "ent_onion" })],
+        children: [],
+      },
+      {
+        id: "li-2",
+        type: "bulletListItem",
+        content: [styled("人参", { inlineMaterial: "ent_carrot" })],
+        children: [],
+      },
+      // ## 手順 (procedure)
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "炒める" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [styled("玉ねぎ", { inlineMaterial: "ent_onion" })],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+    // 冒頭リスト (li-1, li-2) は孤立ノード化しないため、玉ねぎ Entity は
+    // procedure 配下の p-body から 1 つだけ作られる（人参は除外）
+    const onionNodes = doc["@graph"].filter(
+      (n) => n["@id"] === "inline_material_ent_onion",
+    );
+    expect(onionNodes).toHaveLength(1);
+    expect(onionNodes[0]["graphium:blockId"]).toBe("p-body");
+    expect(doc["@graph"].find((n) => n["@id"] === "inline_material_ent_carrot")).toBeUndefined();
+  });
+
+  it("orphan attribute も Entity Activity attach 先が無ければ warning 化", () => {
+    const blocks = [
+      {
+        id: "p-stray",
+        type: "paragraph",
+        content: [styled("80°C", { inlineAttribute: "ent_t" })],
+        children: [],
+      },
+    ];
+    const doc = generateProvDocument({ blocks, labels: new Map(), links: [] });
+    const w = doc["graphium:warnings"] ?? [];
+    expect(w.some((x: any) => x.type === "orphan-inline")).toBe(true);
   });
 });
