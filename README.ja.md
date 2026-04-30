@@ -44,19 +44,6 @@ Graphium は**段階的開示（progressive disclosure）**を設計の中心に
 > **その他のプラットフォーム**
 > デスクトップ版は現在 macOS Apple Silicon 向けのみ提供しています。Windows / Linux / Intel macOS をお使いの場合は、[GitHub Pages のブラウザ版](https://kumagallium.github.io/Graphium/)（インストール不要）をご利用いただくか、下記の [Docker セットアップ](#option-2-run-with-docker--editor-only) でセルフホストしてください。他プラットフォームへの再対応はロードマップに含まれています。テスト協力者を歓迎します ([Issues](https://github.com/kumagallium/Graphium/issues))。
 
-<details>
-<summary><b>macOS:「Graphium は壊れています」エラーが出る場合</b></summary>
-
-アプリはまだコード署名されていません。初回起動時に macOS がブロックする場合があります。インストール後にターミナルで以下を実行してください：
-
-```bash
-xattr -cr /Applications/Graphium.app
-```
-
-その後、通常通りアプリを開けます。
-
-</details>
-
 ### モバイル（iPhone / Android）
 
 Graphium はモバイルブラウザ上で **Progressive Web App（PWA）** として動作します。アプリストアからのダウンロードは不要 — ホーム画面に追加するだけで、アプリのように使えます。

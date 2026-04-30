@@ -90,6 +90,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # Apple Developer ID code-signing & notarization (macOS only).
+          # tauri-action imports APPLE_CERTIFICATE (base64 .p12) into a temp
+          # keychain, signs with APPLE_SIGNING_IDENTITY, and submits the bundle
+          # to the notarization service using APPLE_ID + APPLE_PASSWORD
+          # (app-specific) under APPLE_TEAM_ID.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           releaseId: ${{ needs.resolve-release.outputs.release_id }}
           includeUpdaterJson: false
