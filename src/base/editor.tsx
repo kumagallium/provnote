@@ -17,7 +17,6 @@ import type { CustomBlockEntry } from "./schema";
 import type { SideMenuProps, FormattingToolbarProps } from "@blocknote/react";
 import { buildSuggestionList, getDisplayName, filterSuggestionsForBlock } from "@features/context-label/hashtag-menu";
 import { BlockSelectionManager } from "@features/block-selection";
-import { MediaInlineLabelToolbar } from "@features/inline-label/media-toolbar";
 
 type SlashMenuItem = {
   title: string;
@@ -224,8 +223,6 @@ export function SandboxEditor({
     >
       {/* 複数ブロック選択: ハイライト + フローティングツールバー */}
       <BlockSelectionManager />
-      {/* 単一メディアブロック選択時のインラインラベル付与 (Phase D-3-β) */}
-      <MediaInlineLabelToolbar />
       {usesCustomSideMenu && (
         <SideMenuController sideMenu={sideMenu as FC<SideMenuProps>} />
       )}
