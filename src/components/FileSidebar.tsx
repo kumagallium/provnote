@@ -116,19 +116,31 @@ export function FileSidebar({
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
 
-  // ラベルカウント（ユニークな preview 数 = ギャラリーの行数）
+  // ラベルカウント（ギャラリーの行数 = 同ラベル内のユニーク preview / text 数）
+  // Phase D-3-α: インライン由来のハイライト text もユニーク集計に合流する。
+  //   block-level: preview 文字列単位
+  //   インライン: ハイライト text 単位（複数ノートにまたがる同一 text は 1 行に集約される）
   const labelCounts = useMemo(() => {
     if (!noteIndex) return new Map<string, number>();
-    const previewSets = new Map<string, Set<string>>();
+    const keySets = new Map<string, Set<string>>();
+    const ensure = (label: string): Set<string> => {
+      let s = keySets.get(label);
+      if (!s) { s = new Set(); keySets.set(label, s); }
+      return s;
+    };
     for (const note of noteIndex.notes) {
       for (const l of note.labels) {
-        if (!previewSets.has(l.label)) previewSets.set(l.label, new Set());
-        previewSets.get(l.label)!.add(l.preview);
+        ensure(l.label).add(`block::${l.preview}`);
+      }
+      if (note.inlineLabels) {
+        for (const il of note.inlineLabels) {
+          ensure(il.label).add(`inline::${il.text}`);
+        }
       }
     }
     const counts = new Map<string, number>();
-    for (const [label, previews] of previewSets) {
-      counts.set(label, previews.size);
+    for (const [label, keys] of keySets) {
+      counts.set(label, keys.size);
     }
     return counts;
   }, [noteIndex]);

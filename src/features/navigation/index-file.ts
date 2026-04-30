@@ -12,7 +12,15 @@ import { normalizeLabel } from "../context-label/labels";
 // v4: source, wikiKind フィールドを追加（Wiki ドキュメント対応）
 // v5: author, model フィールドを追加（誰が / どのモデルが書いたかを一覧で表示）
 // v6: ラベルを内部キー（procedure/material/tool/attribute/result）に正規化
-const INDEX_SCHEMA_VERSION = 7;
+// v8: inlineLabelTypes フィールド追加（Phase D-3-α 初版）
+//     インラインハイライト + メディアインラインラベルを集計し、左ナビ ラベルフィルタで
+//     material/tool/attribute/output を絞り込めるようにする
+// v9: inlineLabels フィールド追加（Phase D-3-α）
+//     ハイライトされたテキスト本体（"NaCl" 等）と blockId / entityId を保持し、
+//     LabelGalleryView で「インプット → たまねぎ 12件 …」のような referent 単位の
+//     集計を可能にする。inlineLabelTypes は派生情報なので廃止し、
+//     必要時に inlineLabels から導出する。
+const INDEX_SCHEMA_VERSION = 9;
 
 export type GraphiumIndex = {
   version: number;
@@ -54,6 +62,26 @@ export type NoteIndexEntry = {
    * 通常ノート → 派生 wiki エントリの逆引き lookup を実装するために保存する。
    */
   derivedFromNotes?: string[];
+  /**
+   * インラインラベル（Phase D-3-α）。
+   * ノート本文の inline style ハイライト（material / tool / attribute / output）と
+   * メディアブロックのサイドストア (`page.mediaInlineLabels`) を集約したエントリ群。
+   *
+   * - blockId: ハイライトが属するブロック ID（メディアブロックの場合はそのメディアの ID）
+   * - label: コアラベル種別
+   * - text: ハイライトされたテキスト（メディアの場合は `block.props.name` など）。
+   *   referent 単位 (entityId) で同一ブロック内の text を結合する
+   * - entityId: PROV Entity の同一性キー（同じ referent の重複ハイライトをまとめるため）
+   *
+   * LabelGalleryView では `text` をキーにグルーピングして「インプット → NaCl 5件」
+   * のような referent ベースの一覧表示を行う。
+   */
+  inlineLabels?: {
+    blockId: string;
+    label: "material" | "tool" | "attribute" | "output";
+    text: string;
+    entityId: string;
+  }[];
 };
 
 // ── Drive API ──
@@ -173,6 +201,7 @@ export function buildIndexEntry(
   const headings: NoteIndexEntry["headings"] = [];
   const labels: NoteIndexEntry["labels"] = [];
   const outgoingLinks: NoteIndexEntry["outgoingLinks"] = [];
+  const inlineLabels: NonNullable<NoteIndexEntry["inlineLabels"]> = [];
 
   if (page) {
     // 見出しを収集
@@ -182,6 +211,40 @@ export function buildIndexEntry(
         if (text) {
           headings.push({ blockId: block.id, text, level: block.props.level });
         }
+      }
+    }
+
+    // インラインハイライトを集計（Phase D-3-α）
+    // BlockNote の inline style として保存されている material/tool/attribute/output を
+    // ブロックツリー全体から拾い、(blockId, label, entityId) 単位で text を連結する。
+    collectInlineLabels(page.blocks || [], inlineLabels);
+
+    // メディアブロックのインラインラベル（Phase D-3-β サイドストア）
+    if (page.mediaInlineLabels) {
+      const blockById = new Map<string, any>();
+      const collectBlocks = (bs: any[]) => {
+        for (const b of bs) {
+          if (b?.id) blockById.set(b.id, b);
+          if (b?.children?.length) collectBlocks(b.children);
+        }
+      };
+      collectBlocks(page.blocks || []);
+      for (const [blockId, entry] of Object.entries(page.mediaInlineLabels)) {
+        if (!entry?.label) continue;
+        const block = blockById.get(blockId);
+        const url: string | undefined = block?.props?.url;
+        const text =
+          block?.props?.name ||
+          (url
+            ? decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
+            : "") ||
+          blockId.slice(0, 8);
+        inlineLabels.push({
+          blockId,
+          label: entry.label,
+          text,
+          entityId: entry.entityId,
+        });
       }
     }
 
@@ -259,7 +322,71 @@ export function buildIndexEntry(
     author,
     model,
     derivedFromNotes: doc.wikiMeta?.derivedFromNotes,
+    inlineLabels: inlineLabels.length > 0 ? inlineLabels : undefined,
   };
+}
+
+/**
+ * ブロックツリーを再帰的にたどり、inline style 経由のラベルエントリを集める。
+ * Phase D-3-α 用ヘルパー。BlockNote の content[].styles を走査し、
+ * (blockId, label, entityId) が同じ連続 text 片を 1 つの referent として連結する。
+ *
+ * 例: "[NaCl][水溶液] を作る" のように 2 連続のハイライトが同 entityId で付いていれば
+ *     "NaCl水溶液" のテキストを持つ 1 エントリにまとめる。entityId が違えば別エントリ。
+ */
+function collectInlineLabels(
+  blocks: any[],
+  out: NonNullable<NoteIndexEntry["inlineLabels"]>,
+): void {
+  const STYLE_TO_LABEL: Record<string, "material" | "tool" | "attribute" | "output"> = {
+    inlineMaterial: "material",
+    inlineTool: "tool",
+    inlineAttribute: "attribute",
+    inlineOutput: "output",
+  };
+  const visit = (b: any): void => {
+    if (!b || typeof b !== "object") return;
+    const content = b.content;
+    if (Array.isArray(content)) {
+      // 同 (label, entityId) ハイライトをブロック内で連結する
+      const aggregated = new Map<string, { label: "material" | "tool" | "attribute" | "output"; text: string; entityId: string }>();
+      const collect = (text: string, styles: Record<string, any> | undefined) => {
+        if (!styles) return;
+        for (const styleKey of Object.keys(STYLE_TO_LABEL)) {
+          const entityId = styles[styleKey];
+          if (typeof entityId !== "string" || !entityId) continue;
+          const label = STYLE_TO_LABEL[styleKey];
+          const key = `${label}::${entityId}`;
+          const existing = aggregated.get(key);
+          if (existing) existing.text += text;
+          else aggregated.set(key, { label, text, entityId });
+        }
+      };
+      for (const c of content) {
+        if (c?.type === "text") {
+          collect(typeof c.text === "string" ? c.text : "", c.styles);
+        } else if (c?.type === "link" && Array.isArray(c.content)) {
+          for (const lc of c.content) {
+            if (lc?.type === "text") {
+              collect(typeof lc.text === "string" ? lc.text : "", lc.styles);
+            }
+          }
+        }
+      }
+      for (const agg of aggregated.values()) {
+        out.push({
+          blockId: b.id,
+          label: agg.label,
+          text: agg.text,
+          entityId: agg.entityId,
+        });
+      }
+    }
+    if (Array.isArray(b.children)) {
+      for (const child of b.children) visit(child);
+    }
+  };
+  for (const b of blocks) visit(b);
 }
 
 /**

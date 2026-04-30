@@ -195,6 +195,100 @@ describe("buildIndexEntry", () => {
     expect(entry.labels).toHaveLength(0);
     expect(entry.outgoingLinks).toHaveLength(0);
   });
+
+  // Phase D-3-α: インラインハイライト + メディアインラインラベルの集計
+  it("inline style ハイライトを (blockId, label, text, entityId) の単位でエントリ化する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            {
+              id: "p1",
+              type: "paragraph",
+              content: [
+                { type: "text", text: "NaCl", styles: { inlineMaterial: "ent_nacl" } },
+                { type: "text", text: " を使う", styles: {} },
+                { type: "text", text: "ピペット", styles: { inlineTool: "ent_pip" } },
+              ],
+            },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabels).toBeDefined();
+    expect(entry.inlineLabels).toEqual(
+      expect.arrayContaining([
+        { blockId: "p1", label: "material", text: "NaCl", entityId: "ent_nacl" },
+        { blockId: "p1", label: "tool", text: "ピペット", entityId: "ent_pip" },
+      ]),
+    );
+  });
+
+  it("同 (label, entityId) の連続ハイライトはブロック内で text を連結する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            {
+              id: "p1",
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Na", styles: { inlineMaterial: "ent_x" } },
+                { type: "text", text: "Cl", styles: { inlineMaterial: "ent_x" } },
+              ],
+            },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabels).toEqual([
+      { blockId: "p1", label: "material", text: "NaCl", entityId: "ent_x" },
+    ]);
+  });
+
+  it("mediaInlineLabels (Phase D-3-β サイドストア) も inlineLabels にエントリ化する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            { id: "img-1", type: "image", props: { url: "x.png", name: "diagram.png" }, content: undefined },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+          mediaInlineLabels: {
+            "img-1": { label: "output", entityId: "ent_x" },
+          },
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabels).toContainEqual({
+      blockId: "img-1",
+      label: "output",
+      text: "diagram.png",
+      entityId: "ent_x",
+    });
+  });
+
+  it("インラインラベルがゼロなら inlineLabels は undefined のまま", () => {
+    const entry = buildIndexEntry("file-1", mockDoc());
+    expect(entry.inlineLabels).toBeUndefined();
+  });
 });
 
 describe("updateIndexEntry", () => {
