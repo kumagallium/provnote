@@ -8,12 +8,14 @@ import {
 } from "../features/prov-generator";
 import type { BlockLink } from "../features/block-link/link-types";
 import type { DocumentProvenance } from "../features/document-provenance/types";
+import type { MediaLabelEntry } from "../features/inline-label/media-store";
 
 export function useProvGeneration(
   editorRef: React.RefObject<any>,
   labels: Map<string, string>,
   links: BlockLink[],
   documentProvenance?: DocumentProvenance | null,
+  mediaInlineLabels?: Map<string, MediaLabelEntry>,
 ) {
   const [provDoc, setProvDoc] = useState<ProvDocument | null>(null);
   const provTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -26,9 +28,10 @@ export function useProvGeneration(
       labels,
       links,
       documentProvenance: documentProvenance ?? undefined,
+      mediaInlineLabels,
     });
     setProvDoc(doc);
-  }, [editorRef, labels, links, documentProvenance]);
+  }, [editorRef, labels, links, documentProvenance, mediaInlineLabels]);
 
   // ラベル・リンク変更時に自動再生成
   useEffect(() => {

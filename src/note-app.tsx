@@ -14,6 +14,10 @@ import {
   LabelDropdownPortal,
 } from "./features/context-label";
 import {
+  MediaInlineLabelProvider,
+  useMediaInlineLabelStore,
+} from "./features/inline-label/media-store";
+import {
   ProvIndicatorLayer,
   ProvIndicatorHoverHint,
   BlockHoverHighlight,
@@ -348,9 +352,11 @@ function NoteEditor(props: NoteEditorProps) {
     <LabelStoreProvider>
       <LinkStoreProvider>
         <IndexTableStoreProvider>
+        <MediaInlineLabelProvider>
         <AiAssistantProvider aiAvailable={props.aiAvailable}>
           <NoteEditorInner {...props} />
         </AiAssistantProvider>
+        </MediaInlineLabelProvider>
         </IndexTableStoreProvider>
       </LinkStoreProvider>
     </LabelStoreProvider>
@@ -433,6 +439,7 @@ function NoteEditorInner({
   const linkStore = useLinkStore();
   const { removeBlockMetadata } = useBlockLifecycle();
   const indexTableStore = useIndexTableStore();
+  const mediaInlineLabelStore = useMediaInlineLabelStore();
   const aiAssistant = useAiAssistant();
   const isDesktop = useIsDesktop();
   const editorRef = useRef<any>(null);
@@ -882,6 +889,10 @@ function NoteEditorInner({
     // インデックステーブルの状態を収集
     const indexTablesSnapshot = indexTableStore.getSnapshot();
     const hasIndexTables = Object.keys(indexTablesSnapshot).length > 0;
+    // メディアインラインラベル（Phase D-3-β）
+    const mediaInlineLabelsSnapshot = mediaInlineLabelStore.getSnapshot();
+    const hasMediaInlineLabels =
+      Object.keys(mediaInlineLabelsSnapshot).length > 0;
     let doc: GraphiumDocument = {
       version: LATEST_DOCUMENT_VERSION,
       title,
@@ -894,6 +905,9 @@ function NoteEditorInner({
           provLinks,
           knowledgeLinks,
           indexTables: hasIndexTables ? indexTablesSnapshot : undefined,
+          mediaInlineLabels: hasMediaInlineLabels
+            ? mediaInlineLabelsSnapshot
+            : undefined,
         },
       ],
       noteLinks: noteLinksRef.current.length > 0 ? noteLinksRef.current : undefined,
@@ -931,7 +945,7 @@ function NoteEditorInner({
     prevPageRef.current = structuredClone(doc.pages[0]);
 
     return doc;
-  }, [title, labelStore, linkStore, indexTableStore, aiAssistant, initialDoc, currentProvenance]);
+  }, [title, labelStore, linkStore, indexTableStore, mediaInlineLabelStore, aiAssistant, initialDoc, currentProvenance]);
 
   const handleSave = useCallback(async () => {
     const doc = await buildDocument();
@@ -980,6 +994,7 @@ function NoteEditorInner({
     labelStore.labels,
     linkStore.links,
     initialDoc?.documentProvenance,
+    mediaInlineLabelStore.labels,
   );
 
   // ── PDF エクスポートハンドラー ──
@@ -1009,18 +1024,21 @@ function NoteEditorInner({
   const prevLabelsRef = useRef(labelStore.labels);
   const prevLinksRef = useRef(linkStore.links);
   const prevTablesRef = useRef(indexTableStore.tables);
+  const prevMediaLabelsRef = useRef(mediaInlineLabelStore.labels);
   useEffect(() => {
     if (
       prevLabelsRef.current !== labelStore.labels ||
       prevLinksRef.current !== linkStore.links ||
-      prevTablesRef.current !== indexTableStore.tables
+      prevTablesRef.current !== indexTableStore.tables ||
+      prevMediaLabelsRef.current !== mediaInlineLabelStore.labels
     ) {
       prevLabelsRef.current = labelStore.labels;
       prevLinksRef.current = linkStore.links;
       prevTablesRef.current = indexTableStore.tables;
+      prevMediaLabelsRef.current = mediaInlineLabelStore.labels;
       markDirty();
     }
-  }, [labelStore.labels, linkStore.links, indexTableStore.tables, markDirty]);
+  }, [labelStore.labels, linkStore.links, indexTableStore.tables, mediaInlineLabelStore.labels, markDirty]);
 
   // AI チャットパネル用ハンドラー（継続対話）
   const handleAiChatSubmit = useCallback(
@@ -1523,6 +1541,9 @@ function NoteEditorInner({
       ];
       if (allLinks.length > 0) {
         linkStore.restoreLinks(allLinks);
+      }
+      if (page.mediaInlineLabels) {
+        mediaInlineLabelStore.restoreSnapshot(page.mediaInlineLabels);
       }
       if (page.indexTables) {
         indexTableStore.restore(page.indexTables);

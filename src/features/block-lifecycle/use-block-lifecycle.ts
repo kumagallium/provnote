@@ -21,6 +21,7 @@
 import { useCallback } from "react";
 import { useLabelStore } from "../context-label/store";
 import { useLinkStore } from "../block-link/store";
+import { useMediaInlineLabelStoreOptional } from "../inline-label/media-store";
 import {
   cleanupBlockMetadata,
   copyLabelsByIdMap,
@@ -44,20 +45,38 @@ export type BlockLifecycle = {
 export function useBlockLifecycle(): BlockLifecycle {
   const labelStore = useLabelStore();
   const linkStore = useLinkStore();
+  const mediaInlineLabelStore = useMediaInlineLabelStoreOptional();
 
   const removeBlockMetadata = useCallback(
     (blockIds: readonly string[]) => {
       cleanupBlockMetadata(blockIds, labelStore, linkStore);
+      // メディアインラインラベル (Phase D-3-β) の同期
+      if (mediaInlineLabelStore) {
+        for (const id of blockIds) {
+          if (mediaInlineLabelStore.getLabel(id)) {
+            mediaInlineLabelStore.setLabel(id, null);
+          }
+        }
+      }
     },
-    [labelStore, linkStore],
+    [labelStore, linkStore, mediaInlineLabelStore],
   );
 
   const copyBlocksMetadata = useCallback(
     (idMap: ReadonlyMap<string, string>) => {
       copyLabelsByIdMap(idMap, labelStore);
       copyLinksByIdMap(idMap, linkStore);
+      // メディアインラインラベルの ID 移植
+      if (mediaInlineLabelStore) {
+        for (const [oldId, newId] of idMap) {
+          const entry = mediaInlineLabelStore.getLabel(oldId);
+          if (entry) {
+            mediaInlineLabelStore.setLabel(newId, { ...entry });
+          }
+        }
+      }
     },
-    [labelStore, linkStore],
+    [labelStore, linkStore, mediaInlineLabelStore],
   );
 
   return { removeBlockMetadata, copyBlocksMetadata };

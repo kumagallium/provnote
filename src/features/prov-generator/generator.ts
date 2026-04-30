@@ -86,6 +86,12 @@ type GeneratorInput = {
   links: BlockLink[];
   /** ドキュメント来歴（オプション） */
   documentProvenance?: import("../document-provenance/types").DocumentProvenance;
+  /**
+   * メディアブロック (image/video/audio/file/pdf) のインラインラベル
+   * (Phase D-3-β, 2026-04-30)。テキストハイライトと同等の役割を持ち、
+   * 設計メモ §8.6 に従い blockId → {label, entityId} のサイドストアで保存される。
+   */
+  mediaInlineLabels?: Map<string, { label: CoreLabel; entityId: string }>;
 };
 
 // ── テーブル構造化パーサー ──
@@ -436,9 +442,17 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   // ラベルなしメディアブロックの祖先を探して属性として埋め込む
   const embeddedMediaIds = new Set<string>();
 
+  // Phase D-3-β: メディアインラインラベル付きブロックは後続の集約パスで
+  // 直接 Entity 化されるため、祖先 attribute 化からは除外する。
+  const mediaInlineLabeledIds = new Set<string>();
+  if (input.mediaInlineLabels) {
+    for (const id of input.mediaInlineLabels.keys()) mediaInlineLabeledIds.add(id);
+  }
+
   for (const block of flatBlocks) {
     // ラベル付き or 非メディア → スキップ
     if (labels.has(block.id)) continue;
+    if (mediaInlineLabeledIds.has(block.id)) continue;
     if (!MEDIA_BLOCK_TYPES.includes(block.type)) continue;
     if (!block.props?.url) continue;
 
@@ -508,7 +522,8 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       MEDIA_BLOCK_TYPES.includes(block.type) &&
       block.props?.url &&
       currentEntityLabel &&
-      !embeddedMediaIds.has(block.id)
+      !embeddedMediaIds.has(block.id) &&
+      !mediaInlineLabeledIds.has(block.id) // Phase D-3-β: インラインラベル付きは別経路
     ) {
       const url: string = block.props.url;
       const actIds = getActivityIdsForScope(block.id);
@@ -637,6 +652,10 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     /** このブロック内での文字範囲（最寄り Entity 検索用） */
     charStart: number;
     charEnd: number;
+    /** メディアブロック由来の場合のメディア URL */
+    mediaUrl?: string;
+    /** メディアブロック由来の場合のメディア種別 (image/video/audio/file/pdf) */
+    mediaType?: string;
   };
   const aggregatedByKey = new Map<string, AggregatedEntity>();
   for (const seg of inlineSegments) {
@@ -654,6 +673,41 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         text: seg.text,
         charStart: seg.charStart,
         charEnd: seg.charEnd,
+      });
+    }
+  }
+
+  // ── Phase D-3-β (2026-04-30): メディアブロックのインラインラベル ──
+  //
+  // image / video / audio / file / pdf ブロックは BlockNote の inline style を
+  // 持てないため、サイドストア (mediaInlineLabels) で blockId → {label, entityId}
+  // を保存している。テキストハイライトと同じ集約マップ (aggregatedByKey) に
+  // 合流させ、後続の Entity / Attribute 生成ロジックを共有する。
+  const mediaInlineLabels = input.mediaInlineLabels;
+  if (mediaInlineLabels && mediaInlineLabels.size > 0) {
+    const blockById = new Map<string, any>();
+    for (const b of flatBlocks) blockById.set(b.id, b);
+    for (const [blockId, entry] of mediaInlineLabels) {
+      const block = blockById.get(blockId);
+      if (!block) continue;
+      if (!MEDIA_BLOCK_TYPES.includes(block.type)) continue;
+      const url: string | undefined = block.props?.url || undefined;
+      const mediaName: string =
+        block.props?.name ||
+        (url
+          ? decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "")
+          : "") ||
+        block.id.slice(0, 8);
+      const key = `${blockId}::${entry.label}::${entry.entityId}`;
+      aggregatedByKey.set(key, {
+        label: entry.label,
+        entityId: entry.entityId,
+        blockId,
+        text: mediaName,
+        charStart: 0,
+        charEnd: 0,
+        mediaUrl: url,
+        mediaType: block.type,
       });
     }
   }
@@ -688,6 +742,8 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         blockId: agg.blockId,
         entitySubtype: LABEL_TO_ENTITY_SUBTYPE[agg.label],
       };
+      if (agg.mediaUrl) node.mediaUrl = agg.mediaUrl;
+      if (agg.mediaType) node.mediaType = agg.mediaType;
       // graphium:phase をメタとして残す（クエリやフィルタ用）
       (node as any)["graphium:phase"] = phase ?? "execution";
       nodes.push(node);
