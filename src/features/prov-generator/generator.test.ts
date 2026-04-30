@@ -1449,3 +1449,114 @@ describe("インラインハイライト → PROV Entity / Attribute (Phase D-1)
     expect(used.some((u: any) => u["@id"] === "inline_material_ent_orph")).toBe(false);
   });
 });
+
+// ──────────────────────────────────────────────
+// Phase D-2: Plan / Result phase scoping
+// ──────────────────────────────────────────────
+describe("Plan / Result phase スコーピング (Phase D-2)", () => {
+  const styled = (text: string, styles: Record<string, string | boolean> = {}) => ({
+    type: "text",
+    text,
+    styles,
+  });
+
+  it("#plan 配下のインライン Entity は graphium:phase=plan で識別される（型は prov:Entity のまま）", () => {
+    const blocks = [
+      { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
+      { id: "h-plan", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "計画" }], children: [] },
+      { id: "p-plan", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" }), styled(" 5g 予定")], children: [] },
+    ];
+    const labels = new Map([
+      ["h-step", "procedure"],
+      ["h-plan", "plan"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const planEnt = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl_plan");
+    expect(planEnt).toBeDefined();
+    // PROV-DM 厳密性: 個別の予定物質を prov:Plan 型にしない（Plan は計画書全体を指す概念）
+    expect(planEnt!["@type"]).toBe("prov:Entity");
+    expect(planEnt!["graphium:phase"]).toBe("plan");
+  });
+
+  it("#result 配下のインライン Entity は execution（既存挙動）+ graphium:phase=result", () => {
+    const blocks = [
+      { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
+      { id: "h-result", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "結果" }], children: [] },
+      { id: "p-res", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" }), styled(" 5.02g 実測")], children: [] },
+    ];
+    const labels = new Map([
+      ["h-step", "procedure"],
+      ["h-result", "result"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const execEnt = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(execEnt).toBeDefined();
+    expect(execEnt!["@type"]).toBe("prov:Entity");
+    expect(execEnt!["graphium:phase"]).toBe("result");
+  });
+
+  it("phase 未指定（procedure 直下）は graphium:phase=execution のデフォルト", () => {
+    const blocks = [
+      { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
+      { id: "p-body", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" })], children: [] },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(ent!["graphium:phase"]).toBe("execution");
+  });
+
+  it("同 entityId が plan/result 両方にある時、execution → plan に prov:specializationOf エッジ", () => {
+    const blocks = [
+      { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
+      { id: "h-plan", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "計画" }], children: [] },
+      { id: "p-plan", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" })], children: [] },
+      { id: "h-result", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "結果" }], children: [] },
+      { id: "p-res", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" })], children: [] },
+    ];
+    const labels = new Map([
+      ["h-step", "procedure"],
+      ["h-plan", "plan"],
+      ["h-result", "result"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const planEnt = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl_plan");
+    const execEnt = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(planEnt).toBeDefined();
+    expect(execEnt).toBeDefined();
+
+    // execution Entity に specializationOf が含まれ、plan Entity を指している
+    const specs = (execEnt as any)["prov:specializationOf"] ?? [];
+    expect(specs.some((s: any) => s["@id"] === "inline_material_ent_nacl_plan")).toBe(true);
+  });
+
+  it("plan / result 見出しは Activity を生まず、procedure の Activity スコープを保つ", () => {
+    const blocks = [
+      { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
+      { id: "h-plan", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "計画" }], children: [] },
+      { id: "p-plan", type: "paragraph", content: [styled("NaCl", { inlineMaterial: "ent_nacl" })], children: [] },
+    ];
+    const labels = new Map([
+      ["h-step", "procedure"],
+      ["h-plan", "plan"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    // Activity は h-step だけ
+    const activities = doc["@graph"].filter((n) => n["@type"] === "prov:Activity");
+    expect(activities).toHaveLength(1);
+    expect(activities[0]["@id"]).toBe("activity_h-step");
+
+    // h-plan に対する Activity は作られない
+    expect(doc["@graph"].find((n) => n["@id"] === "activity_h-plan")).toBeUndefined();
+
+    // 計画 Entity は activity_h-step の prov:used に含まれる
+    const stepAct = doc["@graph"].find((n) => n["@id"] === "activity_h-step");
+    const used = (stepAct as any)["prov:used"] ?? [];
+    expect(used.some((u: any) => u["@id"] === "inline_material_ent_nacl_plan")).toBe(true);
+  });
+});
