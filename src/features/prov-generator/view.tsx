@@ -19,6 +19,65 @@ import { extractRelations, type FlatRelation } from "./generator";
 import { t, getDisplayLabelName } from "../../i18n";
 import { getActiveProvider } from "../../lib/storage/registry";
 
+/**
+ * 動画 URL から最初の数百ミリ秒のフレームを canvas に書き出して
+ * data URL で返す。Cytoscape の background-image は静止画しか扱えないため、
+ * 動画ノードのサムネイルは事前にラスタ化する必要がある。
+ */
+async function captureVideoFrame(videoUrl: string, seekSeconds = 0.1): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.src = videoUrl;
+
+    const cleanup = () => {
+      video.src = "";
+      video.removeAttribute("src");
+      video.load();
+    };
+
+    const onError = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    video.addEventListener("loadedmetadata", () => {
+      try {
+        video.currentTime = Math.min(seekSeconds, Math.max(0, (video.duration || 0) - 0.05));
+      } catch {
+        onError();
+      }
+    });
+
+    video.addEventListener("seeked", () => {
+      try {
+        const w = video.videoWidth || 160;
+        const h = video.videoHeight || 90;
+        const canvas = document.createElement("canvas");
+        // サムネイルなのでロングサイドを 200 程度に縮小
+        const scale = Math.min(1, 200 / Math.max(w, h));
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { onError(); return; }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        cleanup();
+        resolve(dataUrl);
+      } catch {
+        onError();
+      }
+    });
+
+    video.addEventListener("error", onError);
+    // タイムアウト（メタデータが取れない壊れた URL に備える）
+    setTimeout(() => onError(), 5000);
+  });
+}
+
 // 後方互換
 type ProvDocument = ProvJsonLd;
 
@@ -118,6 +177,7 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
         type: node["@type"],
         subtype: getNodeSubtype(node),
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
+        ...(thumbnailUrl && mediaType ? { thumbnailMediaType: mediaType } : {}),
       },
     });
 
@@ -182,6 +242,7 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
           data: {
             id: attrId,
             label: attrLabel,
+            ...(attrThumbUrl && attrMediaType ? { thumbnailMediaType: attrMediaType } : {}),
             type: "graphium:Attribute",
             subtype: "parameter",
             ...(attrThumbUrl ? { thumbnailUrl: attrThumbUrl } : {}),
@@ -494,9 +555,10 @@ function CytoscapeGraph({
 
     let cancelled = false;
 
-    // サムネイル URL を Blob URL に変換して Cytoscape に反映
-    // local-media:// や Drive URL はアクティブなストレージプロバイダ経由で
-    // blob URL に変換し、純粋な http(s) URL は fetch でフォールバックする。
+    // サムネイル URL を Blob URL / 動画フレームに変換して Cytoscape に反映
+    // - local-media:// や Drive URL はアクティブなストレージプロバイダ経由で blob URL に変換
+    // - 純粋な http(s) URL は fetch でフォールバック
+    // - 動画は最初のフレームを canvas でキャプチャして data URL にする
     const thumbnailNodes = cy.nodes("[thumbnailUrl]");
     const blobUrls: string[] = [];
     if (thumbnailNodes.length > 0) {
@@ -507,36 +569,47 @@ function CytoscapeGraph({
           if (cancelled) break;
           const url = node.data("thumbnailUrl") as string;
           if (!url) continue;
-          if (url.startsWith("blob:") || url.startsWith("data:")) continue;
+          if (url.startsWith("data:")) continue;
+          const mediaType = node.data("thumbnailMediaType") as string | undefined;
 
-          let blobUrl: string | null = null;
-
-          // まずストレージプロバイダで解決を試みる
-          try {
-            const fileId = provider.extractFileId(url);
-            if (fileId) {
-              blobUrl = await provider.getMediaBlobUrl(fileId);
-            }
-          } catch {
-            // プロバイダ解決失敗 → fetch フォールバックに進む
-          }
-
-          // フォールバック: 純粋な http(s) URL を直接 fetch
-          if (!blobUrl) {
+          // 1) 元 URL → ブラウザが直接読める URL（blob: もしくは元の http(s)）
+          let resolvedUrl: string | null = null;
+          if (url.startsWith("blob:")) {
+            resolvedUrl = url;
+          } else {
             try {
-              const res = await fetch(url);
-              if (!res.ok) continue;
-              const blob = await res.blob();
-              blobUrl = URL.createObjectURL(blob);
-              blobUrls.push(blobUrl);
+              const fileId = provider.extractFileId(url);
+              if (fileId) {
+                resolvedUrl = await provider.getMediaBlobUrl(fileId);
+              }
             } catch {
-              // ネットワークエラーはスキップ
-              continue;
+              // プロバイダ解決失敗 → fetch フォールバックに進む
+            }
+            if (!resolvedUrl) {
+              try {
+                const res = await fetch(url);
+                if (!res.ok) continue;
+                const blob = await res.blob();
+                resolvedUrl = URL.createObjectURL(blob);
+                blobUrls.push(resolvedUrl);
+              } catch {
+                continue;
+              }
             }
           }
 
-          if (!cancelled && blobUrl) {
-            cy.batch(() => { node.data("thumbnailUrl", blobUrl); });
+          // 2) 動画は最初のフレームを canvas で抜く（背景画像は静止画である必要がある）
+          let finalUrl: string | null = resolvedUrl;
+          if (mediaType === "video") {
+            try {
+              finalUrl = await captureVideoFrame(resolvedUrl);
+            } catch {
+              finalUrl = null;
+            }
+          }
+
+          if (!cancelled && finalUrl) {
+            cy.batch(() => { node.data("thumbnailUrl", finalUrl); });
           }
         }
         if (!cancelled) {
