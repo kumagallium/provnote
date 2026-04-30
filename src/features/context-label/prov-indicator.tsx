@@ -220,7 +220,7 @@ export function ProvIndicatorLayer() {
               }
               data-prov-label-anchor={blockId}
               title={tStatic("provIndicator.clickForDetails", { label: getDisplayLabel(label) })}
-              className="fixed z-[9997] inline-block rounded-full text-xs font-semibold cursor-pointer select-none whitespace-nowrap pointer-events-auto"
+              className="fixed z-[40] inline-block rounded-full text-xs font-semibold cursor-pointer select-none whitespace-nowrap pointer-events-auto"
               style={{
                 top,
                 right: window.innerWidth - left,

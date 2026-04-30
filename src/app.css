@@ -330,9 +330,19 @@
 
 /* FormattingToolbar (テキスト選択時のフローティングメニュー) は他の浮動 UI より上に出す。
    ラベルバッジ (prov-indicator.tsx で z-[9997]) や block-link badge と被ると
-   インラインラベルボタンが隠れるので、それらより上の 9998 を割り当てる。 */
-.bn-toolbar {
-  z-index: 9998 !important;
+   インラインラベルボタンが隠れる。BlockNote の Floating UI ポジショナの祖先
+   要素にも stacking context が作られるため、toolbar 本体と祖先 .bn-formatting-toolbar
+   の両方に高 z-index を当てる。 */
+.bn-toolbar,
+.bn-formatting-toolbar,
+[data-floating-ui-portal] .bn-toolbar,
+[data-floating-ui-portal] .bn-formatting-toolbar {
+  z-index: 10001 !important;
+}
+
+/* Floating UI が portal を作る場合、ポジショナのラッパーも上に出す */
+[data-floating-ui-portal] {
+  z-index: 10001 !important;
 }
 
 /* ラベルドロップダウンが開いている間、SideMenu を強制表示 */
