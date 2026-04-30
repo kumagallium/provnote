@@ -17,6 +17,7 @@ import {
   MediaInlineLabelProvider,
   useMediaInlineLabelStore,
 } from "./features/inline-label/media-store";
+import { regenInlineEntitiesInBlocks } from "./features/inline-label/regen-on-paste";
 import {
   ProvIndicatorLayer,
   ProvIndicatorHoverHint,
@@ -794,6 +795,19 @@ function NoteEditorInner({
 
     // paste: Graphium ペイロードを最優先で処理し、なければ既存の URL 検知に流す
     const pasteListener = (e: ClipboardEvent) => {
+      // 全コピペ共通: 挿入後にインライン entityId を再発番する後処理（Phase E, 2026-04-30）
+      // 同 entityId 共有は意図しない場合が多いので、コピー範囲内では一貫した
+      // 新 ID に置き換える（旧 ID 同一なら新 ID も同一になる remap）。
+      // 詳細: features/inline-label/regen-on-paste.ts
+      const beforeIdsForRegen = new Set(flattenBlockIds(editor.document));
+      const scheduleEntityRegen = () => {
+        setTimeout(() => {
+          const afterIds = flattenBlockIds(editor.document);
+          const newIds = new Set(afterIds.filter((id) => !beforeIdsForRegen.has(id)));
+          if (newIds.size > 0) regenInlineEntitiesInBlocks(editor, newIds);
+        }, 0);
+      };
+
       // 1) ブラウザ内コピペ（同タブ）はカスタム MIME がそのまま生きる
       // 2) OS clipboard 経由でも text/html の HTML コメントから取り出す
       const graphiumRaw = e.clipboardData?.getData(GRAPHIUM_CLIPBOARD_MIME);
@@ -814,8 +828,12 @@ function NoteEditorInner({
             addLink: (params) => linkStore.addLink(params),
           });
         }, 0);
+        scheduleEntityRegen();
         return;
       }
+
+      // Graphium ペイロード以外でも entity 再発番は走らせる（プレーン Markdown / HTML 等）
+      scheduleEntityRegen();
 
       // 既存: URL のみのペーストならブックマーク選択メニューを出す
       const text = e.clipboardData?.getData("text/plain")?.trim();
