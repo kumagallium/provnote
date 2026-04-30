@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.5.0](https://github.com/kumagallium/Graphium/compare/v0.4.0...v0.5.0) - 2026-04-30
+- Phase B: h1 step Activity + hashtag context filter by @kumagallium in https://github.com/kumagallium/Graphium/pull/183
+- Phase C-1: InlineHighlight schema + v4→v5 migration by @kumagallium in https://github.com/kumagallium/Graphium/pull/185
+- Phase C-2: inline highlights as BlockNote styles + toolbar buttons by @kumagallium in https://github.com/kumagallium/Graphium/pull/186
+- Phase D-1: PROV generator reads inline highlights from BlockNote styles by @kumagallium in https://github.com/kumagallium/Graphium/pull/187
+- Phase D-2: Plan / Result phase scoping in PROV exporter by @kumagallium in https://github.com/kumagallium/Graphium/pull/188
+- chore(macos): codesign + notarize releases via tauri-action by @kumagallium in https://github.com/kumagallium/Graphium/pull/190
+- Phase D-3-β: media block inline labels via floating toolbar by @kumagallium in https://github.com/kumagallium/Graphium/pull/189
+- Phase D-3-α: index inline labels for note-list filter by @kumagallium in https://github.com/kumagallium/Graphium/pull/191
+- Phase E (AI chat): inline span markers in AI prompt + parser by @kumagallium in https://github.com/kumagallium/Graphium/pull/192
+- Phase E: migrate templates + url-to-prov ingester to inline highlights by @kumagallium in https://github.com/kumagallium/Graphium/pull/193
+
 ## [v0.4.0](https://github.com/kumagallium/Graphium/compare/v0.3.12...v0.4.0) - 2026-04-29
 - [fix] Restore index-table create-note icon after note open by @kumagallium in https://github.com/kumagallium/Graphium/pull/178
 - feat(storage): server-side filesystem storage for self-host (G-DOCKER-SYNC) by @kumagallium in https://github.com/kumagallium/Graphium/pull/180
