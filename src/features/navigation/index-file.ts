@@ -12,7 +12,10 @@ import { normalizeLabel } from "../context-label/labels";
 // v4: source, wikiKind フィールドを追加（Wiki ドキュメント対応）
 // v5: author, model フィールドを追加（誰が / どのモデルが書いたかを一覧で表示）
 // v6: ラベルを内部キー（procedure/material/tool/attribute/result）に正規化
-const INDEX_SCHEMA_VERSION = 7;
+// v8: inlineLabelTypes フィールド追加（Phase D-3-α）
+//     インラインハイライト + メディアインラインラベルを集計し、左ナビ ラベルフィルタで
+//     material/tool/attribute/output を絞り込めるようにする
+const INDEX_SCHEMA_VERSION = 8;
 
 export type GraphiumIndex = {
   version: number;
@@ -54,6 +57,13 @@ export type NoteIndexEntry = {
    * 通常ノート → 派生 wiki エントリの逆引き lookup を実装するために保存する。
    */
   derivedFromNotes?: string[];
+  /**
+   * インライン referent を含むラベル種別の集合（Phase D-3-α）。
+   * ノート本文内の inline style ハイライト + メディアブロックのインラインラベルから
+   * 集計する。block-level ラベル (`labels`) には載らないため独立して保持し、
+   * 左ナビのラベルフィルタで material/tool/attribute/output を絞り込めるようにする。
+   */
+  inlineLabelTypes?: ("material" | "tool" | "attribute" | "output")[];
 };
 
 // ── Drive API ──
@@ -173,6 +183,7 @@ export function buildIndexEntry(
   const headings: NoteIndexEntry["headings"] = [];
   const labels: NoteIndexEntry["labels"] = [];
   const outgoingLinks: NoteIndexEntry["outgoingLinks"] = [];
+  const inlineLabelSet = new Set<"material" | "tool" | "attribute" | "output">();
 
   if (page) {
     // 見出しを収集
@@ -182,6 +193,18 @@ export function buildIndexEntry(
         if (text) {
           headings.push({ blockId: block.id, text, level: block.props.level });
         }
+      }
+    }
+
+    // インラインハイライトを集計（Phase D-3-α）
+    // BlockNote の inline style として保存されている material/tool/attribute/output を
+    // ブロックツリー全体から拾う。
+    collectInlineLabels(page.blocks || [], inlineLabelSet);
+
+    // メディアブロックのインラインラベル（Phase D-3-β サイドストア）
+    if (page.mediaInlineLabels) {
+      for (const entry of Object.values(page.mediaInlineLabels)) {
+        if (entry?.label) inlineLabelSet.add(entry.label);
       }
     }
 
@@ -259,7 +282,51 @@ export function buildIndexEntry(
     author,
     model,
     derivedFromNotes: doc.wikiMeta?.derivedFromNotes,
+    inlineLabelTypes: inlineLabelSet.size > 0 ? Array.from(inlineLabelSet) : undefined,
   };
+}
+
+/**
+ * ブロックツリーを再帰的にたどり、inline style 経由のラベル種別を集める。
+ * Phase D-3-α 用ヘルパー。BlockNote の content[].styles に
+ * inlineMaterial / inlineTool / inlineAttribute / inlineOutput が
+ * 含まれていればそれぞれを Set に追加する。
+ */
+function collectInlineLabels(
+  blocks: any[],
+  out: Set<"material" | "tool" | "attribute" | "output">,
+): void {
+  const STYLE_TO_LABEL: Record<string, "material" | "tool" | "attribute" | "output"> = {
+    inlineMaterial: "material",
+    inlineTool: "tool",
+    inlineAttribute: "attribute",
+    inlineOutput: "output",
+  };
+  const visit = (b: any): void => {
+    if (!b || typeof b !== "object") return;
+    const content = b.content;
+    if (Array.isArray(content)) {
+      for (const c of content) {
+        if (c?.type === "text" && c.styles) {
+          for (const key of Object.keys(STYLE_TO_LABEL)) {
+            if (c.styles[key]) out.add(STYLE_TO_LABEL[key]);
+          }
+        } else if (c?.type === "link" && Array.isArray(c.content)) {
+          for (const lc of c.content) {
+            if (lc?.type === "text" && lc.styles) {
+              for (const key of Object.keys(STYLE_TO_LABEL)) {
+                if (lc.styles[key]) out.add(STYLE_TO_LABEL[key]);
+              }
+            }
+          }
+        }
+      }
+    }
+    if (Array.isArray(b.children)) {
+      for (const child of b.children) visit(child);
+    }
+  };
+  for (const b of blocks) visit(b);
 }
 
 /**

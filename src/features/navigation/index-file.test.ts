@@ -195,6 +195,79 @@ describe("buildIndexEntry", () => {
     expect(entry.labels).toHaveLength(0);
     expect(entry.outgoingLinks).toHaveLength(0);
   });
+
+  // Phase D-3-α: インラインハイライト + メディアインラインラベルの集計
+  it("インライン style のハイライト種別を inlineLabelTypes に集計する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            {
+              id: "p1",
+              type: "paragraph",
+              content: [
+                { type: "text", text: "NaCl", styles: { inlineMaterial: "ent_n" } },
+                { type: "text", text: " を使う", styles: {} },
+              ],
+            },
+            {
+              id: "p2",
+              type: "paragraph",
+              content: [
+                { type: "text", text: "ピペット", styles: { inlineTool: "ent_p" } },
+              ],
+              children: [
+                {
+                  id: "p2c",
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: "80°C", styles: { inlineAttribute: "ent_t" } },
+                  ],
+                },
+              ],
+            },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabelTypes).toBeDefined();
+    expect(new Set(entry.inlineLabelTypes!)).toEqual(
+      new Set(["material", "tool", "attribute"]),
+    );
+  });
+
+  it("mediaInlineLabels (Phase D-3-β サイドストア) も inlineLabelTypes に合流する", () => {
+    const doc = mockDoc({
+      pages: [
+        {
+          id: "page-1",
+          title: "Main",
+          blocks: [
+            { id: "img-1", type: "image", props: { url: "x.png" }, content: undefined },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+          mediaInlineLabels: {
+            "img-1": { label: "output", entityId: "ent_x" },
+          },
+        },
+      ],
+    });
+    const entry = buildIndexEntry("file-1", doc);
+    expect(entry.inlineLabelTypes).toContain("output");
+  });
+
+  it("インラインラベルがゼロなら inlineLabelTypes は undefined のまま", () => {
+    const entry = buildIndexEntry("file-1", mockDoc());
+    expect(entry.inlineLabelTypes).toBeUndefined();
+  });
 });
 
 describe("updateIndexEntry", () => {

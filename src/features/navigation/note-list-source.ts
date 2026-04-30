@@ -54,12 +54,19 @@ export class IndexFileNoteListSource implements NoteListSource {
     // AI ドキュメント（Wiki）はノート一覧から除外（AI Knowledge セクションで表示）
     return this.index.notes.filter((n) => n.source !== "ai").map((n) => {
       const wikiEntries = knowledgeMap.get(n.noteId) ?? [];
+      // Phase D-3-α: block-level labels と inlineLabelTypes を統合する。
+      // フィルタ UI は単一の文字列配列を見ているので、material/tool/attribute/output の
+      // 出処（block ラベル / インライン style / メディアサイドストア）を区別しない。
+      const labelSet = new Set<string>(n.labels.map((l) => l.label));
+      if (n.inlineLabelTypes) {
+        for (const t of n.inlineLabelTypes) labelSet.add(t);
+      }
       return {
         noteId: n.noteId,
         title: n.title,
         modifiedAt: n.modifiedAt,
         createdAt: n.createdAt,
-        labels: [...new Set(n.labels.map((l) => l.label))],
+        labels: Array.from(labelSet),
         incomingLinkCount: incomingMap.get(n.noteId)?.size ?? 0,
         outgoingLinkCount: outgoingMap.get(n.noteId) ?? 0,
         author: n.author,
