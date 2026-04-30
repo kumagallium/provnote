@@ -28,10 +28,40 @@ function makeEntityId(label: InlineLabelKey): string {
   return `ent_${label}_${rand}`;
 }
 
+const MEDIA_BLOCK_TYPES = new Set(["image", "video", "audio", "file", "pdf"]);
+
+/**
+ * tiptap の現在の選択がメディアブロックの NodeSelection かを判定する。
+ * 該当時はテキスト用のインラインラベルボタンを抑止し、専用の
+ * MediaInlineLabelToolbar (features/inline-label/media-toolbar.tsx) に委譲する。
+ */
+function isMediaBlockNodeSelection(editor: any): boolean {
+  const tiptap = editor?._tiptapEditor;
+  if (!tiptap) return false;
+  const sel = tiptap.state.selection;
+  const node = sel?.node;
+  if (!node) return false;
+  if (MEDIA_BLOCK_TYPES.has(node.type?.name)) return true;
+  if (node.type?.name === "blockContainer") {
+    let hasMedia = false;
+    node.descendants((d: any) => {
+      if (hasMedia) return false;
+      if (d?.type?.name && MEDIA_BLOCK_TYPES.has(d.type.name)) {
+        hasMedia = true;
+        return false;
+      }
+      return true;
+    });
+    return hasMedia;
+  }
+  return false;
+}
+
 export function NoteFormattingToolbar(props: FormattingToolbarProps) {
   const editor = useBlockNoteEditor<any, any, any>();
   const aiAssistant = useAiAssistant();
   const t = useT();
+  const onMedia = isMediaBlockNodeSelection(editor);
 
   const handleAiClick = async () => {
     const selectedText = window.getSelection()?.toString()?.trim();
@@ -74,7 +104,7 @@ export function NoteFormattingToolbar(props: FormattingToolbarProps) {
   return (
     <FormattingToolbar {...props}>
       {getFormattingToolbarItems(props.blockTypeSelectItems)}
-      {INLINE_LABEL_ORDER.map((label) => {
+      {!onMedia && INLINE_LABEL_ORDER.map((label) => {
         const styleKey = LABEL_TO_STYLE[label];
         const activeStyles = editor.getActiveStyles?.() ?? {};
         const isActive = Boolean(activeStyles[styleKey]);
