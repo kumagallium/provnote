@@ -71,6 +71,8 @@ export function provToCytoscapeElements(doc: ProvJsonLd): cytoscape.ElementDefin
   const RESERVED_KEYS = new Set([
     "graphium:blockId", "graphium:attributes", "graphium:warnings", "graphium:entityType",
     "graphium:mediaType", "graphium:mediaUrl",
+    // Phase D-2: graphium:phase はメタ情報なのでノードとして描画しない
+    "graphium:phase",
   ]);
 
   // メディアタイプ別のラベルプレフィックス
@@ -581,7 +583,7 @@ export function ProvGraphPanel({ doc }: { doc: ProvJsonLd | null }) {
   const attrCount = doc["@graph"].reduce((sum, n) => {
     let count = 0;
     if (n["graphium:attributes"]) count += (n["graphium:attributes"] as ProvAttribute[]).length;
-    const STATS_EXCLUDED = ["graphium:blockId", "graphium:attributes", "graphium:warnings", "graphium:entityType", "graphium:mediaType", "graphium:mediaUrl"];
+    const STATS_EXCLUDED = ["graphium:blockId", "graphium:attributes", "graphium:warnings", "graphium:entityType", "graphium:mediaType", "graphium:mediaUrl", "graphium:phase"];
     for (const key of Object.keys(n)) {
       if (key.startsWith("graphium:") && !STATS_EXCLUDED.includes(key) && typeof n[key as `graphium:${string}`] === "string") count++;
     }

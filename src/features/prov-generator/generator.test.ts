@@ -1460,7 +1460,7 @@ describe("Plan / Result phase スコーピング (Phase D-2)", () => {
     styles,
   });
 
-  it("#plan 配下のインライン Entity は prov:Plan 型 + graphium:phase=plan", () => {
+  it("#plan 配下のインライン Entity は graphium:phase=plan で識別される（型は prov:Entity のまま）", () => {
     const blocks = [
       { id: "h-step", type: "heading", props: { level: 2 }, content: [{ type: "text", text: "Step1" }], children: [] },
       { id: "h-plan", type: "heading", props: { level: 3 }, content: [{ type: "text", text: "計画" }], children: [] },
@@ -1474,7 +1474,8 @@ describe("Plan / Result phase スコーピング (Phase D-2)", () => {
 
     const planEnt = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl_plan");
     expect(planEnt).toBeDefined();
-    expect(planEnt!["@type"]).toBe("prov:Plan");
+    // PROV-DM 厳密性: 個別の予定物質を prov:Plan 型にしない（Plan は計画書全体を指す概念）
+    expect(planEnt!["@type"]).toBe("prov:Entity");
     expect(planEnt!["graphium:phase"]).toBe("plan");
   });
 

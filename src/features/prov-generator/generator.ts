@@ -673,21 +673,23 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   }
 
   // 1) Input / Tool / Output → Entity ノード + edge
+  //    Plan phase の Entity も型は `prov:Entity` のまま（PROV-DM の Plan は
+  //    "agent が activity 実行に使う計画書全体" を指す概念で、個別の予定物質に
+  //    `prov:Plan` を付けるのは誤用）。phase はメタ属性 `graphium:phase` で表現。
   for (const agg of aggregatedList) {
     if (agg.label === "attribute") continue; // Parameter は後段で処理
     const phase = getPhaseForBlock(agg.blockId);
     const nodeId = nodeIdFor(agg);
-    const isPlan = phase === "plan";
     if (!nodes.find((n) => n["@id"] === nodeId)) {
       const node: InternalNode = {
         "@id": nodeId,
-        "@type": isPlan ? "prov:Plan" : "prov:Entity",
+        "@type": "prov:Entity",
         label: agg.text || agg.entityId,
         blockId: agg.blockId,
         entitySubtype: LABEL_TO_ENTITY_SUBTYPE[agg.label],
       };
       // graphium:phase をメタとして残す（クエリやフィルタ用）
-      (node as any)["graphium:phase"] = isPlan ? "plan" : (phase ?? "execution");
+      (node as any)["graphium:phase"] = phase ?? "execution";
       nodes.push(node);
     }
     // 同 entityId の複数ブロック分は edge を重ねる
