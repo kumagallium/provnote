@@ -19,7 +19,7 @@ describe("migrateToLatest", () => {
     expect(doc.version).toBe(LATEST_DOCUMENT_VERSION);
   });
 
-  it("v3 → v4: result → output リネーム", () => {
+  it("v3 → v4 → v5: result → output → BlockNote inline style 適用", () => {
     const doc = baseDoc(3, {
       id: "p1",
       title: "p1",
@@ -29,14 +29,12 @@ describe("migrateToLatest", () => {
       knowledgeLinks: [],
     });
     migrateToLatest(doc);
-    // v4 → v5 で labels から消えて highlights に行く
     expect(doc.pages[0].labels).toEqual({});
-    expect(doc.pages[0].highlights).toBeDefined();
-    expect(doc.pages[0].highlights).toHaveLength(1);
-    expect(doc.pages[0].highlights![0].label).toBe("output");
+    const block = doc.pages[0].blocks[0];
+    expect(block.content[0].styles.inlineOutput).toBe("ent_b1");
   });
 
-  it("v4 → v5: block-level inline-type ラベルが whole-block highlight に変換される", () => {
+  it("v4 → v5: block-level inline-type ラベルが BlockNote inline style に変換される", () => {
     const doc = baseDoc(4, {
       id: "p1",
       title: "p1",
@@ -57,18 +55,12 @@ describe("migrateToLatest", () => {
     });
     migrateToLatest(doc);
 
-    expect(doc.pages[0].labels).toEqual({}); // 全て highlights に移動
-    expect(doc.pages[0].highlights).toHaveLength(4);
-
-    const matH = doc.pages[0].highlights!.find((h) => h.blockId === "b_mat")!;
-    expect(matH.label).toBe("material");
-    expect(matH.from).toBe(0);
-    expect(matH.to).toBe("NaCl 5g".length);
-    expect(matH.text).toBe("NaCl 5g");
-
-    const outH = doc.pages[0].highlights!.find((h) => h.blockId === "b_out")!;
-    expect(outH.label).toBe("output");
-    expect(outH.text).toBe("透明溶液を得た");
+    expect(doc.pages[0].labels).toEqual({});
+    const blocks = doc.pages[0].blocks;
+    expect(blocks[0].content[0].styles.inlineMaterial).toBe("ent_b_mat");
+    expect(blocks[1].content[0].styles.inlineTool).toBe("ent_b_tool");
+    expect(blocks[2].content[0].styles.inlineAttribute).toBe("ent_b_attr");
+    expect(blocks[3].content[0].styles.inlineOutput).toBe("ent_b_out");
   });
 
   it("v4 → v5: heading 系ラベル（procedure/plan/result/free.*）は labels に残る", () => {
@@ -97,27 +89,28 @@ describe("migrateToLatest", () => {
       h_result: "result",
       p_free: "free.purpose",
     });
-    expect(doc.pages[0].highlights ?? []).toHaveLength(0);
+    expect(doc.pages[0].blocks[0].content[0].styles).toEqual({});
   });
 
-  it("v4 → v5: 既存 highlights があれば破壊せず append する", () => {
+  it("v4 → v5: 既存 styles を破壊せずマージする（bold 等は残る）", () => {
     const doc = baseDoc(4, {
       id: "p1",
       title: "p1",
       blocks: [
-        { id: "b_x", type: "paragraph", content: txt("hello"), children: [] },
+        {
+          id: "b_x",
+          type: "paragraph",
+          content: [{ type: "text", text: "hello", styles: { bold: true } }],
+          children: [],
+        },
       ],
       labels: { b_x: "material" },
-      highlights: [
-        { id: "pre_h", blockId: "b_other", from: 0, to: 3, label: "tool", entityId: "ent_t1", text: "abc" },
-      ],
       provLinks: [],
       knowledgeLinks: [],
-    } as any);
+    });
     migrateToLatest(doc);
-    expect(doc.pages[0].highlights).toHaveLength(2);
-    expect(doc.pages[0].highlights!.some((h) => h.id === "pre_h")).toBe(true);
-    expect(doc.pages[0].highlights!.some((h) => h.blockId === "b_x" && h.label === "material")).toBe(true);
+    expect(doc.pages[0].blocks[0].content[0].styles.bold).toBe(true);
+    expect(doc.pages[0].blocks[0].content[0].styles.inlineMaterial).toBe("ent_b_x");
   });
 
   it("v4 → v5: ネストされた children ブロックも index される", () => {
@@ -140,14 +133,11 @@ describe("migrateToLatest", () => {
     });
     migrateToLatest(doc);
     expect(doc.pages[0].labels).toEqual({});
-    expect(doc.pages[0].highlights).toHaveLength(1);
-    const h = doc.pages[0].highlights![0];
-    expect(h.blockId).toBe("child");
-    expect(h.text).toBe("子要素");
-    expect(h.to).toBe("子要素".length);
+    const child = doc.pages[0].blocks[0].children[0];
+    expect(child.content[0].styles.inlineMaterial).toBe("ent_child");
   });
 
-  it("v4 → v5: ブロックが見つからないラベルは label から消すだけ（空 text の highlight 生成）", () => {
+  it("v4 → v5: ブロックが見つからないラベルは label から消すだけ", () => {
     const doc = baseDoc(4, {
       id: "p1",
       title: "p1",
@@ -158,9 +148,29 @@ describe("migrateToLatest", () => {
     });
     migrateToLatest(doc);
     expect(doc.pages[0].labels).toEqual({});
-    // ブロック未存在 → text 空の highlight を 1 件残す（後段クリーンアップ対象）
-    expect(doc.pages[0].highlights).toHaveLength(1);
-    expect(doc.pages[0].highlights![0].text).toBe("");
-    expect(doc.pages[0].highlights![0].to).toBe(0);
+  });
+
+  it("v4 → v5: link inline 内の text にも style が適用される", () => {
+    const doc = baseDoc(4, {
+      id: "p1",
+      title: "p1",
+      blocks: [
+        {
+          id: "b_link",
+          type: "paragraph",
+          content: [
+            { type: "text", text: "see ", styles: {} },
+            { type: "link", href: "http://example.com", content: [{ type: "text", text: "here", styles: {} }] },
+          ],
+          children: [],
+        },
+      ],
+      labels: { b_link: "material" },
+      provLinks: [],
+      knowledgeLinks: [],
+    });
+    migrateToLatest(doc);
+    expect(doc.pages[0].blocks[0].content[0].styles.inlineMaterial).toBe("ent_b_link");
+    expect(doc.pages[0].blocks[0].content[1].content[0].styles.inlineMaterial).toBe("ent_b_link");
   });
 });

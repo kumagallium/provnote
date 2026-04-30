@@ -74,6 +74,7 @@ import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, g
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
+import { LATEST_DOCUMENT_VERSION } from "./lib/document-migration";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
@@ -882,7 +883,7 @@ function NoteEditorInner({
     const indexTablesSnapshot = indexTableStore.getSnapshot();
     const hasIndexTables = Object.keys(indexTablesSnapshot).length > 0;
     let doc: GraphiumDocument = {
-      version: 2,
+      version: LATEST_DOCUMENT_VERSION,
       title,
       pages: [
         {
@@ -1338,7 +1339,7 @@ function NoteEditorInner({
       // Split View: 現在のドキュメントを派生元として保存
       const currentBlocks = editorRef.current.document;
       onSourceDocChange({
-        version: 2,
+        version: LATEST_DOCUMENT_VERSION,
         title,
         pages: [{
           id: "main",

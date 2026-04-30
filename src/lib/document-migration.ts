@@ -10,11 +10,11 @@
 //   3 → 4: 旧内部キー "result"（Output Entity 意味）を "output" にリネーム。
 //          Phase 用の "plan" / "result"（Phase 意味）を新設したため衝突回避。
 //   4 → 5: block-level inline-type ラベル（material/tool/attribute/output）を
-//          ブロック全文をカバーするインラインハイライトに変換。
+//          BlockNote のインライン style（inlineMaterial 等）に変換。
 //          LabelStore は heading 用ラベル（procedure/plan/result/free.*）に純化。
 // ──────────────────────────────────────────────
 
-import type { GraphiumDocument, InlineHighlight } from "./document-types";
+import type { GraphiumDocument } from "./document-types";
 import { normalizeLabel, classifyLabel } from "../features/context-label/labels";
 
 export const LATEST_DOCUMENT_VERSION = 5;
@@ -121,24 +121,27 @@ function migrateResultToOutputV4(doc: GraphiumDocument): void {
 
 /**
  * v4 → v5: block-level inline-type ラベル（material/tool/attribute/output）を
- * ブロック全文をカバーするインラインハイライトに変換する。
+ * BlockNote のインライン style（inlineMaterial 等）に変換する。
  *
  * Phase C 設計（docs/internal/provenance-layer-design.md）:
- *   - block-level inline-type ラベルは廃止。インラインハイライトのみが referent を表す
- *   - 既存ノートを壊さないため、変換時に whole-block ハイライトを生成して同じ意味を保つ
+ *   - block-level inline-type ラベルは廃止。BlockNote の text style として永続化する
+ *   - 各 inline-type ラベルは BlockNote style として `inlineMaterial / inlineTool /
+ *     inlineAttribute / inlineOutput` に対応し、値は entityId 文字列
  *   - LabelStore は heading 用（procedure/plan/result/free.*）に純化される
  *
- * 安全策:
- *   - 該当ラベルが付いていてもブロックが見つからない場合は、ハイライト未生成で labels から削除
- *   - 既に highlights 配列がある場合は append（破壊しない）
- *   - 元のテキストが空のブロックは from=0, to=0 のハイライトとして残す（後段で空ハイライトのクリーンアップを別途行う）
+ * 変換規則:
+ *   - 該当ブロックの content[] 内の全 text inline に対応 style を付与
+ *   - 1 ブロック = 1 entityId（同 ID で集約）
+ *   - 該当ブロックが見つからない場合は label 削除のみ
+ *
+ * NOTE: C-1 で導入した `page.highlights[]` 配列は **使わず**、BlockNote ネイティブの
+ * style を真の保存先とする。`highlights[]` フィールドはスキーマ上は残るが現状未使用。
  */
 function migrateInlineLabelsToHighlightsV5(doc: GraphiumDocument): void {
   for (const page of doc.pages ?? []) {
     if (!page.labels) continue;
     const blockIndex = buildBlockIndex(page.blocks ?? []);
     const remainingLabels: Record<string, string> = {};
-    const highlights: InlineHighlight[] = page.highlights ? [...page.highlights] : [];
 
     for (const [blockId, rawLabel] of Object.entries(page.labels)) {
       if (typeof rawLabel !== "string") continue;
@@ -150,23 +153,36 @@ function migrateInlineLabelsToHighlightsV5(doc: GraphiumDocument): void {
       }
 
       const block = blockIndex.get(blockId);
-      const text = block ? extractBlockText(block) : "";
-
-      highlights.push({
-        id: `mig_${blockId}_${rawLabel}`,
-        blockId,
-        from: 0,
-        to: text.length,
-        label: rawLabel as InlineHighlight["label"],
-        entityId: `ent_${blockId}`,
-        text,
-      });
-      // labels からは消す
+      if (block) {
+        const styleKey = `inline${rawLabel[0].toUpperCase()}${rawLabel.slice(1)}`;
+        const entityId = `ent_${blockId}`;
+        applyStyleToBlockContent(block, styleKey, entityId);
+      }
+      // labels からは消す（block が見つからなくても削除）
     }
 
     page.labels = remainingLabels;
-    if (highlights.length > 0) {
-      page.highlights = highlights;
+  }
+}
+
+/**
+ * ブロックの content[] 内の text/link inline 全てに style を適用する。
+ *   - { type: "text", styles: { ... } } → styles[styleKey] = entityId
+ *   - { type: "link", content: [...] } → 配下の text にも適用
+ *   - 文字列 / image / table 等は無視
+ */
+function applyStyleToBlockContent(block: any, styleKey: string, entityId: string): void {
+  const content = block?.content;
+  if (!Array.isArray(content)) return;
+  for (const c of content) {
+    if (c?.type === "text") {
+      c.styles = { ...(c.styles ?? {}), [styleKey]: entityId };
+    } else if (c?.type === "link" && Array.isArray(c.content)) {
+      for (const lc of c.content) {
+        if (lc?.type === "text") {
+          lc.styles = { ...(lc.styles ?? {}), [styleKey]: entityId };
+        }
+      }
     }
   }
 }
@@ -190,31 +206,3 @@ function buildBlockIndex(blocks: any[]): Map<string, any> {
   return index;
 }
 
-/**
- * ブロックの content からテキストを抽出する。
- * BlockNote の InlineContent 配列を想定:
- *   - { type: "text", text: "..." } → text を連結
- *   - { type: "link", content: [...] } → 中の text を連結
- *   - 文字列の場合はそのまま
- *   - その他 (image / table 等) はテキスト 0
- */
-function extractBlockText(block: any): string {
-  const content = block?.content;
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((c: any) => {
-      if (typeof c === "string") return c;
-      if (c?.type === "text") return c.text ?? "";
-      if (c?.type === "link") return extractInlineText(c.content ?? []);
-      return "";
-    })
-    .join("");
-}
-
-function extractInlineText(inlines: any[]): string {
-  if (!Array.isArray(inlines)) return "";
-  return inlines
-    .map((c: any) => (typeof c === "string" ? c : c?.text ?? ""))
-    .join("");
-}
