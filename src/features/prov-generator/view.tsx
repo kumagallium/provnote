@@ -17,6 +17,7 @@ import ELK from "elkjs/lib/elk.bundled.js";
 import type { ProvJsonLd, ProvJsonLdNode, ProvAttribute } from "./generator";
 import { extractRelations, type FlatRelation } from "./generator";
 import { t, getDisplayLabelName } from "../../i18n";
+import { getActiveProvider } from "../../lib/storage/registry";
 
 // 後方互換
 type ProvDocument = ProvJsonLd;
@@ -494,29 +495,51 @@ function CytoscapeGraph({
     let cancelled = false;
 
     // サムネイル URL を Blob URL に変換して Cytoscape に反映
+    // local-media:// や Drive URL はアクティブなストレージプロバイダ経由で
+    // blob URL に変換し、純粋な http(s) URL は fetch でフォールバックする。
     const thumbnailNodes = cy.nodes("[thumbnailUrl]");
     const blobUrls: string[] = [];
     if (thumbnailNodes.length > 0) {
       // 順次取得（429 レート制限を回避）
       (async () => {
+        const provider = getActiveProvider();
         for (const node of thumbnailNodes.toArray()) {
           if (cancelled) break;
           const url = node.data("thumbnailUrl") as string;
+          if (!url) continue;
           if (url.startsWith("blob:") || url.startsWith("data:")) continue;
+
+          let blobUrl: string | null = null;
+
+          // まずストレージプロバイダで解決を試みる
           try {
-            const res = await fetch(url);
-            if (!res.ok) continue;
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            blobUrls.push(blobUrl);
-            if (!cancelled) {
-              cy.batch(() => { node.data("thumbnailUrl", blobUrl); });
+            const fileId = provider.extractFileId(url);
+            if (fileId) {
+              blobUrl = await provider.getMediaBlobUrl(fileId);
             }
           } catch {
-            // ネットワークエラーはスキップ
+            // プロバイダ解決失敗 → fetch フォールバックに進む
+          }
+
+          // フォールバック: 純粋な http(s) URL を直接 fetch
+          if (!blobUrl) {
+            try {
+              const res = await fetch(url);
+              if (!res.ok) continue;
+              const blob = await res.blob();
+              blobUrl = URL.createObjectURL(blob);
+              blobUrls.push(blobUrl);
+            } catch {
+              // ネットワークエラーはスキップ
+              continue;
+            }
+          }
+
+          if (!cancelled && blobUrl) {
+            cy.batch(() => { node.data("thumbnailUrl", blobUrl); });
           }
         }
-        if (!cancelled && blobUrls.length > 0) {
+        if (!cancelled) {
           cy.style().update();
         }
       })();
