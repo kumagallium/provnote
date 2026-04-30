@@ -535,6 +535,180 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     }
   }
 
+  // ── インラインハイライト → Entity / Attribute（Phase D-1, 2026-04-30） ──
+  //
+  // BlockNote のインライン style (`inlineMaterial / inlineTool / inlineAttribute /
+  // inlineOutput`) を読み取り、PROV Entity / Attribute を生成する。
+  //
+  // - 同 entityId を持つ複数の text inline は 1 つの Entity に集約（テキスト連結）
+  // - material / tool → prov:used
+  // - output → prov:wasGeneratedBy
+  // - attribute (Parameter) → 同ブロック内で最寄りの Entity ハイライトに従属、なければ親 Activity
+  //
+  // 実装メモ:
+  //   - block-level [material]/[tool]/[output]/[attribute] は legacy として共存可能だが、
+  //     Phase C-2 のマイグレーションでインライン style に変換されているはず
+  //   - ID は `inline_<label>_<entityId>` で安定させ、衝突を防ぐ
+  type InlineHighlightSegment = {
+    blockId: string;
+    label: CoreLabel;
+    entityId: string;
+    text: string;
+    /** ブロック内の char offset 開始（最寄り Entity 検索用） */
+    charStart: number;
+    /** ブロック内の char offset 終了 */
+    charEnd: number;
+  };
+
+  const inlineSegments: InlineHighlightSegment[] = [];
+  const STYLE_TO_LABEL: Record<string, CoreLabel> = {
+    inlineMaterial: "material",
+    inlineTool: "tool",
+    inlineAttribute: "attribute",
+    inlineOutput: "output",
+  };
+
+  for (const block of flatBlocks) {
+    const content = block?.content;
+    if (!Array.isArray(content)) continue;
+    let charOffset = 0;
+    const collectFromText = (textInline: any) => {
+      const text: string = typeof textInline?.text === "string" ? textInline.text : "";
+      const styles = textInline?.styles ?? {};
+      const len = text.length;
+      for (const styleKey of Object.keys(STYLE_TO_LABEL)) {
+        const entityId = styles[styleKey];
+        if (typeof entityId === "string" && entityId) {
+          inlineSegments.push({
+            blockId: block.id,
+            label: STYLE_TO_LABEL[styleKey],
+            entityId,
+            text,
+            charStart: charOffset,
+            charEnd: charOffset + len,
+          });
+        }
+      }
+      charOffset += len;
+    };
+    for (const c of content) {
+      if (c?.type === "text") {
+        collectFromText(c);
+      } else if (c?.type === "link" && Array.isArray(c.content)) {
+        for (const lc of c.content) {
+          if (lc?.type === "text") collectFromText(lc);
+        }
+      } else if (typeof c === "string") {
+        charOffset += c.length;
+      }
+    }
+  }
+
+  // entityId × ブロック の単位で Entity / Attribute をまとめる
+  type AggregatedEntity = {
+    label: CoreLabel;
+    entityId: string;
+    blockId: string;
+    text: string;
+    /** このブロック内での文字範囲（最寄り Entity 検索用） */
+    charStart: number;
+    charEnd: number;
+  };
+  const aggregatedByKey = new Map<string, AggregatedEntity>();
+  for (const seg of inlineSegments) {
+    const key = `${seg.blockId}::${seg.label}::${seg.entityId}`;
+    const existing = aggregatedByKey.get(key);
+    if (existing) {
+      existing.text += seg.text;
+      existing.charStart = Math.min(existing.charStart, seg.charStart);
+      existing.charEnd = Math.max(existing.charEnd, seg.charEnd);
+    } else {
+      aggregatedByKey.set(key, {
+        label: seg.label,
+        entityId: seg.entityId,
+        blockId: seg.blockId,
+        text: seg.text,
+        charStart: seg.charStart,
+        charEnd: seg.charEnd,
+      });
+    }
+  }
+
+  const aggregatedList = Array.from(aggregatedByKey.values());
+
+  // 1) Input / Tool / Output → Entity ノード + edge
+  for (const agg of aggregatedList) {
+    if (agg.label === "attribute") continue; // Parameter は後段で処理
+    const nodeId = `inline_${agg.label}_${agg.entityId}`;
+    if (!nodes.find((n) => n["@id"] === nodeId)) {
+      nodes.push({
+        "@id": nodeId,
+        "@type": "prov:Entity",
+        label: agg.text || agg.entityId,
+        blockId: agg.blockId,
+        entitySubtype: LABEL_TO_ENTITY_SUBTYPE[agg.label],
+      });
+    }
+    // 同 entityId の複数ブロック分は edge を重ねる
+    for (const actId of getActivityIdsForScope(agg.blockId)) {
+      if (agg.label === "output") {
+        relations.push({ "@type": "prov:wasGeneratedBy", from: nodeId, to: actId });
+      } else {
+        relations.push({ "@type": "prov:used", from: actId, to: nodeId });
+      }
+    }
+  }
+
+  // 2) Parameter (attribute) → 隣接 Entity の attribute、無ければ Activity の attribute
+  //    隣接判定: 同ブロック内の Entity ハイライトのうち、Parameter の char 範囲との
+  //    最短距離（重なり=0、隣接=1、離れる=距離）を優先
+  for (const agg of aggregatedList) {
+    if (agg.label !== "attribute") continue;
+
+    const sameBlockEntities = aggregatedList.filter(
+      (other) => other.blockId === agg.blockId && other.label !== "attribute",
+    );
+
+    let chosenNodeId: string | null = null;
+    if (sameBlockEntities.length > 0) {
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (const other of sameBlockEntities) {
+        const otherNodeId = `inline_${other.label}_${other.entityId}`;
+        // 範囲距離: 重なりは 0、それ以外は最短ギャップ
+        const overlap = !(agg.charEnd <= other.charStart || other.charEnd <= agg.charStart);
+        const dist = overlap
+          ? 0
+          : Math.min(
+              Math.abs(agg.charStart - other.charEnd),
+              Math.abs(other.charStart - agg.charEnd),
+            );
+        if (dist < bestDist) {
+          bestDist = dist;
+          chosenNodeId = otherNodeId;
+        }
+      }
+    }
+
+    const attrEntry = { label: agg.text || agg.entityId, blockId: agg.blockId };
+
+    if (chosenNodeId) {
+      const target = nodes.find((n) => n["@id"] === chosenNodeId);
+      if (target) {
+        if (!target.attributes) target.attributes = [];
+        target.attributes.push(attrEntry);
+      }
+    } else {
+      // 同ブロック内に Entity が無い → 親 Activity に attach
+      for (const actId of getActivityIdsForScope(agg.blockId)) {
+        const actNode = nodes.find((n) => n["@id"] === actId);
+        if (actNode) {
+          if (!actNode.attributes) actNode.attributes = [];
+          actNode.attributes.push(attrEntry);
+        }
+      }
+    }
+  }
+
   // ── informed_by → 前手順の結果を経由してリンク ──
   for (const link of validLinks) {
     if (link.type === "informed_by") {

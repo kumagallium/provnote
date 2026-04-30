@@ -1262,3 +1262,190 @@ describe("子ブロック（インデント）→ 親 Entity の属性", () => {
     expect(tempAttrs).toHaveLength(1);
   });
 });
+
+// ──────────────────────────────────────────────
+// Phase D-1: インラインハイライトから PROV Entity / Attribute 生成
+// ──────────────────────────────────────────────
+describe("インラインハイライト → PROV Entity / Attribute (Phase D-1)", () => {
+  const styled = (text: string, styles: Record<string, string | boolean> = {}) => ({
+    type: "text",
+    text,
+    styles,
+  });
+
+  it("inlineMaterial 1 つ → Entity (prov:Entity, subtype=material) + prov:used", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [
+          styled("NaCl", { inlineMaterial: "ent_nacl" }),
+          styled(" を 5g 投入", {}),
+        ],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(ent).toBeDefined();
+    expect(ent!["@type"]).toBe("prov:Entity");
+    expect(ent!["rdfs:label"]).toBe("NaCl");
+    expect(ent!["graphium:entityType"]).toBe("material");
+
+    const acts = doc["@graph"].find((n) => n["@id"] === "activity_h-step");
+    const used = (acts as any)["prov:used"] ?? [];
+    expect(used.some((u: any) => u["@id"] === "inline_material_ent_nacl")).toBe(true);
+  });
+
+  it("inlineOutput → prov:wasGeneratedBy", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "p-out",
+        type: "paragraph",
+        content: [
+          styled("透明溶液", { inlineOutput: "ent_sol" }),
+          styled(" が得られた"),
+        ],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_output_ent_sol");
+    expect(ent).toBeDefined();
+    expect(ent!["prov:wasGeneratedBy"]?.["@id"]).toBe("activity_h-step");
+  });
+
+  it("inlineAttribute は隣接 Entity の attribute として埋め込まれる", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [
+          styled("NaCl", { inlineMaterial: "ent_nacl" }),
+          styled(" "),
+          styled("5g", { inlineAttribute: "ent_5g" }),
+          styled(" を投入"),
+        ],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const nacl = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(nacl).toBeDefined();
+    const attrs = nacl!["graphium:attributes"] ?? [];
+    expect(attrs.some((a: any) => a["rdfs:label"] === "5g")).toBe(true);
+
+    // attribute は独立 Entity ノードを作らない
+    expect(doc["@graph"].find((n) => n["@id"] === "inline_attribute_ent_5g")).toBeUndefined();
+  });
+
+  it("inlineAttribute が同ブロックに Entity を持たない時は Activity の attribute になる", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [
+          styled("80°C", { inlineAttribute: "ent_temp" }),
+          styled(" の条件で実施"),
+        ],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const act = doc["@graph"].find((n) => n["@id"] === "activity_h-step");
+    expect(act).toBeDefined();
+    const attrs = act!["graphium:attributes"] ?? [];
+    expect(attrs.some((a: any) => a["rdfs:label"] === "80°C")).toBe(true);
+  });
+
+  it("同 entityId の複数 text inline は 1 Entity に集約され、テキストが連結される", () => {
+    const blocks = [
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+      {
+        id: "p-body",
+        type: "paragraph",
+        content: [
+          styled("Na", { inlineMaterial: "ent_nacl" }),
+          styled("Cl", { inlineMaterial: "ent_nacl" }),
+          styled(" を投入"),
+        ],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_nacl");
+    expect(ent).toBeDefined();
+    expect(ent!["rdfs:label"]).toBe("NaCl");
+  });
+
+  it("Activity スコープ外（procedure 見出し前）のインラインは Activity edge を持たない", () => {
+    const blocks = [
+      {
+        id: "p-orphan",
+        type: "paragraph",
+        content: [styled("孤立 NaCl", { inlineMaterial: "ent_orph" })],
+        children: [],
+      },
+      {
+        id: "h-step",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step1" }],
+        children: [],
+      },
+    ];
+    const labels = new Map([["h-step", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const ent = doc["@graph"].find((n) => n["@id"] === "inline_material_ent_orph");
+    expect(ent).toBeDefined();
+    // Activity 側の prov:used に含まれない
+    const act = doc["@graph"].find((n) => n["@id"] === "activity_h-step") as any;
+    const used = act?.["prov:used"] ?? [];
+    expect(used.some((u: any) => u["@id"] === "inline_material_ent_orph")).toBe(false);
+  });
+});
