@@ -495,6 +495,16 @@ export function useFileManager(authenticated: boolean) {
         const currentFileId = activeFileIdRef.current;
         // ファイル一覧に存在するか確認（ゴミ箱内のファイルへの保存を防止）
         const fileExists = currentFileId && files.some((f) => f.id === currentFileId);
+        // ファイル一覧未ロード中は currentFileId が一覧に無いように見える。
+        // ここで「新規作成」分岐に落ちると同じノートの重複が作られるので、
+        // 一覧読み込み完了まで保存をスキップする。
+        if (currentFileId && !fileExists && filesLoading) {
+          console.warn(
+            "[handleSave] files list not loaded yet; skipping save to avoid duplicate creation",
+            { activeFileId: currentFileId },
+          );
+          return;
+        }
         if (currentFileId && fileExists) {
           // 既存ファイルを上書き
           await saveFile(currentFileId, doc);
@@ -558,7 +568,7 @@ export function useFileManager(authenticated: boolean) {
         setSaving(false);
       }
     },
-    [setActiveFileId, files]
+    [setActiveFileId, files, filesLoading]
   );
 
   // 派生ノートを別ファイルとして作成
