@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.5.1](https://github.com/kumagallium/Graphium/compare/v0.5.0...v0.5.1) - 2026-05-01
+- feat: unified link & merge UI for inline highlights and prev-step by @kumagallium in https://github.com/kumagallium/Graphium/pull/194
+- fix: skip auto-save while file list is loading by @kumagallium in https://github.com/kumagallium/Graphium/pull/196
+
 ## [v0.5.0](https://github.com/kumagallium/Graphium/compare/v0.4.0...v0.5.0) - 2026-04-30
 - Phase B: h1 step Activity + hashtag context filter by @kumagallium in https://github.com/kumagallium/Graphium/pull/183
 - Phase C-1: InlineHighlight schema + v4→v5 migration by @kumagallium in https://github.com/kumagallium/Graphium/pull/185
