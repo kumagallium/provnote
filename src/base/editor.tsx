@@ -9,7 +9,35 @@ import {
   getDefaultReactSlashMenuItems,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { BlockNoteSchema, defaultBlockSpecs, defaultStyleSpecs } from "@blocknote/core";
+import { BlockNoteSchema, createCodeBlockSpec, defaultBlockSpecs, defaultStyleSpecs } from "@blocknote/core";
+import { codeBlockOptions } from "@blocknote/code-block";
+
+/**
+ * シンタックスハイライトのテーマ:
+ * @blocknote/code-block の codeBlockOptions は github-dark/github-light を内蔵するが、
+ * github-light は彩度高め（赤・紫）で Crucible の落ち着いた自然色パレットに馴染まない。
+ * design.md の「高彩度の Tailwind デフォルト色を避け、森・大地・空をイメージした自然色で統一」
+ * 方針に合わせ、低彩度の `min-light` をロードして先頭に置く。
+ *
+ * prosemirror-highlight の shiki パーサは getLoadedThemes()[0] を採用するため、
+ * ロード後に min-light を先頭に並べ替える。
+ */
+const lightCodeBlock = createCodeBlockSpec({
+  ...codeBlockOptions,
+  createHighlighter: async () => {
+    const h = await codeBlockOptions.createHighlighter!();
+    const minLight = await import("@shikijs/themes/min-light");
+    await h.loadTheme(minLight.default);
+    const original = h.getLoadedThemes.bind(h);
+    h.getLoadedThemes = () => {
+      const all = original();
+      const preferred = all.filter((t) => t === "min-light");
+      const others = all.filter((t) => t !== "min-light");
+      return [...preferred, ...others];
+    };
+    return h;
+  },
+});
 import { inlineLabelStyleSpecs } from "@features/inline-label/styles";
 import { filterSuggestionItems as _filterSuggestionItems } from "@blocknote/core/extensions";
 import { FC, useCallback, useEffect, useMemo } from "react";
@@ -87,6 +115,7 @@ export function SandboxEditor({
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
+      codeBlock: lightCodeBlock,
       ...customSpecs,
     } as any,
     styleSpecs: {
