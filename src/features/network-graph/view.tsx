@@ -79,13 +79,16 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       "overlay-opacity": 0.08,
     },
   },
-  // ホバー中のノード
+  // ホバー中のノード（フルラベルに切り替え）
   {
     selector: "node.hover",
     style: {
       "border-width": 3,
       "overlay-opacity": 0.06,
       "overlay-color": "#000",
+      label: "data(fullLabel)" as any,
+      "font-weight": "bold" as any,
+      "z-index": 999,
     },
   },
   // ホバーノードの隣接ノード
@@ -181,12 +184,18 @@ export function NetworkGraphPanel({
     // Cytoscape 要素を構築
     const elements: cytoscape.ElementDefinition[] = [];
 
+    // ラベルが長いとノード周辺で重なるので、表示用に省略する。フルタイトルはツールチップで読める。
+    const truncate = (s: string, max = 18): string =>
+      [...s].length > max ? `${[...s].slice(0, max).join("")}…` : s;
+
     for (const node of data.nodes) {
       const color = getNodeColor(node.hop, node.isCurrent, node.isWiki);
+      const baseTitle = node.isWiki ? `🤖 ${node.title}` : node.title;
       elements.push({
         data: {
           id: node.id,
-          label: node.isWiki ? `🤖 ${node.title}` : node.title,
+          label: truncate(baseTitle, 18),
+          fullLabel: baseTitle,
           color,
           borderColor: getBorderColor(node.hop, node.isCurrent, node.isWiki),
           size: getNodeSize(node.isCurrent),
@@ -218,6 +227,8 @@ export function NetworkGraphPanel({
       elements,
       style: cytoscapeStyle,
       layout: { name: "preset" },
+      // ラベル衝突を抑えるため、ホバー時にフルラベルを表示する設定
+      // （ノード自体の label は data.label = 省略形）
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
@@ -227,6 +238,8 @@ export function NetworkGraphPanel({
     });
 
     // fcose レイアウト実行（要素描画後にアニメーション開始）
+    // ラベル重なり対策: ノード反発と理想エッジ長を大きめにとってノード間距離を確保する。
+    // 拡大表示時は、より広い領域を活用したいので少し緩めに散らす。
     const layout = cy.layout({
       name: "fcose",
       animate: true,
@@ -234,13 +247,13 @@ export function NetworkGraphPanel({
       animationEasing: "ease-out-cubic" as any,
       quality: "default",
       randomize: true,
-      nodeRepulsion: 6000,
-      idealEdgeLength: 120,
-      edgeElasticity: 0.45,
+      nodeRepulsion: 18000,
+      idealEdgeLength: 180,
+      edgeElasticity: 0.35,
       gravity: 0.25,
       gravityRange: 3.8,
-      nodeSeparation: 80,
-      padding: 40,
+      nodeSeparation: 140,
+      padding: 60,
     } as any);
     layout.on("layoutstop", () => {
       cy.fit(undefined, 20);
