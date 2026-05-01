@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles, Trash2 } from "lucide-react";
 import { AiUpgradeNotice } from "./AiUpgradeNotice";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
@@ -61,6 +61,12 @@ export type FileSidebarProps = {
    * 渡されると右上に折り畳みボタンが表示される。モバイル Sheet では undefined のまま。
    */
   onCollapse?: () => void;
+  /** ゴミ箱を開く */
+  onShowTrash?: () => void;
+  /** ゴミ箱がアクティブか */
+  trashActive?: boolean;
+  /** ゴミ箱内のノート数 */
+  trashCount?: number;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -112,6 +118,9 @@ export function FileSidebar({
   onShowSkillList,
   skillActive = false,
   onCollapse,
+  onShowTrash,
+  trashActive = false,
+  trashCount = 0,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -360,6 +369,22 @@ export function FileSidebar({
 
       {/* フッター */}
       <div className="p-3 border-t border-sidebar-border space-y-1">
+        {onShowTrash && (
+          <button
+            onClick={onShowTrash}
+            className={`w-full flex items-center gap-1.5 text-xs transition-colors ${
+              trashActive
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Trash2 size={12} className="shrink-0" />
+            <span className="flex-1 text-left">{t("nav.trash")}</span>
+            {trashCount > 0 && (
+              <span className="text-xs">{trashCount}</span>
+            )}
+          </button>
+        )}
         <button
           onClick={onShowSettings}
           className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"

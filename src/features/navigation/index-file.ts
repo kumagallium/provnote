@@ -20,7 +20,11 @@ import { normalizeLabel } from "../context-label/labels";
 //     LabelGalleryView で「インプット → たまねぎ 12件 …」のような referent 単位の
 //     集計を可能にする。inlineLabelTypes は派生情報なので廃止し、
 //     必要時に inlineLabels から導出する。
-const INDEX_SCHEMA_VERSION = 9;
+// v10: deletedAt / trashedAt フィールド追加（ゴミ箱機能）
+//      ノートを「ゴミ箱に送る」と deletedAt が ISO 文字列で入る。
+//      ファイル本体は削除せず、メイン一覧・検索・picker・グラフからは除外し、
+//      ゴミ箱ビューでのみ表示・復元・完全削除できる。
+const INDEX_SCHEMA_VERSION = 10;
 
 export type GraphiumIndex = {
   version: number;
@@ -82,6 +86,12 @@ export type NoteIndexEntry = {
     text: string;
     entityId: string;
   }[];
+  /**
+   * ゴミ箱に入れた日時（ISO 文字列）。
+   * セットされていればこのノートはゴミ箱内とみなし、メイン一覧・検索・picker・グラフから除外する。
+   * 復元すると undefined に戻る。完全削除でエントリ自体が除去される。
+   */
+  deletedAt?: string;
 };
 
 // ── Drive API ──
@@ -626,7 +636,7 @@ export function updateIndexEntry(
   return { ...index, updatedAt: new Date().toISOString(), notes };
 }
 
-// ノート削除時: エントリを除去
+// ノート削除時: エントリを除去（完全削除）
 export function removeIndexEntry(
   index: GraphiumIndex,
   noteId: string,
@@ -636,4 +646,64 @@ export function removeIndexEntry(
     updatedAt: new Date().toISOString(),
     notes: index.notes.filter((n) => n.noteId !== noteId),
   };
+}
+
+// ゴミ箱に送る: deletedAt をセットする（エントリは残す）
+export function softDeleteIndexEntry(
+  index: GraphiumIndex,
+  noteId: string,
+): GraphiumIndex {
+  const now = new Date().toISOString();
+  return {
+    ...index,
+    updatedAt: now,
+    notes: index.notes.map((n) =>
+      n.noteId === noteId ? { ...n, deletedAt: now } : n
+    ),
+  };
+}
+
+// ゴミ箱から復元: deletedAt を消す
+export function restoreIndexEntry(
+  index: GraphiumIndex,
+  noteId: string,
+): GraphiumIndex {
+  return {
+    ...index,
+    updatedAt: new Date().toISOString(),
+    notes: index.notes.map((n) => {
+      if (n.noteId !== noteId) return n;
+      const { deletedAt: _omit, ...rest } = n;
+      return rest;
+    }),
+  };
+}
+
+// 通常表示用: ゴミ箱内エントリを除外
+export function getActiveNotes(index: GraphiumIndex | null): NoteIndexEntry[] {
+  if (!index) return [];
+  return index.notes.filter((n) => !n.deletedAt);
+}
+
+// ゴミ箱表示用: ゴミ箱内エントリのみ
+export function getTrashedNotes(index: GraphiumIndex | null): NoteIndexEntry[] {
+  if (!index) return [];
+  return index.notes.filter((n) => n.deletedAt);
+}
+
+/**
+ * 指定ノートを参照しているノートを列挙する（参照警告・参照数カラム用）。
+ * outgoingLinks が `targetNoteId === noteId` を含むエントリを返す。
+ * ゴミ箱内ノートからの参照は除外する（ゴミ箱内同士の循環は考慮しない）。
+ */
+export function findIncomingReferences(
+  index: GraphiumIndex | null,
+  noteId: string,
+): NoteIndexEntry[] {
+  if (!index) return [];
+  return index.notes.filter((n) => {
+    if (n.noteId === noteId) return false;
+    if (n.deletedAt) return false;
+    return n.outgoingLinks.some((link) => link.targetNoteId === noteId);
+  });
 }

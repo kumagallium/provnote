@@ -1,7 +1,7 @@
 // ファイル管理 hook
 // NoteApp のファイル一覧/キャッシュ/開く/新規/保存/削除/派生/グラフ/インデックスを集約
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphiumFile, GraphiumDocument, WikiKind } from "../lib/document-types";
 import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
@@ -22,6 +22,8 @@ import {
   readIndexFile,
   updateIndexEntry,
   removeIndexEntry,
+  softDeleteIndexEntry,
+  restoreIndexEntry,
   saveIndexFile,
   buildIndexEntry,
   type RecentNote,
@@ -121,8 +123,25 @@ export function useFileManager(authenticated: boolean) {
   // 最近のノート履歴
   const [recentNotes, setRecentNotes] = useState<RecentNote[]>(() => getRecentNotes());
   // ノートインデックス（.graphium-index.json）
-  const [noteIndex, setNoteIndex] = useState<GraphiumIndex | null>(null);
+  // rawNoteIndex は ゴミ箱内のエントリも含む全件（ゴミ箱ビューはこちらを使う）
+  // noteIndex は deletedAt 付きエントリを除外したビュー（メイン一覧・検索・picker・グラフが使う）
+  const [rawNoteIndex, setRawNoteIndex] = useState<GraphiumIndex | null>(null);
   const noteIndexRef = useRef<GraphiumIndex | null>(null);
+  // 既存呼び出しを破壊しないため setNoteIndex 名を維持（ref と raw state を同期するラッパ）
+  const setNoteIndex = useCallback((next: GraphiumIndex | null) => {
+    noteIndexRef.current = next;
+    setRawNoteIndex(next);
+  }, []);
+  // メイン一覧用: deletedAt エントリを除外した index ビュー
+  const noteIndex: GraphiumIndex | null = useMemo(() => {
+    if (!rawNoteIndex) return null;
+    return { ...rawNoteIndex, notes: rawNoteIndex.notes.filter((n) => !n.deletedAt) };
+  }, [rawNoteIndex]);
+  // ゴミ箱用: deletedAt エントリのみ
+  const trashedNotes = useMemo(
+    () => (rawNoteIndex ? rawNoteIndex.notes.filter((n) => n.deletedAt) : []),
+    [rawNoteIndex]
+  );
   // 派生ノート作成中フラグ
   const [deriving, setDeriving] = useState(false);
   // メディアインデックス（.graphium-media-index.json）
@@ -259,7 +278,12 @@ export function useFileManager(authenticated: boolean) {
           }
         });
       }
-      setNoteGraphData(buildNoteGraph(currentId, fileList, docCacheRef.current));
+      // ゴミ箱内のノートはグラフからも除外
+      const trashedIds = new Set(
+        (noteIndexRef.current?.notes ?? []).filter((n) => n.deletedAt).map((n) => n.noteId)
+      );
+      const visibleFiles = fileList.filter((f) => !trashedIds.has(f.id));
+      setNoteGraphData(buildNoteGraph(currentId, visibleFiles, docCacheRef.current));
     },
     []
   );
@@ -757,15 +781,72 @@ export function useFileManager(authenticated: boolean) {
     [activeDoc, handleOpenFile, setActiveFileId],
   );
 
-  // 削除（関連ノートのリンク情報もクリーンアップ）
+  // ゴミ箱に送る（ソフトデリート）
+  // - インデックスに deletedAt をセットするだけ。ファイル本体・他ノートの参照は保持する
+  // - 復元時に元の状態を取り戻せるよう、関連ノートのリンクには触らない
+  // - Recent からは除去し、開いていれば閉じる
   const handleDelete = useCallback(
     async (fileId: string) => {
       try {
-        // 削除対象のドキュメントを取得
-        const targetDoc = docCacheRef.current.get(fileId);
+        // 最近のノートからは除く
+        setRecentNotes(removeFromRecent(fileId));
+        // インデックスに deletedAt をセット
+        if (noteIndexRef.current) {
+          const updated = softDeleteIndexEntry(noteIndexRef.current, fileId);
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+        // 開いていれば閉じる
+        if (activeFileId === fileId) {
+          setActiveFileId(null);
+          setActiveDoc(null);
+          setEditorKey((k) => k + 1);
+        }
+      } catch (err) {
+        console.error("ゴミ箱への移動に失敗:", err);
+      }
+    },
+    [activeFileId, setActiveFileId]
+  );
+
+  // ゴミ箱から復元（deletedAt を消す）
+  const handleRestore = useCallback(
+    async (fileId: string) => {
+      try {
+        if (noteIndexRef.current) {
+          const updated = restoreIndexEntry(noteIndexRef.current, fileId);
+          noteIndexRef.current = updated;
+          setNoteIndex(updated);
+          saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+        }
+      } catch (err) {
+        console.error("ゴミ箱からの復元に失敗:", err);
+      }
+    },
+    []
+  );
+
+  // 完全削除（OS のゴミ箱へ送る or プロバイダ固有の最終削除）
+  // - 関連ノートのリンクをクリーンアップしてから storage().deleteFile を呼ぶ
+  // - desktop では Tauri 側で trash クレートが OS ゴミ箱に送る
+  // - web (IndexedDB) / server-fs は即時消去、Google Drive は Drive のゴミ箱
+  const handlePermanentDelete = useCallback(
+    async (fileId: string) => {
+      try {
+        // 削除対象のドキュメントを取得（参照クリーンアップ用）
+        let targetDoc = docCacheRef.current.get(fileId);
+        if (!targetDoc) {
+          // ゴミ箱から完全削除する場合、キャッシュにないことがある
+          try {
+            targetDoc = await loadFile(fileId);
+          } catch {
+            // 既にファイルが無くても続行
+          }
+        }
 
         if (targetDoc) {
-          // 1. 派生元ノートの noteLinks から削除対象への参照を除去
+          // 1. 派生元ノートの noteLinks から参照を除去
           if (targetDoc.derivedFromNoteId) {
             const parentDoc = docCacheRef.current.get(targetDoc.derivedFromNoteId);
             if (parentDoc?.noteLinks) {
@@ -804,9 +885,8 @@ export function useFileManager(authenticated: boolean) {
         docCacheRef.current.delete(fileId);
 
         await deleteFile(fileId);
-        // 最近のノートからも除去
         setRecentNotes(removeFromRecent(fileId));
-        // インデックスから除去
+        // インデックスから除去（完全削除なのでエントリごと消す）
         if (noteIndexRef.current) {
           const updated = removeIndexEntry(noteIndexRef.current, fileId);
           noteIndexRef.current = updated;
@@ -827,7 +907,7 @@ export function useFileManager(authenticated: boolean) {
         }
         await refreshFiles();
       } catch (err) {
-        console.error("削除に失敗:", err);
+        console.error("完全削除に失敗:", err);
       }
     },
     [activeFileId, refreshFiles, setActiveFileId]
@@ -1215,6 +1295,8 @@ export function useFileManager(authenticated: boolean) {
     setShowNoteList,
     recentNotes,
     noteIndex,
+    rawNoteIndex,
+    trashedNotes,
     mediaIndex,
     activeAssetType,
     activeLabel,
@@ -1231,6 +1313,8 @@ export function useFileManager(authenticated: boolean) {
     handleDeriveWholeNote,
     handleAiDeriveNote,
     handleDelete,
+    handleRestore,
+    handlePermanentDelete,
     getCachedDoc,
     loadDoc,
     handleUploadMedia,
