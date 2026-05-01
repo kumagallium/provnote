@@ -6,6 +6,7 @@
 // ──────────────────────────────────────────────
 
 import { CORE_LABELS, normalizeLabel, classifyLabel, getHeadingLabelRole, LABEL_TO_ENTITY_SUBTYPE, type CoreLabel } from "../context-label/labels";
+import { parseAttributeBinding, PARENT_ACTIVITY_MARKER } from "../inline-label/attribute-binding";
 import type { BlockLink } from "../block-link/link-types";
 import { isProvLink } from "../block-link/link-types";
 import { createWarning, type ProvWarning } from "./errors";
@@ -597,6 +598,11 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     charStart: number;
     /** ブロック内の char offset 終了 */
     charEnd: number;
+    /**
+     * Phase F: attribute のみ。明示指定された親 entity / "activity" / null。
+     * null は最寄り Entity 推論（旧挙動）。
+     */
+    parentOverride?: string | null;
   };
 
   const inlineSegments: InlineHighlightSegment[] = [];
@@ -616,15 +622,25 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       const styles = textInline?.styles ?? {};
       const len = text.length;
       for (const styleKey of Object.keys(STYLE_TO_LABEL)) {
-        const entityId = styles[styleKey];
-        if (typeof entityId === "string" && entityId) {
+        const raw = styles[styleKey];
+        if (typeof raw === "string" && raw) {
+          const labelKind = STYLE_TO_LABEL[styleKey];
+          let entityId: string = raw;
+          let parentOverride: string | null = null;
+          if (labelKind === "attribute") {
+            const b = parseAttributeBinding(raw);
+            entityId = b.entityId;
+            parentOverride = b.parentEntityId;
+            if (!entityId) continue;
+          }
           inlineSegments.push({
             blockId: block.id,
-            label: STYLE_TO_LABEL[styleKey],
+            label: labelKind,
             entityId,
             text,
             charStart: charOffset,
             charEnd: charOffset + len,
+            parentOverride,
           });
         }
       }
@@ -656,6 +672,8 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     mediaUrl?: string;
     /** メディアブロック由来の場合のメディア種別 (image/video/audio/file/pdf) */
     mediaType?: string;
+    /** Phase F: attribute のみ。明示指定 parent。null/undefined は最寄り推論。 */
+    parentOverride?: string | null;
   };
   const aggregatedByKey = new Map<string, AggregatedEntity>();
   for (const seg of inlineSegments) {
@@ -665,6 +683,10 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       existing.text += seg.text;
       existing.charStart = Math.min(existing.charStart, seg.charStart);
       existing.charEnd = Math.max(existing.charEnd, seg.charEnd);
+      // 後勝ちで parentOverride を上書き（同 entity に複数 segment がある場合）
+      if (seg.parentOverride !== undefined && seg.parentOverride !== null) {
+        existing.parentOverride = seg.parentOverride;
+      }
     } else {
       aggregatedByKey.set(key, {
         label: seg.label,
@@ -673,6 +695,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         text: seg.text,
         charStart: seg.charStart,
         charEnd: seg.charEnd,
+        parentOverride: seg.parentOverride ?? null,
       });
     }
   }
@@ -787,7 +810,8 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
   }
 
   // 2) Parameter (attribute) → 隣接 Entity の attribute、無ければ Activity の attribute
-  //    隣接判定: 同ブロック内の Entity ハイライトのうち、Parameter の char 範囲との
+  //    Phase F: parentOverride（明示指定）があればそれを最優先。
+  //    隣接判定（fallback）: 同ブロック内の Entity ハイライトのうち、Parameter の char 範囲との
   //    最短距離（重なり=0、隣接=1、離れる=距離）を優先
   for (const agg of aggregatedList) {
     if (agg.label !== "attribute") continue;
@@ -797,7 +821,27 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
     );
 
     let chosenNodeId: string | null = null;
-    if (sameBlockEntities.length > 0) {
+    let bindToActivity = false;
+
+    // Phase F: 明示指定 parent
+    if (agg.parentOverride === PARENT_ACTIVITY_MARKER) {
+      bindToActivity = true;
+    } else if (agg.parentOverride) {
+      // 同ブロック内 → 他ブロック の順で該当 Entity を探す（cross-block 紐付け対応）
+      const explicit =
+        sameBlockEntities.find((o) => o.entityId === agg.parentOverride) ??
+        aggregatedList.find(
+          (o) =>
+            o.label !== "attribute" && o.entityId === agg.parentOverride,
+        );
+      if (explicit) {
+        chosenNodeId = nodeIdFor(explicit);
+      }
+      // 見つからない場合は fallback として最寄り推論に落ちる
+    }
+
+    // fallback: 最寄り推論
+    if (!chosenNodeId && !bindToActivity && sameBlockEntities.length > 0) {
       let bestDist = Number.POSITIVE_INFINITY;
       for (const other of sameBlockEntities) {
         const otherNodeId = nodeIdFor(other);
@@ -825,7 +869,7 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
         target.attributes.push(attrEntry);
       }
     } else {
-      // 同ブロック内に Entity が無い → 親 Activity に attach
+      // bindToActivity または 同ブロック内に Entity が無い → 親 Activity に attach
       for (const actId of getActivityIdsForScope(agg.blockId)) {
         const actNode = nodes.find((n) => n["@id"] === actId);
         if (actNode) {

@@ -15,6 +15,11 @@
 // 明示的な merge UI は別途検討。
 // ──────────────────────────────────────────────
 
+import {
+  parseAttributeBinding,
+  formatAttributeBinding,
+} from "./attribute-binding";
+
 const INLINE_STYLE_TO_ROLE: Record<string, "material" | "tool" | "attribute" | "output"> = {
   inlineMaterial: "material",
   inlineTool: "tool",
@@ -61,10 +66,22 @@ export function regenInlineEntitiesInBlocks(
     let changed = false;
     const next: Record<string, unknown> = { ...styles };
     for (const styleKey of Object.keys(INLINE_STYLE_TO_ROLE)) {
-      const oldId = next[styleKey];
-      if (typeof oldId === "string" && oldId) {
-        next[styleKey] = remapEntityId(styleKey, oldId);
-        changed = true;
+      const oldRaw = next[styleKey];
+      if (typeof oldRaw === "string" && oldRaw) {
+        if (styleKey === "inlineAttribute") {
+          // 親 Entity 明示指定はコピー範囲外を指す可能性があるため破棄して最寄り推論に戻す
+          const { entityId } = parseAttributeBinding(oldRaw);
+          if (entityId) {
+            next[styleKey] = formatAttributeBinding({
+              entityId: remapEntityId(styleKey, entityId),
+              parentEntityId: null,
+            });
+            changed = true;
+          }
+        } else {
+          next[styleKey] = remapEntityId(styleKey, oldRaw);
+          changed = true;
+        }
       }
     }
     return changed ? next : null;

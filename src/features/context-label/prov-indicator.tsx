@@ -25,6 +25,10 @@ import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
 import { useT, getDisplayLabel } from "../../i18n";
 import { t as tStatic } from "../../i18n";
+import {
+  RelationshipPicker,
+  type PickerCandidate,
+} from "../inline-label/relationship-picker";
 
 // ──────────────────────────────────
 // 色定義
@@ -289,7 +293,7 @@ function ProvPanel({
   const { labels: allLabels } = useLabelStore();
   const useLabelStoreRef = { current: allLabels };
   const [showLabelPicker, setShowLabelPicker] = useState(false);
-  const [prevStepMode, setPrevStepMode] = useState(false);
+  const [showPrevStepPicker, setShowPrevStepPicker] = useState(false);
   const [headingCandidates, setHeadingCandidates] = useState<
     { blockId: string; text: string }[]
   >([]);
@@ -444,16 +448,22 @@ function ProvPanel({
         )}
 
         {/* ── リンク一覧 ── */}
+        {/*
+          informed_by など PROV リンクは「source wasInformedBy target」の意味。
+          ・outgoing (sourceBlockId == 自分): 自分が target に依拠している → 入力（前手順）
+          ・incoming (targetBlockId == 自分): source が自分に依拠している → 出力（次手順）
+        */}
         {linkCount > 0 && (
           <>
             <DropdownDivider />
             {outgoing.length > 0 && (
               <>
-                <DropdownSectionHeader>{t("provIndicator.outLinks")}</DropdownSectionHeader>
+                <DropdownSectionHeader>{t("provIndicator.inLinks")}</DropdownSectionHeader>
                 {outgoing.map((link) => (
                   <LinkRow
                     key={link.id}
                     link={link}
+                    direction="outgoing"
                     label={getBlockText(link.targetBlockId)}
                     onClick={() => scrollToBlock(link.targetBlockId)}
                     onRemove={() => onRemoveLink(link.id)}
@@ -464,11 +474,12 @@ function ProvPanel({
             {incoming.length > 0 && (
               <>
                 {outgoing.length > 0 && <DropdownDivider />}
-                <DropdownSectionHeader>{t("provIndicator.inLinks")}</DropdownSectionHeader>
+                <DropdownSectionHeader>{t("provIndicator.outLinks")}</DropdownSectionHeader>
                 {incoming.map((link) => (
                   <LinkRow
                     key={link.id}
                     link={link}
+                    direction="incoming"
                     label={getBlockText(link.sourceBlockId)}
                     onClick={() => scrollToBlock(link.sourceBlockId)}
                     onRemove={() => onRemoveLink(link.id)}
@@ -487,11 +498,7 @@ function ProvPanel({
         </DropdownSectionHeader>
         <button
           onClick={() => {
-            const candidates: {
-              blockId: string;
-              text: string;
-            }[] = [];
-            // procedure ラベルが付いたブロックのみをリンク先候補にする
+            const candidates: { blockId: string; text: string }[] = [];
             const labelMap = useLabelStoreRef.current;
             document
               .querySelectorAll('[data-node-type="blockOuter"]')
@@ -509,7 +516,7 @@ function ProvPanel({
                 });
               });
             setHeadingCandidates(candidates);
-            setPrevStepMode(true);
+            setShowPrevStepPicker(true);
           }}
           className="flex items-center w-full text-left px-3 py-1.5 text-sm bg-info/10 text-[#5b8fb9] rounded mx-1.5 cursor-pointer border-none"
           style={{ width: "calc(100% - 12px)" }}
@@ -517,43 +524,42 @@ function ProvPanel({
           <span className="mr-1">→</span>
           {t("labelUi.selectPrevStep")}
         </button>
-
-        {/* 前手順: 見出し選択 */}
-        {prevStepMode && (
-          <div className="py-1 bg-info/5 border-t border-info/20">
-            <DropdownSectionHeader className="text-[#5b8fb9]">
-              {t("provIndicator.selectStep")}
-            </DropdownSectionHeader>
-            {headingCandidates.length === 0 && (
-              <div className="px-3 py-1.5 text-xs text-muted-foreground">
-                {t("provIndicator.noHeadings")}
-              </div>
-            )}
-            {headingCandidates.map((c) => (
-              <MenuItem
-                key={c.blockId}
-                onClick={() => {
-                  _onPrevStepLinkSelected?.(blockId, c.blockId);
-                  onClose();
-                }}
-                className="text-xs"
-              >
-                <span className="text-[10px] text-[#5b8fb9] font-semibold mr-1">
-                  {getDisplayLabel("procedure")}
-                </span>
-                {c.text || t("common.empty")}
-              </MenuItem>
-            ))}
-            <MenuItem
-              onClick={() => setPrevStepMode(false)}
-              className="text-xs text-muted-foreground"
-            >
-              {t("labelUi.goBack")}
-            </MenuItem>
-          </div>
-        )}
         </>}
       </div>
+
+      {/* 前手順ピッカー（クリック導線統一: RelationshipPicker） */}
+      <RelationshipPicker
+        open={showPrevStepPicker}
+        onClose={() => setShowPrevStepPicker(false)}
+        title={t("linking.title")}
+        source={{
+          label: t("linking.target"),
+          chip: {
+            text: getDisplayLabel("procedure"),
+            style: { bg: "#5b8fb918", border: "#5b8fb9" },
+          },
+        }}
+        sections={[
+          {
+            title: t("linking.sectionPickPrevStep"),
+            candidates: headingCandidates.map<PickerCandidate>((c) => ({
+              id: c.blockId,
+              chips: [
+                {
+                  text: c.text || t("common.empty"),
+                  style: { bg: "#5b8fb912", border: "#5b8fb9" },
+                },
+              ],
+            })),
+            emptyMessage: t("linking.noPrevStepCandidates"),
+            onSelect: (c) => {
+              _onPrevStepLinkSelected?.(blockId, c.id);
+              setShowPrevStepPicker(false);
+              onClose();
+            },
+          },
+        ]}
+      />
     </Dropdown>
   );
 }
@@ -563,17 +569,24 @@ function ProvPanel({
 // ──────────────────────────────────
 function LinkRow({
   link,
+  direction,
   label,
   onClick,
   onRemove,
 }: {
   link: BlockLink;
+  direction: "outgoing" | "incoming";
   label: string;
   onClick: () => void;
   onRemove: () => void;
 }) {
   const t = useT();
   const conf = LINK_TYPE_CONFIG[link.type];
+  // informed_by の incoming は "次手順" 表示（source が自分を informed_by している）
+  const linkLabel =
+    link.type === "informed_by" && direction === "incoming"
+      ? t("linkType.informed_by.next")
+      : conf.label;
   return (
     <div className="flex items-center gap-1 px-2.5 py-1 text-xs">
       <span
@@ -584,7 +597,7 @@ function LinkRow({
         className="text-[10px] font-semibold min-w-[40px]"
         style={{ color: conf.color }}
       >
-        {conf.label}
+        {linkLabel}
       </span>
       <button
         onClick={onClick}

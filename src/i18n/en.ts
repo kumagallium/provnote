@@ -46,6 +46,7 @@ export const en: Record<string, string> = {
   "linkType.generated": "Generated",
   "linkType.reproduction_of": "Reproduced",
   "linkType.informed_by": "Prior step",
+  "linkType.informed_by.next": "Next step",
   "linkType.reference": "Reference",
 
   // ── リンク作成者 ──
@@ -119,6 +120,33 @@ export const en: Record<string, string> = {
   "editor.aiAssistant": "🤖 AI Assistant",
   "editor.askAi": "Ask AI about selection",
   "editor.derivedNote": "Derived note",
+  // ── 関係指定ピッカー（共通） ──
+  "linking.title": "Link & merge",
+  "linking.target": "Target",
+  "linking.untitledHighlight": "(empty)",
+  "linking.current": "Currently",
+  "linking.currentNone": "(none)",
+  "linking.currentSelf": "(standalone — no merge)",
+  "linking.currentNearest": "(nearest entity inferred)",
+  "linking.currentActivity": "→ Activity (directly)",
+
+  // セクション見出し（意図ベース）
+  "linking.sectionMerge": "Merge with another highlight",
+  "linking.sectionChangeBinding": "Change binding target",
+  "linking.sectionSameScope": "Same step (other blocks)",
+  "linking.sectionOtherBlocks": "Other steps",
+  "linking.sectionPickPrevStep": "Pick a previous step",
+
+  // 候補なしメッセージ
+  "linking.noMergeCandidates": "No other highlights of the same label in this note.",
+  "linking.noBindingCandidates": "No entity highlights in this block.",
+  "linking.noPrevStepCandidates": "No procedure-labeled blocks available.",
+
+  // アクション
+  "linking.bindToActivity": "→ Bind directly to the activity",
+  "linking.resetBinding": "Reset to nearest-entity",
+  "linking.occurrences": "{count} block(s)",
+  "linking.searchPlaceholder": "Search candidates...",
 
   // ── 右パネルタブ ──
   "panel.prov": "Steps",
