@@ -1692,3 +1692,139 @@ describe("メディアブロック × インラインラベル (Phase D-3-β)", 
     expect(doc["@graph"].find((n) => n["@id"] === "entity_media_img-1")).toBeDefined();
   });
 });
+
+// ──────────────────────────────────
+// Phase F: Parameter 親 Entity 明示指定（attribute binding）
+// ──────────────────────────────────
+describe("Parameter 親 Entity 明示指定（Phase F）", () => {
+  // Step 1 と Step 2 を持つ doc。Step 2 の Parameter が Step 1 の Material を指す
+  const blocks = [
+    {
+      id: "h-step1",
+      type: "heading",
+      props: { level: 2 },
+      content: [{ type: "text", text: "Step 1" }],
+      children: [],
+    },
+    {
+      id: "p-step1",
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: "NaCl",
+          styles: { inlineMaterial: "ent_mat_nacl" },
+        },
+      ],
+      children: [],
+    },
+    {
+      id: "h-step2",
+      type: "heading",
+      props: { level: 2 },
+      content: [{ type: "text", text: "Step 2" }],
+      children: [],
+    },
+    {
+      id: "p-step2",
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: "5g",
+          styles: { inlineAttribute: "ent_attr_x@ent_mat_nacl" },
+        },
+      ],
+      children: [],
+    },
+  ];
+  const labels = new Map([
+    ["h-step1", "procedure"],
+    ["h-step2", "procedure"],
+  ]);
+
+  it("クロスブロック parent override が解決され、attribute が指定 Entity に attach される", () => {
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+    const naclNode = doc["@graph"].find((n) => n["@id"].includes("ent_mat_nacl"));
+    expect(naclNode).toBeDefined();
+    const attrs = (naclNode as any)?.["graphium:attributes"] ?? [];
+    expect(attrs.length).toBe(1);
+    expect(attrs[0]["rdfs:label"]).toBe("5g");
+  });
+
+  it("activity マーカーで親 Activity に直結される（同ブロックに Entity があっても）", () => {
+    const blocksLocal = [
+      {
+        id: "h",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step" }],
+        children: [],
+      },
+      {
+        id: "p",
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: "NaCl",
+            styles: { inlineMaterial: "ent_mat_nacl" },
+          },
+          { type: "text", text: " " },
+          {
+            type: "text",
+            text: "5g",
+            styles: { inlineAttribute: "ent_attr_x@activity" },
+          },
+        ],
+        children: [],
+      },
+    ];
+    const labelsLocal = new Map([["h", "procedure"]]);
+    const doc = generateProvDocument({ blocks: blocksLocal, labels: labelsLocal, links: [] });
+    // Activity ノードの attributes に attach されているはず
+    const actNode = doc["@graph"].find((n) => n["@type"] === "prov:Activity");
+    expect(actNode).toBeDefined();
+    const attrs = (actNode as any)?.["graphium:attributes"] ?? [];
+    expect(attrs.find((a: any) => a["rdfs:label"] === "5g")).toBeDefined();
+    // Material ノードには attach されていない
+    const matNode = doc["@graph"].find((n) => n["@id"].includes("ent_mat_nacl"));
+    const matAttrs = (matNode as any)?.["graphium:attributes"] ?? [];
+    expect(matAttrs.find((a: any) => a["rdfs:label"] === "5g")).toBeUndefined();
+  });
+
+  it("@parent 無し（旧形式）は最寄り推論で動作する（後方互換）", () => {
+    const blocksLocal = [
+      {
+        id: "h",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Step" }],
+        children: [],
+      },
+      {
+        id: "p",
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: "NaCl",
+            styles: { inlineMaterial: "ent_mat_nacl" },
+          },
+          { type: "text", text: " " },
+          {
+            type: "text",
+            text: "5g",
+            styles: { inlineAttribute: "ent_attr_x" },
+          },
+        ],
+        children: [],
+      },
+    ];
+    const labelsLocal = new Map([["h", "procedure"]]);
+    const doc = generateProvDocument({ blocks: blocksLocal, labels: labelsLocal, links: [] });
+    const matNode = doc["@graph"].find((n) => n["@id"].includes("ent_mat_nacl"));
+    const matAttrs = (matNode as any)?.["graphium:attributes"] ?? [];
+    expect(matAttrs.find((a: any) => a["rdfs:label"] === "5g")).toBeDefined();
+  });
+});

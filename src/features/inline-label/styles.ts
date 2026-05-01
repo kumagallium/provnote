@@ -15,6 +15,7 @@
 // ──────────────────────────────────────────────
 
 import { createStyleSpec } from "@blocknote/core";
+import { parseAttributeBinding } from "./attribute-binding";
 
 const BASE_STYLE = "padding: 0 0.1em; border-radius: 2px;";
 
@@ -36,11 +37,20 @@ function buildSpec(label: InlineLabel) {
       propSchema: "string",
     },
     {
-      render: (entityId) => {
+      render: (rawValue) => {
         const span = document.createElement("span");
         span.setAttribute("data-inline-label", label);
-        if (typeof entityId === "string" && entityId) {
-          span.setAttribute("data-entity-id", entityId);
+        if (typeof rawValue === "string" && rawValue) {
+          // attribute は `entityId@parentEntityId` の複合キーを許可。それ以外は単体 entityId
+          if (label === "attribute") {
+            const { entityId, parentEntityId } = parseAttributeBinding(rawValue);
+            if (entityId) span.setAttribute("data-entity-id", entityId);
+            if (parentEntityId) {
+              span.setAttribute("data-parent-entity-id", parentEntityId);
+            }
+          } else {
+            span.setAttribute("data-entity-id", rawValue);
+          }
         }
         span.style.cssText = [
           BASE_STYLE,

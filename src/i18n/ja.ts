@@ -46,6 +46,7 @@ export const ja: Record<string, string> = {
   "linkType.generated": "生成",
   "linkType.reproduction_of": "再現",
   "linkType.informed_by": "前手順",
+  "linkType.informed_by.next": "次手順",
   "linkType.reference": "参照",
 
   // ── リンク作成者 ──
@@ -119,6 +120,33 @@ export const ja: Record<string, string> = {
   "editor.aiAssistant": "🤖 AI アシスタント",
   "editor.askAi": "選択範囲を AI に聞く",
   "editor.derivedNote": "派生ノート",
+  // ── 関係指定ピッカー（共通） ──
+  "linking.title": "紐付けと同一化",
+  "linking.target": "対象",
+  "linking.untitledHighlight": "(空)",
+  "linking.current": "現在",
+  "linking.currentNone": "(なし)",
+  "linking.currentSelf": "(単独 — 同一化なし)",
+  "linking.currentNearest": "(最寄り Entity を自動推論)",
+  "linking.currentActivity": "→ Activity に直結",
+
+  // セクション見出し（意図ベース）
+  "linking.sectionMerge": "別のハイライトと同一化",
+  "linking.sectionChangeBinding": "紐付け先を変更",
+  "linking.sectionSameScope": "同じステップ内（他ブロック）",
+  "linking.sectionOtherBlocks": "他のステップ",
+  "linking.sectionPickPrevStep": "前手順を選ぶ",
+
+  // 候補なしメッセージ
+  "linking.noMergeCandidates": "同じラベルの他のハイライトがありません。",
+  "linking.noBindingCandidates": "このブロックに Entity ハイライトがありません。",
+  "linking.noPrevStepCandidates": "前手順候補となる見出しブロックがありません。",
+
+  // アクション
+  "linking.bindToActivity": "→ 親 Activity に直接紐付ける",
+  "linking.resetBinding": "最寄り推論に戻す",
+  "linking.occurrences": "{count} ブロック",
+  "linking.searchPlaceholder": "候補を検索...",
 
   // ── 右パネルタブ ──
   "panel.prov": "ステップ",

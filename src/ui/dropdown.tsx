@@ -32,9 +32,17 @@ function Dropdown({
   // 外側クリックで閉じる
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
+      const target = e.target as Node | null;
+      if (!ref.current) return;
+      if (ref.current.contains(target)) return;
+      // Modal などの portal 内のクリックは外側扱いしない
+      if (
+        target instanceof Element &&
+        target.closest("[data-modal-portal]")
+      ) {
+        return;
       }
+      onClose();
     };
     // バッジクリックとの競合を避けるため少し遅延
     const timer = setTimeout(() => {

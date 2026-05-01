@@ -33,7 +33,10 @@ function Modal({ open, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      data-modal-portal="true"
+    >
       {/* オーバーレイ */}
       <div
         className="absolute inset-0 bg-black/40"
