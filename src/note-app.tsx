@@ -2,7 +2,7 @@
 // Google Drive と連携してノートの作成・保存・読み込みを行う
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText, PanelLeftOpen, BookPlus, BookOpen } from "lucide-react";
+import { Save, FileDown, Share2, MoreHorizontal, Network, GitBranch, MessageSquare, History, FileText, PanelLeftOpen, BookPlus, BookOpen, Trash2 } from "lucide-react";
 import { apiBase, isTauri } from "./lib/platform";
 import { ensureSidecar } from "./lib/sidecar";
 import { SandboxEditor } from "./base/editor";
@@ -171,6 +171,8 @@ function NoteHeaderMenu({
   isWikiDoc,
   inKnowledge,
   onOpenKnowledge,
+  onDelete,
+  deleteDisabled,
   t,
 }: {
   onSave: () => void;
@@ -189,6 +191,9 @@ function NoteHeaderMenu({
   inKnowledge?: boolean;
   /** 「Already in Knowledge」押下で対応 wiki エントリを開く */
   onOpenKnowledge?: () => void;
+  /** ノート削除（ゴミ箱送り）コールバック */
+  onDelete?: () => void;
+  deleteDisabled?: boolean;
   t: (key: string) => string;
 }) {
   const [open, setOpen] = useState(false);
@@ -281,6 +286,19 @@ function NoteHeaderMenu({
               )}
             </>
           )}
+          {onDelete && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className={`${itemClass} text-destructive hover:bg-destructive/10`}
+                disabled={deleteDisabled}
+                onClick={() => { onDelete(); setOpen(false); }}
+              >
+                <Trash2 size={14} />
+                {t("editor.deleteNote")}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -328,6 +346,8 @@ type NoteEditorProps = {
   onDeriveWholeNote?: () => void;
   /** 派生処理中（ボタンを無効化） */
   derivingDisabled?: boolean;
+  /** ノート削除（ゴミ箱送り）コールバック。ヘッダーメニューから呼ばれる */
+  onDeleteNote?: () => void;
   /** チャットから Knowledge コールバック（手動） */
   onIngestChat?: (messages: import("./lib/document-types").ChatMessage[]) => void;
   /** チャット応答の自動 Wiki 保存コールバック */
@@ -428,6 +448,7 @@ function NoteEditorInner({
   onIngestFromUrl,
   onDeriveWholeNote,
   derivingDisabled,
+  onDeleteNote,
   onIngestChat,
   onAutoIngestChat,
   isWikiDoc,
@@ -1957,6 +1978,8 @@ function NoteEditorInner({
               ? () => onNavigateNote(`wiki:${wikiEntriesForCurrentNote[0].noteId}`)
               : undefined
           }
+          onDelete={onDeleteNote}
+          deleteDisabled={!fileId || saving}
           t={t}
         />
       </div>
@@ -3495,6 +3518,20 @@ export function NoteApp() {
             onDeriveNote={fm.handleDeriveNote}
             onDeriveWholeNote={fm.handleDeriveWholeNote}
             derivingDisabled={fm.deriving}
+            onDeleteNote={fm.activeFileId && fm.activeDoc?.source !== "ai" ? () => {
+              const id = fm.activeFileId!;
+              if (fm.rawNoteIndex) {
+                const refs = findIncomingReferences(fm.rawNoteIndex, id);
+                if (refs.length > 0) {
+                  const ok = window.confirm(
+                    t("nav.refsTrashWarn", { count: String(refs.length) })
+                  );
+                  if (!ok) return;
+                }
+              }
+              fm.handleDelete(id);
+              router.navigate({ view: "home" });
+            } : undefined}
             onAiDeriveNote={fm.handleAiDeriveNote}
             onNavigateNote={(noteId: string, cachedDoc?: import("./lib/document-types").GraphiumDocument) => {
               if (noteId.startsWith("wiki:")) {
