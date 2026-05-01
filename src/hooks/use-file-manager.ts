@@ -158,7 +158,7 @@ export function useFileManager(authenticated: boolean) {
   const [wikiMetas, setWikiMetas] = useState<Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>>(new Map());
   // Skill 関連の状態
   const [skillFiles, setSkillFiles] = useState<GraphiumFile[]>([]);
-  const [skillMetas, setSkillMetas] = useState<Map<string, { title: string; description: string; availableForIngest: boolean }>>(new Map());
+  const [skillMetas, setSkillMetas] = useState<Map<string, { title: string; description: string; availableForIngest: boolean; systemSkillId?: string; language?: "ja" | "en" }>>(new Map());
 
   // ファイル一覧を取得（ノートと Wiki と Skill を並列取得）
   // allSettled を使うことで、古いビルドで一部のコマンド（例: list_skill_files）が
@@ -182,28 +182,89 @@ export function useFileManager(authenticated: boolean) {
       setWikiFiles(wikiResult);
       setSkillFiles(skillResult);
       // Skill メタデータをバックグラウンドで読み込み
-      if (skillResult.length > 0) {
-        Promise.allSettled(
-          skillResult.map(async (f) => {
-            const doc = await loadSkillFile(f.id);
-            return { id: f.id, doc };
-          })
-        ).then((results) => {
-          const metas = new Map<string, { title: string; description: string; availableForIngest: boolean }>();
-          for (const r of results) {
-            if (r.status === "fulfilled") {
-              const { id, doc } = r.value;
-              metas.set(id, {
+      // 同時にシステムスキル（default-voice-ja/en）が欠けていれば作成する
+      Promise.allSettled(
+        skillResult.map(async (f) => {
+          const doc = await loadSkillFile(f.id);
+          return { id: f.id, doc };
+        })
+      ).then(async (results) => {
+        const metas = new Map<string, { title: string; description: string; availableForIngest: boolean; systemSkillId?: string; language?: "ja" | "en" }>();
+        // systemSkillId ごとに、対応するファイル ID の配列（重複検出用）
+        const systemSkillFiles = new Map<string, { id: string; modifiedAt: string }[]>();
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            const { id, doc } = r.value;
+            metas.set(id, {
+              title: doc.title,
+              description: doc.skillMeta?.description ?? "",
+              availableForIngest: doc.skillMeta?.availableForIngest ?? true,
+              systemSkillId: doc.skillMeta?.systemSkillId,
+              language: doc.skillMeta?.language,
+            });
+            docCacheRef.current.set(`skill:${id}`, doc);
+            if (doc.skillMeta?.systemSkillId) {
+              const arr = systemSkillFiles.get(doc.skillMeta.systemSkillId) ?? [];
+              arr.push({ id, modifiedAt: doc.modifiedAt });
+              systemSkillFiles.set(doc.skillMeta.systemSkillId, arr);
+            }
+          }
+        }
+
+        // 同じ systemSkillId を持つファイルが 2 つ以上あれば、最も新しいもの 1 つだけ残す
+        const provider = storage();
+        const removedIds: string[] = [];
+        for (const [systemId, files] of systemSkillFiles.entries()) {
+          if (files.length <= 1) continue;
+          // modifiedAt 降順でソート、先頭以外を削除
+          files.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+          for (const dup of files.slice(1)) {
+            try {
+              if (provider.deleteSkillFile) {
+                await provider.deleteSkillFile(dup.id);
+              }
+              metas.delete(dup.id);
+              docCacheRef.current.delete(`skill:${dup.id}`);
+              removedIds.push(dup.id);
+              console.info(`[bootstrap] 重複したシステムスキル ${systemId} (file ${dup.id}) を削除しました`);
+            } catch (err) {
+              console.warn("重複システムスキルの削除に失敗:", err);
+            }
+          }
+        }
+        if (removedIds.length > 0) {
+          setSkillFiles((prev) => prev.filter((f) => !removedIds.includes(f.id)));
+        }
+
+        const existingSystemIds = new Set<string>(systemSkillFiles.keys());
+
+        // システムスキルが未作成なら同梱定義から生成する（ストレージプロバイダーが対応している場合のみ）
+        try {
+          const { SYSTEM_SKILLS } = await import("../features/skill/system-skills");
+          const { buildSystemSkillDocument } = await import("../features/skill/skill-service");
+          if (provider.saveSkillFile) {
+            for (const def of SYSTEM_SKILLS) {
+              if (existingSystemIds.has(def.id)) continue;
+              const newId = crypto.randomUUID();
+              const doc = buildSystemSkillDocument(def);
+              await provider.saveSkillFile(newId, doc);
+              metas.set(newId, {
                 title: doc.title,
                 description: doc.skillMeta?.description ?? "",
                 availableForIngest: doc.skillMeta?.availableForIngest ?? true,
+                systemSkillId: doc.skillMeta?.systemSkillId,
+                language: doc.skillMeta?.language,
               });
-              docCacheRef.current.set(`skill:${id}`, doc);
+              docCacheRef.current.set(`skill:${newId}`, doc);
+              setSkillFiles((prev) => [...prev, { id: newId, name: doc.title, modifiedTime: doc.modifiedAt, createdTime: doc.createdAt }]);
             }
           }
-          setSkillMetas(metas);
-        });
-      }
+        } catch (err) {
+          console.warn("システムスキルのブートストラップに失敗:", err);
+        }
+
+        setSkillMetas(metas);
+      });
       // Wiki メタデータをバックグラウンドで読み込み（サイドバーカウント・リスト表示用）
       if (wikiResult.length > 0) {
         Promise.allSettled(
@@ -257,33 +318,45 @@ export function useFileManager(authenticated: boolean) {
 
   // ネットワークグラフを構築（全ノートの派生関係を取得）
   const rebuildGraph = useCallback(
-    async (currentId: string | null, fileList: GraphiumFile[]) => {
-      if (!currentId || fileList.length === 0) {
+    async (currentId: string | null, noteList: GraphiumFile[], wikiList: GraphiumFile[]) => {
+      if (!currentId || (noteList.length === 0 && wikiList.length === 0)) {
         setNoteGraphData({ nodes: [], edges: [] });
         return;
       }
-      // 未取得のノートをバックグラウンドで読み込み
-      const missing = fileList.filter((f) => !docCacheRef.current.has(f.id));
-      if (missing.length > 0) {
+      // ノートだけ未取得のものをバックグラウンドで読み込み（wiki は別の loader が必要なのでここでは
+      // 読み込まず、すでに開かれた wiki だけがキャッシュにある状態で動く）
+      const missingNotes = noteList.filter((f) => !docCacheRef.current.has(f.id));
+      if (missingNotes.length > 0) {
         const results = await Promise.allSettled(
-          missing.map(async (f) => {
+          missingNotes.map(async (f) => {
             const doc = await loadFile(f.id);
             docCacheRef.current.set(f.id, doc);
           })
         );
-        // エラーは無視（削除済みファイルなど）
         results.forEach((r, i) => {
           if (r.status === "rejected") {
-            console.warn(`ノート読み込みスキップ: ${missing[i].name}`);
+            console.warn(`ノート読み込みスキップ: ${missingNotes[i].name}`);
           }
         });
       }
-      // ゴミ箱内のノートはグラフからも除外
+      // ゴミ箱内のノートはグラフから除外
       const trashedIds = new Set(
         (noteIndexRef.current?.notes ?? []).filter((n) => n.deletedAt).map((n) => n.noteId)
       );
-      const visibleFiles = fileList.filter((f) => !trashedIds.has(f.id));
-      setNoteGraphData(buildNoteGraph(currentId, visibleFiles, docCacheRef.current));
+      const visibleNotes = noteList.filter((f) => !trashedIds.has(f.id));
+      const visibleWikis = wikiList.filter((f) => !trashedIds.has(f.id));
+      // buildNoteGraph 用に「素の ID → doc」のマップを作る。ノートと Wiki はキャッシュキーが
+      // 異なる（"<id>" / "wiki:<id>"）ため、ここで揃える。
+      const docs = new Map<string, GraphiumDocument>();
+      for (const f of visibleNotes) {
+        const doc = docCacheRef.current.get(f.id);
+        if (doc) docs.set(f.id, doc);
+      }
+      for (const f of visibleWikis) {
+        const doc = docCacheRef.current.get(`wiki:${f.id}`);
+        if (doc) docs.set(f.id, doc);
+      }
+      setNoteGraphData(buildNoteGraph(currentId, [...visibleNotes, ...visibleWikis], docs));
     },
     []
   );
@@ -462,12 +535,16 @@ export function useFileManager(authenticated: boolean) {
     return () => { cancelled = true; };
   }, [authenticated, noteIndex, files]);
 
-  // activeFileId や files が変わったらグラフを再構築
+  // activeFileId や files / wikiFiles が変わったらグラフを再構築。
+  // Wiki ページ（Concept / Synthesis）を開いているときも、その wiki の派生関係を
+  // 表示できるよう wikiFiles も合わせて渡す。
   useEffect(() => {
-    if (activeFileId && files.length > 0) {
-      rebuildGraph(activeFileId, files);
+    if (activeFileId) {
+      // activeFileId は "wiki:<id>" / "skill:<id>" 形式の場合があるので素の ID に戻す
+      const rawId = activeFileId.replace(/^(wiki|skill):/, "");
+      rebuildGraph(rawId, files, wikiFiles);
     }
-  }, [activeFileId, files, rebuildGraph]);
+  }, [activeFileId, files, wikiFiles, rebuildGraph]);
 
   // 新しいノートを作成
   const handleNewNote = useCallback(() => {
@@ -1219,6 +1296,8 @@ export function useFileManager(authenticated: boolean) {
             title: doc.title,
             description: doc.skillMeta?.description ?? "",
             availableForIngest: doc.skillMeta?.availableForIngest ?? true,
+            systemSkillId: doc.skillMeta?.systemSkillId,
+            language: doc.skillMeta?.language,
           });
           return next;
         });
@@ -1250,6 +1329,44 @@ export function useFileManager(authenticated: boolean) {
       }
     },
     [activeFileId, setActiveFileId]
+  );
+
+  // システム同梱スキルをデフォルト内容に戻す
+  const handleResetSystemSkill = useCallback(
+    async (skillId: string) => {
+      const meta = skillMetas.get(skillId);
+      if (!meta?.systemSkillId) {
+        console.warn("システムスキルではないのでリセットできません:", skillId);
+        return;
+      }
+      try {
+        const { getSystemSkillById } = await import("../features/skill/system-skills");
+        const { buildSystemSkillDocument } = await import("../features/skill/skill-service");
+        const def = getSystemSkillById(meta.systemSkillId as any);
+        if (!def) return;
+        const doc = buildSystemSkillDocument(def);
+        await saveSkillFile(skillId, doc);
+        docCacheRef.current.set(`skill:${skillId}`, doc);
+        setSkillMetas((prev) => {
+          const next = new Map(prev);
+          next.set(skillId, {
+            title: doc.title,
+            description: doc.skillMeta?.description ?? "",
+            availableForIngest: doc.skillMeta?.availableForIngest ?? true,
+            systemSkillId: doc.skillMeta?.systemSkillId,
+            language: doc.skillMeta?.language,
+          });
+          return next;
+        });
+        if (activeFileId === `skill:${skillId}`) {
+          setActiveDoc(doc);
+          setEditorKey((k) => k + 1);
+        }
+      } catch (err) {
+        console.error("システムスキルのリセットに失敗:", err);
+      }
+    },
+    [skillMetas, activeFileId, setActiveDoc, setEditorKey]
   );
 
   // Skill の新規作成
@@ -1337,6 +1454,7 @@ export function useFileManager(authenticated: boolean) {
     handleOpenSkillFile,
     handleSaveSkillFile,
     handleDeleteSkillFile,
+    handleResetSystemSkill,
     handleCreateSkillFile,
   };
 }

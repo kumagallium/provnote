@@ -2,7 +2,7 @@
 // プロンプトテンプレートの一覧表示・新規作成・削除
 
 import { useMemo, useState } from "react";
-import { Wrench, Search, Trash2, Plus, Zap } from "lucide-react";
+import { Wrench, Search, Trash2, Plus, Zap, Lock, RotateCcw } from "lucide-react";
 import type { GraphiumFile, SkillMeta } from "../../lib/document-types";
 import { Breadcrumb } from "../../components/Breadcrumb";
 
@@ -19,11 +19,13 @@ type SkillEntry = {
   description: string;
   availableForIngest: boolean;
   modifiedAt: string;
+  systemSkillId?: string;
+  language?: "ja" | "en";
 };
 
 type Props = {
   skillFiles: GraphiumFile[];
-  skillMetas: Map<string, { title: string; description: string; availableForIngest: boolean }>;
+  skillMetas: Map<string, { title: string; description: string; availableForIngest: boolean; systemSkillId?: string; language?: "ja" | "en" }>;
   /** クリック時（サイドピーク or 編集表示） */
   onOpenSkill: (skillId: string) => void;
   /** ダブ���クリック or フルで開く */
@@ -31,6 +33,8 @@ type Props = {
   onBack: () => void;
   onDeleteSkill: (skillId: string) => Promise<void>;
   onNewSkill: () => void;
+  /** システムスキルをデフォルト内容に戻す */
+  onResetSystemSkill?: (skillId: string) => Promise<void>;
 };
 
 export function SkillListView({
@@ -41,11 +45,12 @@ export function SkillListView({
   onBack,
   onDeleteSkill,
   onNewSkill,
+  onResetSystemSkill,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const skillEntries = useMemo(() => {
+  const skillEntries = useMemo<SkillEntry[]>(() => {
     return skillFiles
       .filter((f) => skillMetas.has(f.id))
       .map((f) => {
@@ -56,9 +61,17 @@ export function SkillListView({
           description: meta.description,
           availableForIngest: meta.availableForIngest,
           modifiedAt: f.modifiedTime,
+          systemSkillId: meta.systemSkillId,
+          language: meta.language,
         };
       })
-      .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+      .sort((a, b) => {
+        // システムスキルを上に表示
+        const aSys = a.systemSkillId ? 0 : 1;
+        const bSys = b.systemSkillId ? 0 : 1;
+        if (aSys !== bSys) return aSys - bSys;
+        return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+      });
   }, [skillFiles, skillMetas]);
 
   const filtered = useMemo(() => {
@@ -78,6 +91,13 @@ export function SkillListView({
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleReset = async (e: React.MouseEvent, skillId: string) => {
+    e.stopPropagation();
+    if (!onResetSystemSkill) return;
+    if (!confirm("このスキルをデフォルト内容に戻します。よろしいですか？")) return;
+    await onResetSystemSkill(skillId);
   };
 
   return (
@@ -137,6 +157,17 @@ export function SkillListView({
                       <span className="text-sm font-medium text-foreground truncate">
                         {entry.title}
                       </span>
+                      {entry.systemSkillId && (
+                        <span title="システム同梱スキル（削除不可）" className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-muted text-muted-foreground">
+                          <Lock size={9} />
+                          <span>System</span>
+                        </span>
+                      )}
+                      {entry.language && (
+                        <span title={`適用言語: ${entry.language === "ja" ? "日本語" : "English"}`} className="px-1.5 py-0.5 rounded text-[9px] bg-muted text-muted-foreground uppercase">
+                          {entry.language}
+                        </span>
+                      )}
                       {entry.availableForIngest && (
                         <span title="Ingest に自動適用"><Zap size={12} className="text-amber-500 shrink-0" /></span>
                       )}
@@ -152,14 +183,27 @@ export function SkillListView({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => handleDelete(e, entry.id)}
-                    disabled={deletingId === entry.id}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {entry.systemSkillId ? (
+                    onResetSystemSkill && (
+                      <button
+                        onClick={(e) => handleReset(e, entry.id)}
+                        className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border bg-background text-[10px]"
+                        title="このスキルをデフォルト内容に戻します"
+                      >
+                        <RotateCcw size={12} />
+                        <span>デフォルトに戻す</span>
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={(e) => handleDelete(e, entry.id)}
+                      disabled={deletingId === entry.id}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </button>
             ))}

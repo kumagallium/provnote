@@ -26,6 +26,16 @@ export type SkillMeta = {
   availableForIngest: boolean;
   /** 作成日時 */
   createdAt: string;
+  /**
+   * システム同梱スキルの識別子（例: "default-voice-ja"）。
+   * 設定されている場合、このスキルは削除不可・常に存在し、デフォルト内容にリセット可能。
+   */
+  systemSkillId?: string;
+  /**
+   * 適用対象の言語。"ja" | "en" を指定すると、生成側の言語と一致するときだけプロンプトに注入される。
+   * 未指定の場合は全言語に適用（既存スキルとの後方互換）。
+   */
+  language?: "ja" | "en";
 };
 
 // AI Wiki ドキュメントのメタデータ

@@ -33,11 +33,23 @@ export type ExistingWikiDetail = {
   sectionPreviews: string[];
 };
 
+/** 横断更新時に適用するスキル */
+export type CrossUpdateSkill = { title: string; prompt: string };
+
 /**
  * 横断更新用のシステムプロンプトを構築する
  */
-export function buildCrossUpdateSystemPrompt(language: string): string {
-  return `You are a knowledge maintenance engine for Graphium, a provenance-tracking research editor.
+export function buildCrossUpdateSystemPrompt(
+  language: string,
+  skills?: CrossUpdateSkill[],
+): string {
+  const skillSection = skills && skills.length > 0
+    ? `\n\n## Applied Style Skills (apply these to ALL output below)\n\nThe following style skills define the voice, register, and rhythm of every section you write. Treat them as overriding any default tone you would otherwise use. Re-read them before writing.\n\n${skills.map((s) => `### ${s.title}\n\n${s.prompt}`).join("\n\n")}`
+    : "";
+
+  return `You are a knowledge maintenance engine for Graphium, a provenance-tracking note editor. Graphium is domain-general — never inject a research-paper register unless the source content clearly is one.${language === "ja" ? `
+
+**重要: 日本語で書くときは必ず敬体（ですます調）で統一する。常体（〜だ／〜である／〜した）は使わない。** 文末は「〜です」「〜ます」「〜でした」「〜ました」「〜と考えています」「〜のではないでしょうか」のいずれかに揃える。これは絶対ルール。` : ""}${skillSection}
 
 A new note has been ingested into the Wiki. Your job is to determine if any EXISTING Wiki pages should be updated based on the new information.
 
