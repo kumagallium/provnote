@@ -426,3 +426,37 @@ body[data-label-dropdown-open="true"] .bn-side-menu {
   background-color: #f0f5ef !important;
   color: #2d4a32 !important;
 }
+
+/* コードブロック — ライトテーマに合わせる
+   BlockNote デフォルトは bg #161616 / 白文字（ダーク前提）。
+   github-light シンタックスハイライト（@blocknote/code-block + shiki）に
+   合わせて淡背景 + 枠 + foreground 文字を当てる。トークン色は shiki がインライン
+   style で当てるため、color は !important を付けない。 */
+.bn-editor [data-content-type="codeBlock"] {
+  background-color: var(--color-surface) !important;
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 8px !important;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace !important;
+  font-size: 14px;
+  line-height: 1.6;
+}
+/* 言語セレクト（左上）はダーク背景前提で白文字になっているので muted に上書き */
+.bn-editor [data-content-type="codeBlock"] > div > select {
+  color: var(--color-muted-foreground) !important;
+}
+.bn-editor [data-content-type="codeBlock"] > div > select > option {
+  color: var(--color-foreground) !important;
+  background-color: var(--color-card) !important;
+}
+
+/* インラインコード — 段落中の `code` も同様にライトテーマで馴染ませる */
+.bn-editor .bn-inline-content code {
+  background-color: var(--color-surface);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
