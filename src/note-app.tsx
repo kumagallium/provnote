@@ -1718,11 +1718,11 @@ function NoteEditorInner({
       if (resolved) {
         e.preventDefault();
         e.stopPropagation();
-        if (resolved.isWiki) {
-          onNavigateNote(`wiki:${resolved.noteId}`);
-        } else {
-          setSidePeekNoteId(resolved.noteId);
-        }
+        // ノート / Wiki どちらでもまずサイドピークで開く。SidePeek 内の「Open full」で
+        // 完全表示に切り替えられる方が、いきなりページ遷移するより流れが良い。
+        // Wiki の場合は SidePeek が wiki: プレフィックスで loadWikiFile を呼ぶ。
+        const peekId = resolved.isWiki ? `wiki:${resolved.noteId}` : resolved.noteId;
+        setSidePeekNoteId(peekId);
       }
     };
     document.addEventListener("click", handleClick, true);
