@@ -21,26 +21,29 @@ export type Profile = {
   content: string;
 };
 
-// 初期プロファイル（Crucible Agent から移行）
+// 初期プロファイル
+// "general" を default に置く。Graphium は特定ドメインに寄せず、ノート作成全般を支援する。
 const SEED_PROFILES: Profile[] = [
+  {
+    id: "general",
+    name: "general",
+    description: "General-purpose note-taking assistant",
+    content: [
+      "You are a helpful assistant for the user's notes in Graphium.",
+      "Help with whatever the user is thinking about: writing, planning, learning, debugging, summarizing, or organizing ideas.",
+      "Stay concise and concrete. Ask back when the request is ambiguous instead of guessing.",
+      "Do not assume any specific domain (research, business, personal, etc.) unless the user signals one.",
+    ].join("\n"),
+  },
   {
     id: "science",
     name: "science",
-    description: "Scientific research assistant",
+    description: "Scientific research assistant (optional)",
     content: [
       "You are a scientific research assistant.",
       "Help the user with scientific analysis, literature review, and experimental design.",
       "Be precise, cite sources when possible, and explain complex concepts clearly.",
       "When analyzing data or methods, consider reproducibility and statistical rigor.",
-    ].join("\n"),
-  },
-  {
-    id: "general",
-    name: "general",
-    description: "General-purpose assistant",
-    content: [
-      "You are a helpful assistant.",
-      "Provide clear, concise, and accurate responses.",
     ].join("\n"),
   },
 ];

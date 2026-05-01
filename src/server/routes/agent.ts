@@ -48,8 +48,8 @@ app.post("/run", async (c) => {
     );
   }
 
-  // プロファイル解決
-  const profileName = body.profile || "science";
+  // プロファイル解決（明示指定がなければ汎用アシスタントを既定とする）
+  const profileName = body.profile || "general";
   const profile = getProfile(profileName) ?? listProfiles()[0];
   let systemPrompt = profile?.content ?? "You are a helpful assistant.";
   if (body.custom_instructions) {

@@ -106,7 +106,7 @@ import {
 import { setWikiIndexForRetriever, setWikiTitleMap } from "./features/wiki/retriever";
 import { KnowledgeStatusChip } from "./features/wiki/KnowledgeStatusChip";
 import { ingestUrlToProv, buildProvNoteDocument } from "./features/url-to-prov";
-import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt, buildSkillPromptSection } from "./features/skill";
+import { SkillListView, SkillBanner, NewSkillDialog, buildSkillDocument, extractSkillPrompt, buildSkillPromptSection, pickActiveSkills } from "./features/skill";
 import type { WikiKind } from "./lib/document-types";
 import { MobileCaptureView, MemoGalleryView, MemoPickerModal, getMemoSlashMenuItem, setMemoPickerCallback } from "./features/mobile-capture";
 import { TemplatePickerModal, getTemplateSlashMenuItem, setTemplatePickerCallback, getAllTemplates } from "./features/template";
@@ -956,9 +956,10 @@ function NoteEditorInner({
       derivedFromBlockId: initialDoc?.derivedFromBlockId,
       documentProvenance: currentProvenance,
       chats: savedChats.length > 0 ? savedChats : undefined,
-      // Wiki メタデータを保持（source, wikiMeta, generatedBy）
+      // Wiki / Skill メタデータを保持（source, wikiMeta, skillMeta, generatedBy）
       source: initialDoc?.source,
       wikiMeta: initialDoc?.wikiMeta,
+      skillMeta: initialDoc?.skillMeta,
       generatedBy: initialDoc?.generatedBy,
       createdAt: initialDoc?.createdAt || new Date().toISOString(),
       modifiedAt: new Date().toISOString(),
@@ -2457,16 +2458,12 @@ export function NoteApp() {
           .filter((n) => n.source === "ai" && n.wikiKind)
           .map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
 
-        // Ingest 自動適用の Skill を取得
-        const ingestSkills: { title: string; prompt: string }[] = [];
-        for (const [skillId, meta] of fm.skillMetas.entries()) {
-          if (meta.availableForIngest) {
-            const skillDoc = fm.getCachedDoc(`skill:${skillId}`);
-            if (skillDoc) {
-              ingestSkills.push({ title: meta.title, prompt: extractSkillPrompt(skillDoc) });
-            }
-          }
-        }
+        // Ingest 自動適用の Skill を取得（生成言語 = ja に絞る）
+        const ingestSkills = pickActiveSkills(
+          fm.skillMetas,
+          (id) => fm.getCachedDoc(`skill:${id}`),
+          "ja",
+        );
 
         const result = await ingestNote(job.noteId, job.doc, existingWikis, "ja", undefined, ingestSkills);
 
@@ -2496,7 +2493,7 @@ export function NoteApp() {
               const existingDoc = fm.getCachedDoc(`wiki:${wiki.mergeTargetId}`);
               if (existingDoc) {
                 const nIdx = buildNoteIndex(fm.noteIndex);
-                const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model, "ja", nIdx);
+                const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model, "ja", nIdx, ingestSkills);
                 await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
                 embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
                 createdWikiIds.push(wiki.mergeTargetId);
@@ -2546,12 +2543,13 @@ export function NoteApp() {
                   newWikiTitles: createdWikiTitles,
                   existingWikis: existingDetails,
                   language: "ja",
+                  ...(ingestSkills.length > 0 ? { skills: ingestSkills } : {}),
                 });
 
                 for (const proposal of crossResult.proposals) {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
-                  const updatedDoc = await applyCrossUpdate(targetDoc, proposal, job.noteId, result.model, buildNoteIndex(fm.noteIndex));
+                  const updatedDoc = await applyCrossUpdate(targetDoc, proposal, job.noteId, result.model, buildNoteIndex(fm.noteIndex), ingestSkills);
                   await fm.handleSaveWikiFile(proposal.targetWikiId, updatedDoc);
                   embedWikiSections(proposal.targetWikiId, updatedDoc).catch(() => {});
                   wikiLog.append(
@@ -2661,17 +2659,19 @@ export function NoteApp() {
                   })
                   .filter((d): d is NonNullable<typeof d> => d !== null);
                 if (otherConcepts.length === 0) continue;
+                const orphanSkills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
                 const crossResult = await fetchCrossUpdateProposals({
                   newNoteTitle: doc.title,
                   newNoteContent: detail.sectionPreviews.join("\n"),
                   newWikiTitles: [doc.title],
                   existingWikis: otherConcepts,
                   language: "ja",
+                  ...(orphanSkills.length > 0 ? { skills: orphanSkills } : {}),
                 });
                 for (const proposal of crossResult.proposals) {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
-                  const updated = await applyCrossUpdate(targetDoc, proposal, wikiId, null, buildNoteIndex(fm.noteIndex));
+                  const updated = await applyCrossUpdate(targetDoc, proposal, wikiId, null, buildNoteIndex(fm.noteIndex), orphanSkills);
                   await fm.handleSaveWikiFile(proposal.targetWikiId, updated);
                   wikiLog.append("cross-update", [proposal.targetWikiId, wikiId],
                     `Auto-fix orphan: linked "${doc.title}" → "${proposal.targetWikiTitle}"`).catch(() => {});
@@ -2717,6 +2717,7 @@ export function NoteApp() {
               })).filter((s) => s.content);
 
               if (mergeSections.length > 0) {
+                const mergeSkills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
                 const mergedResult = await rewriteAndMerge(
                   keepDoc,
                   {
@@ -2733,6 +2734,7 @@ export function NoteApp() {
                   null,
                   "ja",
                   buildNoteIndex(fm.noteIndex),
+                  mergeSkills,
                 );
 
                 // 統合先に mergeDoc の derivedFromNotes も追加
@@ -2897,6 +2899,7 @@ export function NoteApp() {
               })).filter((s) => s.content);
 
               if (mergeSections.length > 0) {
+                const mergeSkills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
                 const mergedResult = await rewriteAndMerge(
                   keepDoc,
                   {
@@ -2913,6 +2916,7 @@ export function NoteApp() {
                   null,
                   "ja",
                   buildNoteIndex(fm.noteIndex),
+                  mergeSkills,
                 );
 
                 if (mergedResult.wikiMeta) {
@@ -3039,6 +3043,7 @@ export function NoteApp() {
             });
           }
         }
+        const synthSkills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
         const synthRes = await fetch(`${apiBase()}/wiki/synthesize`, {
           method: "POST",
           headers: synthHeaders,
@@ -3047,6 +3052,7 @@ export function NoteApp() {
             existingSynthesisTitles: [],
             language: "ja",
             ...(selectedModel ? { model: selectedModel } : {}),
+            ...(synthSkills.length > 0 ? { skills: synthSkills } : {}),
           }),
         });
         const synthResult = synthRes.ok
@@ -3094,35 +3100,54 @@ export function NoteApp() {
         }
 
         const primarySource = sourceDocs[0];
+        const regenIngestSkills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
         const result = await ingestNote(
           primarySource.noteId,
           primarySource.doc,
           [],
           "ja",
           selectedModel,
+          regenIngestSkills,
         );
 
         if (result.wikis.length > 0) {
-          setIngestToast((prev) => ({
-            items: (prev?.items ?? []).map((i) =>
-              i.id === toastId ? { ...i, detail: "Rewriting..." } : i
-            ),
-          }));
-
-          const rewritten = await rewriteAndMerge(
-            doc,
-            result.wikis[0],
+          // 既存 Wiki と同じ kind の出力を選ぶ。Ingester は通常
+          // [Summary, Concept1, Concept2...] の順で返すため、kind を見ずに [0] を取ると
+          // Concept ページを再生成しようとしても Summary の内容で置き換わってしまう。
+          const targetKind = doc.wikiMeta?.kind ?? "concept";
+          const matched = result.wikis.find((w) => w.kind === targetKind) ?? result.wikis[0];
+          // 再生成は既存内容を保持しない「上書き再構築」が正しい挙動。
+          // rewriteAndMerge は新規ノート ingest 時に既存 Wiki に新情報を統合するためのもので、
+          // 「再生成」ボタンの意図とは異なるため、buildWikiDocument で新規ドキュメントを作る。
+          const newDoc = buildWikiDocument(
+            matched,
             primarySource.noteId,
             result.model,
+            primarySource.doc.title,
+            undefined,
             "ja",
             buildNoteIndex(fm.noteIndex),
           );
-          if (rewritten.wikiMeta) {
-            rewritten.wikiMeta.generatedBy = {
-              model: result.model ?? selectedModel ?? "unknown",
-              version: "1.0.0",
-            };
-          }
+          // 既存 Wiki のメタデータと派生元情報は引き継ぐ
+          const rewritten: GraphiumDocument = {
+            ...newDoc,
+            createdAt: doc.createdAt ?? newDoc.createdAt,
+            modifiedAt: new Date().toISOString(),
+            wikiMeta: {
+              ...newDoc.wikiMeta!,
+              derivedFromNotes: [
+                ...new Set([
+                  ...(doc.wikiMeta?.derivedFromNotes ?? []),
+                  primarySource.noteId,
+                ]),
+              ],
+              derivedFromChats: doc.wikiMeta?.derivedFromChats ?? [],
+              generatedBy: {
+                model: result.model ?? selectedModel ?? "unknown",
+                version: "1.0.0",
+              },
+            },
+          };
           await fm.handleSaveWikiFile(wikiId, rewritten);
           embedWikiSections(wikiId, rewritten).catch(() => {});
           if (openAfter) fm.handleOpenWikiFile(wikiId);
@@ -3456,8 +3481,16 @@ export function NoteApp() {
             onOpenSkill={(skillId) => { setShowSkillList(false); fm.handleOpenSkillFile(skillId); }}
             onOpenSkillFull={(skillId) => { setShowSkillList(false); fm.handleOpenSkillFile(skillId); }}
             onBack={() => setShowSkillList(false)}
-            onDeleteSkill={fm.handleDeleteSkillFile}
+            onDeleteSkill={async (skillId) => {
+              const meta = fm.skillMetas.get(skillId);
+              if (meta?.systemSkillId) {
+                alert("システム同梱スキルは削除できません。デフォルトに戻すには「リセット」を使ってください。");
+                return;
+              }
+              await fm.handleDeleteSkillFile(skillId);
+            }}
             onNewSkill={() => setShowNewSkillDialog(true)}
+            onResetSystemSkill={fm.handleResetSystemSkill}
           />
         ) : !isDesktop && !fm.activeFileId ? (
           /* モバイル: ノート未選択時はクイックキャプチャビューを表示 */
@@ -3572,15 +3605,8 @@ export function NoteApp() {
             onOpenComposer={composer.openComposer}
             composerSubmitRef={composerSubmitRef}
             skillPrompts={(() => {
-              const skills: { title: string; prompt: string }[] = [];
-              for (const [skillId, meta] of fm.skillMetas.entries()) {
-                if (meta.availableForIngest) {
-                  const skillDoc = fm.getCachedDoc(`skill:${skillId}`);
-                  if (skillDoc) {
-                    skills.push({ title: meta.title, prompt: extractSkillPrompt(skillDoc) });
-                  }
-                }
-              }
+              // チャットは ja デフォルト（既存ロジックに揃える。将来 i18n 設定で切替）
+              const skills = pickActiveSkills(fm.skillMetas, (id) => fm.getCachedDoc(`skill:${id}`), "ja");
               if (skills.length === 0) return undefined;
               return buildSkillPromptSection(skills);
             })()}

@@ -261,6 +261,7 @@ app.post("/rewrite", async (c) => {
     editedSectionHeadings: string[];
     language: string;
     model?: string;
+    skills?: { title: string; prompt: string }[];
   }>();
 
   if (!body.existingSections || !body.newSections) {
@@ -276,7 +277,7 @@ app.post("/rewrite", async (c) => {
     );
   }
 
-  const systemPrompt = buildRewriterSystemPrompt(body.language || "en");
+  const systemPrompt = buildRewriterSystemPrompt(body.language || "en", body.skills);
   const userMessage = buildRewriterUserMessage({
     existingSections: body.existingSections,
     newSections: body.newSections,
@@ -316,6 +317,7 @@ app.post("/cross-update", async (c) => {
     existingWikis: ExistingWikiDetail[];
     language: string;
     model?: string;
+    skills?: { title: string; prompt: string }[];
   }>();
 
   if (!body.existingWikis || body.existingWikis.length === 0) {
@@ -328,7 +330,7 @@ app.post("/cross-update", async (c) => {
     return c.json({ proposals: [] });
   }
 
-  const systemPrompt = buildCrossUpdateSystemPrompt(body.language || "en");
+  const systemPrompt = buildCrossUpdateSystemPrompt(body.language || "en", body.skills);
   const userMessage = buildCrossUpdateUserMessage(
     body.newNoteTitle,
     body.newNoteContent,
@@ -367,6 +369,7 @@ app.post("/synthesize", async (c) => {
     existingSynthesisTitles: string[];
     language: string;
     model?: string;
+    skills?: { title: string; prompt: string }[];
   }>();
 
   if (!body.concepts || body.concepts.length < 2) {
@@ -379,7 +382,7 @@ app.post("/synthesize", async (c) => {
     return c.json({ candidates: [] });
   }
 
-  const systemPrompt = buildSynthesizerSystemPrompt(body.language || "en");
+  const systemPrompt = buildSynthesizerSystemPrompt(body.language || "en", body.skills);
   const userMessage = buildSynthesizerUserMessage(
     body.concepts,
     body.existingSynthesisTitles || [],

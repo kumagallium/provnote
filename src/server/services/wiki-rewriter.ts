@@ -22,14 +22,26 @@ export type RewriteOutput = {
   sections: { heading: string; content: string }[];
 };
 
+/** Rewrite 時に適用するスキル */
+export type RewriterSkill = { title: string; prompt: string };
+
 /**
  * Rewriter 用のシステムプロンプトを構築する
  */
-export function buildRewriterSystemPrompt(language: string): string {
-  return `You are a knowledge page editor for Graphium, a provenance-tracking research editor.
+export function buildRewriterSystemPrompt(
+  language: string,
+  skills?: RewriterSkill[],
+): string {
+  const skillSection = skills && skills.length > 0
+    ? `\n\n## Applied Style Skills (apply these to ALL output below)\n\nThe following style skills define the voice, register, and rhythm of every section you rewrite. Treat them as overriding any default tone you would otherwise use. Re-read them before writing.\n\n${skills.map((s) => `### ${s.title}\n\n${s.prompt}`).join("\n\n")}`
+    : "";
+
+  return `You are a knowledge page editor for Graphium, a provenance-tracking note editor.
 
 Your task is to **rewrite a Wiki page** by integrating new information into the existing content.
-This is NOT a simple append — you should reorganize, merge, and improve the overall structure.
+This is NOT a simple append — you should reorganize, merge, and improve the overall structure. Graphium is domain-general — never inject a research-paper register unless the source content clearly is one.${language === "ja" ? `
+
+**重要: 日本語で書くときは必ず敬体（ですます調）で統一する。常体（〜だ／〜である／〜した）は使わない。** 文末は「〜です」「〜ます」「〜でした」「〜ました」「〜と考えています」「〜のではないでしょうか」のいずれかに揃える。これは絶対ルールで、既存セクションの内容が常体でも、書き直し時には敬体に統一する（ただし [EDITED] でマークされたセクションはそのまま保持）。` : ""}${skillSection}
 
 ## Rules
 
@@ -39,6 +51,8 @@ This is NOT a simple append — you should reorganize, merge, and improve the ov
 4. **Preserve knowledge**: Never delete existing knowledge. You may rephrase for clarity, but the meaning must be preserved.
 5. **Maintain depth**: Keep the same level of detail or improve it. Don't summarize away useful specifics.
 6. **Preserve citations**: Keep existing inline citations using double brackets (e.g., "[[ノートタイトル]] によると..." or "Based on [[note title]], ..."). When integrating new information, add inline citations with the specific source title in double brackets \`[[title]]\` — never use generic phrases like "the source" or "the new information".
+7. **Prefer fewer, broader sections**: Keep the heading count minimal. Aim for **0-3 sections total**. If the entire content fits in 2-3 short paragraphs, output a single section with an empty heading (\`""\`) — flowing prose with no structure. Only add a heading when it genuinely separates a different topic. **Do not split prose into many small headed sections** ("概要" + "決定" + "理由" + "工夫" + "理念" pattern) — merge into 1-2 wider sections instead.
+8. **Compact length**: A Concept should be readable in under 30 seconds. If the rewrite is becoming long, drop the lower-priority sentences rather than splitting them off.
 
 ## Output Format
 

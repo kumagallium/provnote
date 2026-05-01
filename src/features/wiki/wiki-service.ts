@@ -219,6 +219,7 @@ export async function rewriteAndMerge(
   /** 言語オーバーライド（既存 Wiki の wikiMeta.language が未設定の場合に使う） */
   language?: string,
   noteIndex?: NoteIndex,
+  skills?: { title: string; prompt: string }[],
 ): Promise<GraphiumDocument> {
   const page = existingDoc.pages[0];
   if (!page) return mergeIntoWikiDocument(existingDoc, ingesterOutput, sourceNoteId, model, noteIndex);
@@ -247,6 +248,7 @@ export async function rewriteAndMerge(
         newSections,
         editedSectionHeadings,
         language: existingDoc.wikiMeta?.language ?? language ?? "en",
+        ...(skills && skills.length > 0 ? { skills } : {}),
       }),
     });
 
@@ -524,19 +526,23 @@ function convertSectionsToBlocks(
   const knowledgeLinks: any[] = [];
 
   for (const section of sections) {
-    // H2 見出しブロック
-    blocks.push({
-      id: crypto.randomUUID(),
-      type: "heading",
-      props: {
-        textColor: "default",
-        backgroundColor: "default",
-        textAlignment: "left",
-        level: 2,
-      },
-      content: [{ type: "text", text: section.heading, styles: {} }],
-      children: [],
-    });
+    // H2 見出しブロック（heading が空文字の場合はスキップ。短い Concept で
+    // セクション分けが不要な場合に LLM が `heading: ""` を返すことがあるため）
+    const trimmedHeading = (section.heading ?? "").trim();
+    if (trimmedHeading) {
+      blocks.push({
+        id: crypto.randomUUID(),
+        type: "heading",
+        props: {
+          textColor: "default",
+          backgroundColor: "default",
+          textAlignment: "left",
+          level: 2,
+        },
+        content: [{ type: "text", text: trimmedHeading, styles: {} }],
+        children: [],
+      });
+    }
 
     // コンテンツを段落ブロックに分割
     const paragraphs = section.content.split("\n").filter(Boolean);
@@ -932,6 +938,7 @@ type CrossUpdateInput = {
   newWikiTitles: string[];
   existingWikis: ExistingWikiDetail[];
   language: string;
+  skills?: { title: string; prompt: string }[];
 };
 
 type CrossUpdateResult = {
@@ -968,6 +975,7 @@ export async function applyCrossUpdate(
   sourceNoteId: string,
   model: string | null,
   noteIndex?: NoteIndex,
+  skills?: { title: string; prompt: string }[],
 ): Promise<GraphiumDocument> {
   const now = new Date().toISOString();
   const page = existingDoc.pages[0];
@@ -1020,6 +1028,7 @@ export async function applyCrossUpdate(
             newSections: [{ heading: proposal.section.heading, content: proposal.section.content }],
             editedSectionHeadings: existingDoc.wikiMeta?.editedSections ?? [],
             language: existingDoc.wikiMeta?.language ?? "ja",
+            ...(skills && skills.length > 0 ? { skills } : {}),
           }),
         });
         if (res.ok) {
