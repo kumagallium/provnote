@@ -83,7 +83,7 @@ import { LATEST_DOCUMENT_VERSION } from "./lib/document-migration";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
-import { NoteListView, buildKnowledgeMap, type GraphiumIndex, type NoteIndexEntry } from "./features/navigation";
+import { NoteListView, TrashView, buildKnowledgeMap, findIncomingReferences, type GraphiumIndex, type NoteIndexEntry } from "./features/navigation";
 import { useHashRouter, type AppRoute, type RouteActions } from "./hooks/use-hash-router";
 import {
   WikiListView, WikiLogView, WikiLintView, WikiBanner,
@@ -2272,6 +2272,7 @@ export function NoteApp() {
     try { localStorage.setItem("graphium-sidebar-collapsed", desktopSidebarCollapsed ? "1" : "0"); } catch {}
   }, [desktopSidebarCollapsed]);
   const [showMemos, setShowMemos] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
 
   // Cmd+K Composer（統一された AI 呼び出し口 / UX Audit #04）
   // Ask のみ UI 公開。他モードの実装は NoteEditorInner 内のハンドラに保持（将来用）。
@@ -3167,18 +3168,18 @@ export function NoteApp() {
 
   const sidebarProps = {
     activeFileId: fm.activeFileId,
-    onSelect: (fileId: string) => { fm.handleOpenFile(fileId); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "editor", fileId }); },
-    onNewNote: () => { fm.handleNewNote(); setShowMemos(false); setSidebarOpen(false); },
+    onSelect: (fileId: string) => { fm.handleOpenFile(fileId); setShowMemos(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "editor", fileId }); },
+    onNewNote: () => { fm.handleNewNote(); setShowMemos(false); setShowTrash(false); setSidebarOpen(false); },
     onRefresh: fm.refreshFiles,
     onShowReleaseNotes: () => setShowReleaseNotes(true),
     onShowSettings: () => { setShowSettings(true); setSidebarOpen(false); },
     agentConfigured,
     recentNotes: fm.recentNotes,
-    onShowNoteList: () => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "notes" }); },
+    onShowNoteList: () => { fm.setShowNoteList(true); fm.setActiveAssetType(null); fm.setActiveLabel(null); setShowMemos(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "notes" }); },
     mediaIndex: fm.mediaIndex,
-    onShowAssetGallery: (type: import("./features/asset-browser").MediaType) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "assets", mediaType: type }); },
+    onShowAssetGallery: (type: import("./features/asset-browser").MediaType) => { fm.setActiveAssetType(type); fm.setShowNoteList(false); fm.setActiveLabel(null); setShowMemos(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "assets", mediaType: type }); },
     noteIndex: fm.noteIndex,
-    onShowLabelGallery: (label: string) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); setShowMemos(false); setSidebarOpen(false); router.navigate({ view: "labels", label }); },
+    onShowLabelGallery: (label: string) => { fm.setActiveLabel(label); fm.setActiveAssetType(null); fm.setShowNoteList(false); setShowMemos(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "labels", label }); },
     activeAssetType: fm.activeAssetType,
     activeLabel: fm.activeLabel,
     filesLoading: fm.filesLoading,
@@ -3196,15 +3197,28 @@ export function NoteApp() {
       }
       return { summary, concept, synthesis };
     })(),
-    onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
+    onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
     activeWikiKind: fm.activeWikiKind,
     aiAvailable: aiAvailable ?? false,
-    onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-log" }); },
-    onShowWikiLint: () => { setActiveWikiView("lint"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setSidebarOpen(false); router.navigate({ view: "wiki-lint" }); },
+    onShowWikiLog: () => { setActiveWikiView("log"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "wiki-log" }); },
+    onShowWikiLint: () => { setActiveWikiView("lint"); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setShowSkillList(false); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "wiki-lint" }); },
     activeWikiView,
     skillCount: fm.skillMetas.size,
-    onShowSkillList: () => { setShowSkillList(true); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setSidebarOpen(false); },
+    onShowSkillList: () => { setShowSkillList(true); fm.setActiveWikiKind(null); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setShowTrash(false); setSidebarOpen(false); },
     skillActive: showSkillList,
+    onShowTrash: () => {
+      setShowTrash(true);
+      fm.setActiveAssetType(null);
+      fm.setActiveLabel(null);
+      fm.setActiveWikiKind(null);
+      fm.setShowNoteList(false);
+      setShowMemos(false);
+      setShowSkillList(false);
+      setActiveWikiView(null);
+      setSidebarOpen(false);
+    },
+    trashActive: showTrash,
+    trashCount: fm.trashedNotes.length,
   };
 
   return (
@@ -3329,6 +3343,22 @@ export function NoteApp() {
             onOpenNoteFull={(noteId) => { setListSidePeekNoteId(null); fm.setShowNoteList(false); fm.handleOpenFile(noteId); router.navigate({ view: "editor", fileId: noteId }); }}
             onBack={() => { setListSidePeekNoteId(null); fm.setShowNoteList(false); router.navigate({ view: "home" }); }}
             onDeleteNotes={async (ids) => {
+              // 参照警告: 1件以上から参照されている場合は info 確認を出してから移動
+              // ゴミ箱への移動なので復元可能 — ここでは情報的な警告にとどめる
+              if (fm.rawNoteIndex) {
+                const refIds = new Set<string>();
+                for (const id of ids) {
+                  for (const ref of findIncomingReferences(fm.rawNoteIndex, id)) {
+                    if (!ids.includes(ref.noteId)) refIds.add(ref.noteId);
+                  }
+                }
+                if (refIds.size > 0) {
+                  const ok = window.confirm(
+                    t("nav.refsTrashWarn", { count: String(refIds.size) })
+                  );
+                  if (!ok) return;
+                }
+              }
               for (const id of ids) await fm.handleDelete(id);
             }}
             onOpenWikiPeek={(wikiNoteId) => { setListSidePeekNoteId(wikiNoteId); }}
@@ -3383,6 +3413,18 @@ export function NoteApp() {
             onOpenWikiFull={(wikiId) => { setListSidePeekNoteId(null); fm.setActiveWikiKind(null); fm.handleOpenWikiFile(wikiId); router.navigate({ view: "wiki-editor", kind: fm.activeWikiKind!, wikiId }); }}
             onBack={() => { setListSidePeekNoteId(null); fm.setActiveWikiKind(null); router.navigate({ view: "home" }); }}
             onDeleteWiki={fm.handleDeleteWikiFile}
+          />
+        ) : showTrash ? (
+          <TrashView
+            rawNoteIndex={fm.rawNoteIndex}
+            trashedNotes={fm.trashedNotes}
+            onBack={() => { setShowTrash(false); router.navigate({ view: "home" }); }}
+            onRestore={async (ids) => {
+              for (const id of ids) await fm.handleRestore(id);
+            }}
+            onPermanentDelete={async (ids) => {
+              for (const id of ids) await fm.handlePermanentDelete(id);
+            }}
           />
         ) : showSkillList ? (
           <SkillListView

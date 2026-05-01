@@ -355,12 +355,20 @@ fn write_note_file(file_id: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("ファイル書き込み失敗: {e}"))
 }
 
-/// ノートファイルを削除
+/// ノートファイルを完全削除（OS のゴミ箱へ送る）
+///
+/// アプリ内ゴミ箱から「完全削除」が押されたときに呼ばれる。
+/// `trash` クレートで OS のゴミ箱に送るので、ユーザーは Finder から復元できる。
+/// trash クレートが失敗した場合はフォールバックで通常削除する。
 #[tauri::command]
 fn delete_note_file(file_id: String) -> Result<(), String> {
     let path = notes_dir()?.join(format!("{file_id}.json"));
     if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("ファイル削除失敗: {e}"))?;
+        if let Err(e) = trash::delete(&path) {
+            // OS のゴミ箱送りに失敗しても、最後の手段として削除する
+            eprintln!("trash::delete 失敗（フォールバックで unlink）: {e}");
+            fs::remove_file(&path).map_err(|e| format!("ファイル削除失敗: {e}"))?;
+        }
     }
     Ok(())
 }
@@ -422,12 +430,15 @@ fn write_wiki_file(file_id: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("Wiki 書き込み失敗: {e}"))
 }
 
-/// Wiki ファイルを削除
+/// Wiki ファイルを完全削除（OS のゴミ箱へ送る）
 #[tauri::command]
 fn delete_wiki_file(file_id: String) -> Result<(), String> {
     let path = wiki_dir()?.join(format!("{file_id}.json"));
     if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("Wiki 削除失敗: {e}"))?;
+        if let Err(e) = trash::delete(&path) {
+            eprintln!("trash::delete 失敗（フォールバックで unlink）: {e}");
+            fs::remove_file(&path).map_err(|e| format!("Wiki 削除失敗: {e}"))?;
+        }
     }
     Ok(())
 }
@@ -489,12 +500,15 @@ fn write_skill_file(file_id: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("Skill 書き込み失敗: {e}"))
 }
 
-/// Skill ファイルを削除
+/// Skill ファイルを完全削除（OS のゴミ箱へ送る）
 #[tauri::command]
 fn delete_skill_file(file_id: String) -> Result<(), String> {
     let path = skill_dir()?.join(format!("{file_id}.json"));
     if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("Skill 削除失敗: {e}"))?;
+        if let Err(e) = trash::delete(&path) {
+            eprintln!("trash::delete 失敗（フォールバックで unlink）: {e}");
+            fs::remove_file(&path).map_err(|e| format!("Skill 削除失敗: {e}"))?;
+        }
     }
     Ok(())
 }
@@ -574,18 +588,23 @@ fn list_media_files_cmd() -> Result<Vec<MediaFileInfo>, String> {
     Ok(files)
 }
 
-/// メディアファイルを削除
+/// メディアファイルを完全削除（OS のゴミ箱へ送る）
 #[tauri::command]
 fn delete_media_file(file_id: String) -> Result<(), String> {
     let dir = media_dir()?;
     let data_path = dir.join(&file_id);
     if data_path.exists() {
-        fs::remove_file(&data_path).map_err(|e| format!("メディア削除失敗: {e}"))?;
+        if let Err(e) = trash::delete(&data_path) {
+            eprintln!("trash::delete 失敗（フォールバックで unlink）: {e}");
+            fs::remove_file(&data_path).map_err(|e| format!("メディア削除失敗: {e}"))?;
+        }
     }
     let meta_path = dir.join(format!("{file_id}.meta.json"));
     if meta_path.exists() {
-        fs::remove_file(&meta_path)
-            .map_err(|e| format!("メタデータ削除失敗: {e}"))?;
+        if let Err(e) = trash::delete(&meta_path) {
+            eprintln!("trash::delete 失敗（フォールバックで unlink）: {e}");
+            fs::remove_file(&meta_path).map_err(|e| format!("メタデータ削除失敗: {e}"))?;
+        }
     }
     Ok(())
 }

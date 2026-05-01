@@ -1,5 +1,6 @@
 export { RecentNotes } from "./RecentNotes";
 export { NoteListView } from "./NoteListView";
+export { TrashView } from "./TrashView";
 export {
   getRecentNotes,
   addToRecent,
@@ -17,6 +18,11 @@ export {
   readIndexFile,
   updateIndexEntry,
   removeIndexEntry,
+  softDeleteIndexEntry,
+  restoreIndexEntry,
+  getActiveNotes,
+  getTrashedNotes,
+  findIncomingReferences,
   buildIndexEntry,
   saveIndexFile,
   buildKnowledgeMap,
