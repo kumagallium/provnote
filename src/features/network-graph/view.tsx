@@ -238,8 +238,11 @@ export function NetworkGraphPanel({
     });
 
     // fcose レイアウト実行（要素描画後にアニメーション開始）
-    // ラベル重なり対策: ノード反発と理想エッジ長を大きめにとってノード間距離を確保する。
-    // 拡大表示時は、より広い領域を活用したいので少し緩めに散らす。
+    // ラベル重なり対策 + ホップ距離の可視化:
+    //   - ノード反発と理想エッジ長を大きめにとって全体間隔を確保
+    //   - idealEdgeLength を hop 差に応じて変える（中心→hop1 は短い、hop2 へは長い）
+    //     ことで「ホップ数が近いほど中心に近い」配置になる。
+    //   - hop 数が多いノード自体に少し負の gravity をかけて外側へ押し出す
     const layout = cy.layout({
       name: "fcose",
       animate: true,
@@ -247,11 +250,24 @@ export function NetworkGraphPanel({
       animationEasing: "ease-out-cubic" as any,
       quality: "default",
       randomize: true,
-      nodeRepulsion: 18000,
-      idealEdgeLength: 180,
+      nodeRepulsion: (node: any) => {
+        // hop が大きいほど周辺ノードと反発を弱め、現在ノード周辺を密にする
+        const hop = node.data("hop") ?? 0;
+        return 12000 + hop * 4000;
+      },
+      idealEdgeLength: (edge: any) => {
+        // エッジが繋ぐノードの hop 差で理想の長さを変える
+        const a = edge.source().data("hop") ?? 0;
+        const b = edge.target().data("hop") ?? 0;
+        const maxHop = Math.max(a, b);
+        // 中心(0)とのエッジは短く、hop が深くなるほど長く
+        if (maxHop <= 1) return 120;
+        if (maxHop <= 2) return 220;
+        return 300;
+      },
       edgeElasticity: 0.35,
-      gravity: 0.25,
-      gravityRange: 3.8,
+      gravity: 0.4,
+      gravityRange: 4.0,
       nodeSeparation: 140,
       padding: 60,
     } as any);
