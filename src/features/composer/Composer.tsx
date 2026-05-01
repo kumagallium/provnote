@@ -139,8 +139,10 @@ export function Composer(props: ComposerProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // 日本語 IME 変換中は無視
-    if (e.nativeEvent.isComposing) return;
+    // 日本語 IME 変換中は無視。
+    // WebKit（Tauri）では IME 確定の Enter で isComposing が false になる場合があるため
+    // keyCode === 229 も併せて判定する。
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
     if (e.key === "ArrowDown") {
       if (rows.length === 0) return;
