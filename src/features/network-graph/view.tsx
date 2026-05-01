@@ -2,7 +2,9 @@
 // Cytoscape.js + fcose で派生関係をヌルヌル可視化
 // design.md テーマカラー準拠
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { createPortal } from "react-dom";
+import { Maximize2, X } from "lucide-react";
 import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import type { NoteGraphData } from "./graph-builder";
@@ -147,11 +149,22 @@ export function NetworkGraphPanel({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const handleNavigate = useCallback(
     (noteId: string) => onNavigate(noteId),
     [onNavigate]
   );
+
+  // Esc キーで拡大解除
+  useEffect(() => {
+    if (!expanded) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [expanded]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -276,7 +289,7 @@ export function NetworkGraphPanel({
       cy.destroy();
       cyRef.current = null;
     };
-  }, [data, handleNavigate]);
+  }, [data, handleNavigate, expanded]);
 
   if (data.nodes.length === 0) {
     return (
@@ -286,40 +299,61 @@ export function NetworkGraphPanel({
     );
   }
 
+  const legendBar = (
+    <div className="px-3 py-2 border-b border-border flex items-center gap-3 text-[10px] text-muted-foreground">
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.current }} />
+        現在
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.hop1 }} />
+        1ホップ
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.hop2 }} />
+        2ホップ
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2.5 h-2.5 rotate-45" style={{ backgroundColor: NODE_COLORS.wiki, width: 8, height: 8 }} />
+        Wiki
+      </span>
+      <span className="ml-auto flex items-center gap-1">
+        <span>{data.nodes.length} ノード / {data.edges.length} エッジ</span>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title={expanded ? "閉じる (Esc)" : "全画面表示"}
+        >
+          {expanded ? <X size={12} /> : <Maximize2 size={12} />}
+        </button>
+      </span>
+    </div>
+  );
+
+  // 拡大時は portal で画面全体に重ねる
+  if (expanded) {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-6"
+        style={{ background: "rgba(0, 0, 0, 0.45)" }}
+        onClick={() => setExpanded(false)}
+      >
+        <div
+          className="relative flex flex-col rounded-lg shadow-2xl overflow-hidden"
+          style={{ background: BG_COLOR, width: "min(1400px, 95vw)", height: "92vh" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {legendBar}
+          <div ref={containerRef} className="flex-1" />
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
   return (
     <div className="flex flex-col h-full" style={{ background: BG_COLOR }}>
-      {/* 凡例 */}
-      <div className="px-3 py-2 border-b border-border flex items-center gap-3 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: NODE_COLORS.current }}
-          />
-          現在
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: NODE_COLORS.hop1 }}
-          />
-          1ホップ
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: NODE_COLORS.hop2 }}
-          />
-          2ホップ
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rotate-45"
-            style={{ backgroundColor: NODE_COLORS.wiki, width: 8, height: 8 }}
-          />
-          Wiki
-        </span>
-      </div>
-      {/* グラフ */}
+      {legendBar}
       <div ref={containerRef} className="flex-1" />
     </div>
   );
