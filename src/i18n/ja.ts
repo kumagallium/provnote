@@ -342,6 +342,7 @@ export const ja: Record<string, string> = {
   "knowledge.inKnowledgeCount": "Knowledge 化済み ({count})",
   "knowledge.openInKnowledge": "対応する Knowledge エントリを開く",
   "knowledge.alreadyInKnowledge": "Knowledge 化済み ↗",
+  "knowledge.regenerate": "再生成",
   "nav.knowledgeColumn": "Knowledge",
   "nav.knowledgeColumnTooltip": "このノートが Knowledge 化されているか",
 

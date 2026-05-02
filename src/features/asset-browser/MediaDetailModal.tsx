@@ -2,7 +2,7 @@
 // 左: 画像拡大表示 / 右: 使用ノートのグラフ構造
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { ExternalLink, BookPlus, BookOpen, FlaskConical } from "lucide-react";
+import { ExternalLink, BookPlus, BookOpen, FlaskConical, RefreshCw } from "lucide-react";
 import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import { getActiveProvider } from "../../lib/storage/registry";
@@ -464,14 +464,24 @@ export function MediaDetailModal({
           <div className="flex items-center gap-2 shrink-0">
             {onIngest && (entry.type === "url" || entry.type === "pdf") && (
               knowledgeWikiNoteId ? (
-                <button
-                  onClick={() => handleNavigate(`wiki:${knowledgeWikiNoteId}`)}
-                  className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5"
-                  title={t("knowledge.openInKnowledge")}
-                >
-                  <BookOpen size={14} />
-                  {t("knowledge.inKnowledge")}
-                </button>
+                <>
+                  <button
+                    onClick={() => handleNavigate(`wiki:${knowledgeWikiNoteId}`)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5"
+                    title={t("knowledge.openInKnowledge")}
+                  >
+                    <BookOpen size={14} />
+                    {t("knowledge.inKnowledge")}
+                  </button>
+                  <button
+                    onClick={() => onIngest(entry)}
+                    className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-md hover:bg-primary/10"
+                    title={t("knowledge.regenerate")}
+                    aria-label={t("knowledge.regenerate")}
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={() => onIngest(entry)}

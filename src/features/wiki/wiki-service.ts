@@ -895,6 +895,66 @@ export async function ingestFromUrl(
 }
 
 /**
+ * PDF Blob からテキスト抽出 → Wiki を生成する
+ *
+ * PDF パースはクライアント側で react-pdf の pdfjs を流用する。
+ * サーバーには抽出済みテキストを通常の /ingest と同じ形で投げる。
+ */
+export async function ingestFromPdf(
+  blob: Blob,
+  fileName: string,
+  sourceNoteId: string,
+  existingWikis: ExistingWikiInfo[],
+  language: string,
+): Promise<IngestResult & { pageCount: number }> {
+  const { extractPdfText } = await import("./pdf-text-extractor");
+  const extracted = await extractPdfText(blob);
+
+  if (!extracted.text || extracted.text.length < 50) {
+    throw new Error("PDF から十分なテキストを抽出できませんでした（スキャン PDF など？）");
+  }
+
+  // 本文に CJK 文字が一定比率含まれていれば、PDF メタデータ Title が ASCII のみ
+  // （LaTeX 等が埋める英語タイトル）の場合は捨ててファイル名を使う。
+  // メタデータの英語 Title が LLM の出力言語に引きずられる原因になるため。
+  const bodyHasCJK = /[぀-ヿ一-鿿]/.test(extracted.text);
+  const titleIsAsciiOnly = extracted.title.length > 0 && /^[\x00-\x7F]+$/.test(extracted.title);
+  const fallbackTitle = fileName.replace(/\.pdf$/i, "");
+  const noteTitle =
+    bodyHasCJK && titleIsAsciiOnly
+      ? fallbackTitle
+      : extracted.title || fallbackTitle;
+
+  // 抽出テキスト冒頭に出力言語ヒントを再掲する。システムプロンプト末尾の
+  // "Output in: ..." 指示が長文中で軽視されるケースに備えた近接リマインダ。
+  const languageHint =
+    language === "ja"
+      ? "[出力言語: 日本語で書いてください。Summary も Concept もすべて日本語にしてください]"
+      : `[Output language: ${language}]`;
+  const noteContent = `${languageHint}\n\n${extracted.text}`;
+
+  const res = await fetch(`${API_BASE}/ingest`, {
+    method: "POST",
+    headers: wikiHeaders(),
+    body: JSON.stringify({
+      noteId: sourceNoteId,
+      noteContent,
+      noteTitle,
+      existingWikiTitles: existingWikis,
+      language,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error || `Ingest failed (${res.status})`);
+  }
+
+  const data = (await res.json()) as IngestResult;
+  return { ...data, pageCount: extracted.pageCount };
+}
+
+/**
  * AI チャットの会話履歴から Wiki を生成する
  */
 export async function ingestFromChat(

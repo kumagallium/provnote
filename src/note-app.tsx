@@ -88,7 +88,7 @@ import { useHashRouter, type AppRoute, type RouteActions } from "./hooks/use-has
 import {
   WikiListView, WikiLogView, WikiLintView, WikiBanner,
   IngestToast, type IngestToastState, type IngestToastItem,
-  ingestNote, ingestFromUrl, ingestFromChat,
+  ingestNote, ingestFromUrl, ingestFromChat, ingestFromPdf,
   buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge, embedWikiSections,
   // 横断更新
   fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
@@ -3326,8 +3326,13 @@ export function NoteApp() {
             onAddUrlBookmark={fm.handleAddUrlBookmark}
             onUploadMedia={fm.handleUploadMedia}
             resolveKnowledgeWikiId={(entry) => {
-              if (entry.type !== "url" || !entry.url) return undefined;
-              return appKnowledgeMap.get(`url:${entry.url}`)?.[0]?.noteId;
+              if (entry.type === "url" && entry.url) {
+                return appKnowledgeMap.get(`url:${entry.url}`)?.[0]?.noteId;
+              }
+              if (entry.type === "pdf" && entry.fileId) {
+                return appKnowledgeMap.get(`pdf:${entry.fileId}`)?.[0]?.noteId;
+              }
+              return undefined;
             }}
             onIngestMedia={aiAvailable ? (entry) => {
               if (entry.type === "url" && entry.url) {
@@ -3349,6 +3354,33 @@ export function NoteApp() {
                     }
                     for (const wiki of result.wikis) {
                       const wikiDoc = buildWikiDocument(wiki, sourceNoteId, result.model, entry.name || entry.url, undefined, "ja", buildNoteIndex(fm.noteIndex));
+                      const newId = await fm.handleCreateWikiFile(wikiDoc);
+                      embedWikiSections(newId, wikiDoc).catch(() => {});
+                    }
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === toastId ? { ...i, status: "success" as const, result: `${result.wikis.length} wiki(s)` } : i) }));
+                  } catch (err) {
+                    setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === toastId ? { ...i, status: "error" as const, result: err instanceof Error ? err.message : "Error" } : i) }));
+                  }
+                })();
+              } else if (entry.type === "pdf" && entry.fileId) {
+                const toastId = `pdf-toast:${Date.now()}`;
+                const sourceNoteId = `pdf:${entry.fileId}`;
+                const newItem: IngestToastItem = { id: toastId, status: "queued", noteTitle: entry.name || entry.fileId };
+                setIngestToast((prev) => ({ items: [...(prev?.items ?? []), newItem] }));
+                (async () => {
+                  setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === toastId ? { ...i, status: "generating" as const, detail: "Extracting PDF text..." } : i) }));
+                  try {
+                    const provider = getActiveProvider();
+                    const blobUrl = await provider.getMediaBlobUrl(entry.fileId);
+                    const blob = await (await fetch(blobUrl)).blob();
+                    const existingWikis = (fm.noteIndex?.notes ?? []).filter((n) => n.source === "ai" && n.wikiKind).map((n) => ({ id: n.noteId, title: n.title, kind: n.wikiKind! }));
+                    const result = await ingestFromPdf(blob, entry.name || "document.pdf", sourceNoteId, existingWikis, "ja");
+                    if (result.wikis.length === 0) {
+                      setIngestToast((prev) => ({ items: (prev?.items ?? []).map((i: IngestToastItem) => i.id === toastId ? { ...i, status: "error" as const, result: "内容不足" } : i) }));
+                      return;
+                    }
+                    for (const wiki of result.wikis) {
+                      const wikiDoc = buildWikiDocument(wiki, sourceNoteId, result.model, entry.name || "PDF", undefined, "ja", buildNoteIndex(fm.noteIndex));
                       const newId = await fm.handleCreateWikiFile(wikiDoc);
                       embedWikiSections(newId, wikiDoc).catch(() => {});
                     }
