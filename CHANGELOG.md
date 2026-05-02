@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.5.2](https://github.com/kumagallium/Graphium/compare/v0.5.1...v0.5.2) - 2026-05-02
+- fix: light-theme code block with min-light syntax highlighting by @kumagallium in https://github.com/kumagallium/Graphium/pull/197
+- [feat] Trash bin with two-stage delete (soft + permanent) by @kumagallium in https://github.com/kumagallium/Graphium/pull/199
+- Improve note generation prompts for readability by @kumagallium in https://github.com/kumagallium/Graphium/pull/200
+- fix: keep Cmd+K composer open on IME Enter (WebKit) by @kumagallium in https://github.com/kumagallium/Graphium/pull/201
+- Extract writing voice as editable system skills by @kumagallium in https://github.com/kumagallium/Graphium/pull/202
+- Notion-style inline note title by @kumagallium in https://github.com/kumagallium/Graphium/pull/203
+- feat: PDF knowledge ingestion + regenerate action by @kumagallium in https://github.com/kumagallium/Graphium/pull/204
+
 ## [v0.5.1](https://github.com/kumagallium/Graphium/compare/v0.5.0...v0.5.1) - 2026-05-01
 - feat: unified link & merge UI for inline highlights and prev-step by @kumagallium in https://github.com/kumagallium/Graphium/pull/194
 - fix: skip auto-save while file list is loading by @kumagallium in https://github.com/kumagallium/Graphium/pull/196
