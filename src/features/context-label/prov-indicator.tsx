@@ -130,8 +130,18 @@ export function ProvIndicatorLayer() {
     }
     if (!wrapper) return;
     const wrapperRect = wrapper.getBoundingClientRect();
+    // SidePeek が開いていて、この wrapper がその下に隠れている場合は
+    // ラベルを SidePeek の左端より内側に収める（z-index で重なるのを防ぐ）
+    let effectiveRight = wrapperRect.right;
+    const sidePeek = document.querySelector("[data-side-peek]");
+    if (sidePeek && !wrapper.contains(sidePeek)) {
+      const peekRect = sidePeek.getBoundingClientRect();
+      if (peekRect.left < effectiveRight) {
+        effectiveRight = peekRect.left;
+      }
+    }
     // サイドバー境界の左にラベルを配置（8px の余白）
-    const indicatorLeft = wrapperRect.right - 8;
+    const indicatorLeft = effectiveRight - 8;
     // ラベルの表示範囲をエディタラッパー内に制限
     setClipBounds({ top: wrapperRect.top, bottom: wrapperRect.bottom });
 
@@ -188,11 +198,17 @@ export function ProvIndicatorLayer() {
       });
       mo.observe(wrapper, { childList: true, subtree: true });
     }
+    // SidePeek の開閉（document.body 直下にポータルされる）を監視
+    const bodyMo = new MutationObserver(() => {
+      requestAnimationFrame(compute);
+    });
+    bodyMo.observe(document.body, { childList: true });
     return () => {
       window.removeEventListener("scroll", compute, true);
       window.removeEventListener("resize", compute);
       ro?.disconnect();
       mo?.disconnect();
+      bodyMo.disconnect();
     };
   }, [compute]);
 

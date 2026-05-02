@@ -1941,14 +1941,12 @@ function NoteEditorInner({
       )}
       {/* ヘッダー */}
       <div className="px-3 md:px-4 py-2.5 md:py-2 border-b border-border flex items-center gap-2 md:gap-3 shrink-0">
-        <input
-          type="text"
-          value={title}
-          onChange={handleTitleChange}
-          className="flex-1 min-w-0 text-sm font-medium bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
-          placeholder={t("editor.titlePlaceholder")}
+        <div
+          className="flex-1 min-w-0 text-sm font-medium text-muted-foreground truncate"
           title={title}
-        />
+        >
+          {title || t("editor.titlePlaceholder")}
+        </div>
         {!isWikiDoc && aiAvailable && (
           <KnowledgeStatusChip
             wikiEntries={wikiEntriesForCurrentNote}
@@ -1989,6 +1987,20 @@ function NoteEditorInner({
         {/* 左: エディタ */}
         <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
           <div style={{ padding: "16px 0", paddingLeft: isDesktop ? 100 : 16, paddingRight: isDesktop ? 100 : 16, paddingBottom: isDesktop ? 16 : 72 }}>
+            <input
+              type="text"
+              value={title}
+              onChange={handleTitleChange}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  editorRef.current?.focus();
+                }
+              }}
+              placeholder={t("editor.titlePlaceholder")}
+              aria-label={t("editor.titlePlaceholder")}
+              className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-3 mb-5 px-[54px]"
+            />
             <SandboxEditor
               key={fileId || "new"}
               blocks={[pdfViewerBlock, bookmarkBlock]}
