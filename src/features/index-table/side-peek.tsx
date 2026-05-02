@@ -469,6 +469,27 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate, wikiEntries, on
             <ProvIndicatorHoverHint wrapperEl={wrapperEl} zIndex={101} />
             <LabelDropdownPortal />
             <div style={{ padding: "16px 24px", paddingRight: 80 }}>
+              <input
+                type="text"
+                value={effectiveDoc?.title ?? ""}
+                onChange={(e) => {
+                  const newTitle = e.target.value;
+                  if (docRef.current) {
+                    docRef.current = { ...docRef.current, title: newTitle };
+                  }
+                  setDoc((d) => (d ? { ...d, title: newTitle } : d));
+                  handleChange();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    editorRef.current?.focus();
+                  }
+                }}
+                placeholder={tStatic("editor.titlePlaceholder")}
+                aria-label={tStatic("editor.titlePlaceholder")}
+                className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-1 mb-4 px-[54px]"
+              />
               <SandboxEditor
                 key={noteId}
                 initialContent={initialContent}
