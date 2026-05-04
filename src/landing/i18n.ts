@@ -48,7 +48,7 @@ export const en = {
   "trust.standards.title": "Open standards",
   "trust.standards.body":
     "Provenance exports as W3C PROV-JSON-LD. Any tool that reads PROV-DM can read your data.",
-  "trust.openSource.title": "Open source (MIT)",
+  "trust.openSource.title": "Open source (Apache 2.0)",
   "trust.openSource.body":
     "Every line is on GitHub. Self-host with Docker, audit the code, send a PR.",
   "trust.storage.title": "Your storage",
@@ -133,7 +133,7 @@ export const ja: Record<keyof typeof en, string> = {
   "trust.standards.title": "オープン標準",
   "trust.standards.body":
     "来歴は W3C PROV-JSON-LD で書き出せます。PROV-DM を読めるツールならどれでも読み込めます。",
-  "trust.openSource.title": "オープンソース（MIT）",
+  "trust.openSource.title": "オープンソース（Apache 2.0）",
   "trust.openSource.body":
     "コードは全部 GitHub にあります。Docker でセルフホストもでき、監査も PR も自由です。",
   "trust.storage.title": "あなたのストレージ",
