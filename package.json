@@ -53,6 +53,7 @@
     "hono": "^4.12.12",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.577.0",
+    "mammoth": "^1.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-pdf": "^10.4.1",

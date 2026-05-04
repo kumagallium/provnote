@@ -1,8 +1,10 @@
 // ノート一覧ビュー（メインエディタ領域に表示）
 // 全ノートをテーブル形式で表示し、ソート・フィルタ・検索・削除に対応
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, Download } from "lucide-react";
+import { Dropdown } from "@/ui/dropdown";
+import { MenuItem } from "@/ui/menu-item";
 import {
   IndexFileNoteListSource,
   type NoteListEntry,
@@ -83,6 +85,8 @@ export function NoteListView({
   onBack,
   onDeleteNotes,
   onOpenWikiPeek,
+  onImportDocx,
+  onIngestNotes,
 }: {
   noteIndex: GraphiumIndex | null;
   /** クリック時のコールバック（サイドピーク表示用） */
@@ -93,6 +97,13 @@ export function NoteListView({
   onDeleteNotes?: (noteIds: string[]) => Promise<void>;
   /** Knowledge アイコン押下で対応 wiki エントリをサイドピークで開くコールバック */
   onOpenWikiPeek?: (wikiNoteId: string) => void;
+  /** Word ファイルインポート（複数ファイル可、進捗コールバック付き） */
+  onImportDocx?: (
+    files: File[],
+    onProgress: (p: { done: number; total: number; current?: string; failed: string[] }) => void,
+  ) => Promise<void>;
+  /** 選択中ノートを Knowledge 化（既存トーストキューに登録） */
+  onIngestNotes?: (noteIds: string[]) => Promise<void>;
 }) {
   const [entries, setEntries] = useState<NoteListEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +116,17 @@ export function NoteListView({
   // 削除確認ダイアログ
   const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // インポート
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const importButtonRef = useRef<HTMLButtonElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMenuPos, setImportMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [importProgress, setImportProgress] = useState<{
+    done: number;
+    total: number;
+    current?: string;
+    failed: string[];
+  } | null>(null);
   const t = useT();
 
   // インデックスからノート一覧を構築
@@ -238,16 +260,142 @@ export function NoteListView({
         <span className="text-xs text-muted-foreground">
           {loading ? t("nav.loadingNotes") : t("nav.noteCount", { filtered: String(filtered.length), total: String(entries.length) })}
         </span>
-        {/* まとめて削除ボタン */}
-        {someSelected && onDeleteNotes && (
+        {/* インポートボタン（選択中でなければ表示） */}
+        {!someSelected && onImportDocx && (
           <button
-            onClick={() => setDeleteTarget([...selectedIds])}
-            className="ml-auto px-3 py-1 text-xs font-medium rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            ref={importButtonRef}
+            onClick={() => {
+              if (importMenuPos) {
+                setImportMenuPos(null);
+                return;
+              }
+              const rect = importButtonRef.current?.getBoundingClientRect();
+              if (rect) {
+                setImportMenuPos({ top: rect.bottom + 4, left: rect.right - 220 });
+              }
+            }}
+            disabled={importing}
+            className="ml-auto inline-flex items-center justify-center w-8 h-8 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            title="ファイルを取り込む"
+            aria-label="ファイルを取り込む"
           >
-            {t("nav.deleteSelected", { count: String(selectedIds.size) })}
+            <Download size={14} />
           </button>
         )}
+        {importMenuPos && (
+          <Dropdown
+            position={importMenuPos}
+            onClose={() => setImportMenuPos(null)}
+            minWidth={220}
+          >
+            <div className="py-1">
+              <MenuItem
+                onClick={() => {
+                  setImportMenuPos(null);
+                  importInputRef.current?.click();
+                }}
+              >
+                Word (.docx) を取り込む
+              </MenuItem>
+              {/* 将来: PowerPoint / Markdown / Notion エクスポート 等を追加 */}
+            </div>
+          </Dropdown>
+        )}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".docx"
+          multiple
+          className="hidden"
+          onChange={async (e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            if (files.length === 0 || !onImportDocx) return;
+            setImporting(true);
+            setImportProgress({ done: 0, total: files.length, failed: [] });
+            try {
+              await onImportDocx(files, (p) => setImportProgress(p));
+            } finally {
+              setImporting(false);
+              // 進捗 UI は失敗があれば残す（ユーザーが内容を確認できるように）。
+              // 全件成功なら少し待って自動で消す
+              setImportProgress((prev) => {
+                if (!prev) return null;
+                if (prev.failed.length === 0) {
+                  setTimeout(() => setImportProgress(null), 2500);
+                }
+                return prev;
+              });
+            }
+          }}
+        />
+        {/* 一括アクション（複数選択時） */}
+        {someSelected && (
+          <div className="ml-auto flex items-center gap-2">
+            {onIngestNotes && (
+              <button
+                onClick={async () => {
+                  const ids = [...selectedIds];
+                  await onIngestNotes(ids);
+                  setSelectedIds(new Set());
+                }}
+                className="px-3 py-1 text-xs font-medium rounded border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
+                title="選択したノートから Concept / Summary を抽出してナレッジに追加します"
+              >
+                {selectedIds.size} 件を Knowledge 化
+              </button>
+            )}
+            {onDeleteNotes && (
+              <button
+                onClick={() => setDeleteTarget([...selectedIds])}
+                className="px-3 py-1 text-xs font-medium rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                {t("nav.deleteSelected", { count: String(selectedIds.size) })}
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* インポート進捗 */}
+      {importProgress && (
+        <div className="px-6 py-2 border-b border-border bg-muted/30 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-foreground">
+              Word 取り込み: {importProgress.done} / {importProgress.total}
+              {importProgress.failed.length > 0 && (
+                <span className="text-destructive ml-2">
+                  （失敗: {importProgress.failed.length}）
+                </span>
+              )}
+            </span>
+            {!importing && (
+              <button
+                onClick={() => setImportProgress(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                閉じる
+              </button>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${(importProgress.done / Math.max(1, importProgress.total)) * 100}%` }}
+            />
+          </div>
+          {importProgress.current && importing && (
+            <div className="text-[11px] text-muted-foreground truncate">
+              処理中: {importProgress.current}
+            </div>
+          )}
+          {importProgress.failed.length > 0 && !importing && (
+            <div className="text-[11px] text-destructive">
+              失敗したファイル: {importProgress.failed.join(", ")}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ツールバー */}
       <NoteListToolbar

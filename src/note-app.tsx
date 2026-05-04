@@ -3468,6 +3468,86 @@ export function NoteApp() {
               for (const id of ids) await fm.handleDelete(id);
             }}
             onOpenWikiPeek={(wikiNoteId) => { setListSidePeekNoteId(wikiNoteId); }}
+            onIngestNotes={aiAvailable ? async (ids) => {
+              // Knowledge 化候補から AI 派生（wiki）と既に処理待ちの ID を除外
+              const candidates: { id: string; title: string }[] = [];
+              const skippedAi: string[] = [];
+              for (const id of ids) {
+                const entry = fm.noteIndex?.notes.find((n) => n.noteId === id);
+                if (!entry) continue;
+                if (entry.source === "ai") {
+                  skippedAi.push(entry.title || "(無題)");
+                  continue;
+                }
+                candidates.push({ id, title: entry.title || "(無題)" });
+              }
+              if (skippedAi.length > 0) {
+                window.alert(`Wiki ノートはスキップしました（${skippedAi.length} 件）`);
+              }
+              if (candidates.length === 0) return;
+
+              // doc 本体をロードしてキューに積む
+              for (const { id, title } of candidates) {
+                const doc = await fm.loadDoc(id);
+                if (!doc) continue;
+                enqueueIngest(id, title, doc);
+              }
+            } : undefined}
+            onImportDocx={async (files, onProgress) => {
+              const { importDocxToGraphiumDoc } = await import("./features/docx-import/import");
+              let lastNewId: string | null = null;
+              const failed: string[] = [];
+              for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                onProgress({ done: i, total: files.length, current: file.name, failed: [...failed] });
+                try {
+                  const doc = await importDocxToGraphiumDoc(file, {
+                    uploadImage: fm.handleUploadMedia,
+                    addUrlBookmark: (url, anchorText) => {
+                      fm.handleAddUrlBookmark({
+                        fileId: `url:${url}`,
+                        name: anchorText,
+                        type: "url",
+                        mimeType: "text/uri-list",
+                        url,
+                        thumbnailUrl: "",
+                        uploadedAt: new Date().toISOString(),
+                        usedIn: [],
+                      });
+                    },
+                  });
+                  const newId = await fm.handleCreateNoteFromImport(doc);
+                  lastNewId = newId;
+                } catch (err) {
+                  console.error("Word インポート失敗:", file.name, err);
+                  failed.push(file.name);
+                }
+                onProgress({ done: i + 1, total: files.length, failed: [...failed] });
+              }
+              await fm.refreshFiles();
+
+              // 画像周りの既知制約を一度だけ通知（成功が 1 件以上ある時のみ）
+              const successCount = files.length - failed.length;
+              if (successCount > 0) {
+                window.alert(
+                  [
+                    `${successCount} 件のノートを取り込みました。`,
+                    "",
+                    "※ 一部の画像が表示されない / トリミング前の状態で展開されることがあります。",
+                    "  原因: EMF/WMF・SmartArt・数式などはブラウザ変換ではサポート外、",
+                    "  Word のクロップ情報はメタデータとして別管理されているため反映されません。",
+                    "  必要に応じて元の Word と見比べて、ノート上で差し替えてください。",
+                  ].join("\n"),
+                );
+              }
+
+              // 単発取り込みなら自動で開く。複数なら一覧に留まる
+              if (lastNewId && files.length === 1) {
+                fm.setShowNoteList(false);
+                fm.handleOpenFile(lastNewId);
+                router.navigate({ view: "editor", fileId: lastNewId });
+              }
+            }}
           />
         ) : showMemos ? (
           <MemoGalleryView
