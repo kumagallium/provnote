@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.5.3](https://github.com/kumagallium/Graphium/compare/v0.5.2...v0.5.3) - 2026-05-04
+- Wrap long titles & fix SidePeek label position by @kumagallium in https://github.com/kumagallium/Graphium/pull/206
+- Reorganize settings, sidebar, and trash header by @kumagallium in https://github.com/kumagallium/Graphium/pull/207
+- fix: parameter parent resolution & IME Enter leak in title by @kumagallium in https://github.com/kumagallium/Graphium/pull/208
+- chore: relicense to Apache License 2.0 by @kumagallium in https://github.com/kumagallium/Graphium/pull/209
+
 ## [v0.5.2](https://github.com/kumagallium/Graphium/compare/v0.5.1...v0.5.2) - 2026-05-02
 - fix: light-theme code block with min-light syntax highlighting by @kumagallium in https://github.com/kumagallium/Graphium/pull/197
 - [feat] Trash bin with two-stage delete (soft + permanent) by @kumagallium in https://github.com/kumagallium/Graphium/pull/199
