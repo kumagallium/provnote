@@ -1243,6 +1243,32 @@ export function useFileManager(authenticated: boolean) {
     [],
   );
 
+  // 外部ファイル（Word / 将来 PowerPoint 等）からの取り込みでノートを新規作成する。
+  // human_derivation として記録 — 元ファイルからの抽出はユーザー由来の派生
+  const handleCreateNoteFromImport = useCallback(
+    async (doc: GraphiumDocument): Promise<string> => {
+      doc = await recordRevision(doc, null, "human_derivation");
+      const newFileId = await createFile(doc.title, doc);
+      const now = new Date().toISOString();
+      docCacheRef.current.set(newFileId, doc);
+
+      setFiles((prev) => [
+        { id: newFileId, name: `${doc.title}.graphium.json`, modifiedTime: now, createdTime: now },
+        ...prev,
+      ]);
+
+      if (noteIndexRef.current) {
+        const updated = updateIndexEntry(noteIndexRef.current, newFileId, doc);
+        noteIndexRef.current = updated;
+        setNoteIndex(updated);
+        saveIndexFile(updated).catch((err) => console.warn("インデックス保存失敗:", err));
+      }
+
+      return newFileId;
+    },
+    [],
+  );
+
   // Wiki の新規作成（Ingest 結果の保存用）
   const handleCreateWikiFile = useCallback(
     async (doc: GraphiumDocument): Promise<string> => {
@@ -1260,6 +1286,7 @@ export function useFileManager(authenticated: boolean) {
           title: doc.title,
           kind: doc.wikiMeta?.kind ?? "concept",
           headings,
+          model: doc.wikiMeta?.generatedBy?.model,
         });
         return next;
       });
@@ -1455,6 +1482,7 @@ export function useFileManager(authenticated: boolean) {
     handleRenameMedia,
     handleAddUrlBookmark,
     handleCreateNoteFromDocument,
+    handleCreateNoteFromImport,
     // Wiki
     wikiFiles,
     wikiMetas,

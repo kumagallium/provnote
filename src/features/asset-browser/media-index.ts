@@ -355,17 +355,20 @@ export async function ensureMediaIndex(
   // URL ブックマークを先に追加（Drive ファイルとは別管理）
   media.push(...existingUrlBookmarks);
 
+  // プロバイダー固有の URL 形式を尊重するため、既存エントリの url/thumbnailUrl はそのまま保持する。
+  // 新規エントリ（disk にあるが index にまだ無い）は Drive 互換 URL でフォールバック。
   for (const file of driveFiles) {
     const existingEntry = existingMap.get(file.id);
     const type = existingEntry?.type ?? mimeToMediaType(file.mimeType);
-    // 画像は CDN URL、それ以外は Drive の公開サムネイル URL を使う
-    const thumbnailUrl = type === "image"
-      ? `https://lh3.googleusercontent.com/d/${file.id}=s200`
-      : `https://drive.google.com/thumbnail?id=${file.id}&sz=s200`;
 
     if (existingEntry) {
-      media.push({ ...existingEntry, usedIn: [], thumbnailUrl });
+      // 既存エントリの URL をそのまま保持（server-fs の media-server:// など）
+      media.push({ ...existingEntry, usedIn: [] });
     } else {
+      // 新規エントリ: Drive 互換でフォールバック（server-fs/local では使われないはず）
+      const thumbnailUrl = type === "image"
+        ? `https://lh3.googleusercontent.com/d/${file.id}=s200`
+        : `https://drive.google.com/thumbnail?id=${file.id}&sz=s200`;
       const url = `https://lh3.googleusercontent.com/d/${file.id}=s0`;
       media.push({
         fileId: file.id,
