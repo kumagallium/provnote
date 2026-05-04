@@ -401,6 +401,17 @@ export const ja: Record<string, string> = {
   "settings.saveDir.restartNote": "変更を全体に反映するには Graphium を再起動してください。",
   "settings.saveDir.pickFailed": "フォルダの選択に失敗しました",
   "settings.saveDir.saveFailed": "保存先の更新に失敗しました",
+  // ── Author identity（team-shared-storage Phase 0） ──
+  "settings.identity.title": "あなたの identity",
+  "settings.identity.help": "共有ノートと PROV 来歴の author として使われます。自己申告のみで検証はされません。",
+  "settings.identity.name": "表示名",
+  "settings.identity.namePlaceholder": "Ada Lovelace",
+  "settings.identity.email": "メール",
+  "settings.identity.emailPlaceholder": "you@example.com",
+  "settings.identity.save": "identity を保存",
+  "settings.identity.saved": "保存しました",
+  "settings.identity.error.name": "表示名は必須です。",
+  "settings.identity.error.email": "メールアドレスの形式が正しくありません（@ を含めてください）。",
   // ── サーバーストレージ（Docker / セルフホスト Web） ──
   "settings.serverStorage.title": "サーバーストレージ",
   "settings.serverStorage.help": "ノートはこのサーバーのファイルシステムに保存され、同じ URL にアクセスする全てのブラウザで共有されます。",

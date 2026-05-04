@@ -82,6 +82,7 @@ import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
 import { LATEST_DOCUMENT_VERSION } from "./lib/document-migration";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
+import { loadAuthorIdentity } from "./features/identity";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, TrashView, buildKnowledgeMap, findIncomingReferences, type GraphiumIndex, type NoteIndexEntry } from "./features/navigation";
@@ -1018,7 +1019,8 @@ function NoteEditorInner({
       actLabel = detected.agentLabel;
     }
     const email = await getActiveProvider().getUserEmail() ?? undefined;
-    doc = await recordRevision(doc, prevPageRef.current, actType, { agentLabel: actLabel, email });
+    const author = loadAuthorIdentity() ?? undefined;
+    doc = await recordRevision(doc, prevPageRef.current, actType, { agentLabel: actLabel, email, author });
     // 前回保存状態を更新
     prevPageRef.current = structuredClone(doc.pages[0]);
 
