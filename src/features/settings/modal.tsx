@@ -19,7 +19,7 @@ import {
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
-import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type LatinFont, type JpFont, LATIN_FONTS, JP_FONTS, applyFontMode } from "./store";
+import { loadSettings, saveSettings, type Settings, type CustomLabels, type ExperimentalSettings, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type LatinFont, type JpFont, LATIN_FONTS, JP_FONTS, applyFontMode } from "./store";
 import {
   fetchModels,
   type ModelInfo,
@@ -83,7 +83,7 @@ type ToolsResponse = {
   };
 };
 
-type Tab = "display" | "storage" | "ai" | "labels" | "maintenance";
+type Tab = "display" | "storage" | "ai" | "labels" | "experimental" | "maintenance";
 
 // Settings → Maintenance タブで使う Wiki サマリー
 export type WikiSummaryForSettings = {
@@ -142,6 +142,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [customLabels, setCustomLabels] = useState<CustomLabels>({});
   const [latinFont, setLatinFont] = useState<LatinFont>("");
   const [jpFont, setJpFont] = useState<JpFont>("");
+  const [experimental, setExperimental] = useState<ExperimentalSettings>({ atomLayer: false, synthesis: false });
 
   // サーバーデータ
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -311,6 +312,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
     setCustomLabels(settings.customLabels ?? {});
     setLatinFont(settings.latinFont ?? "");
     setJpFont(settings.jpFont ?? "");
+    setExperimental(settings.experimental ?? { atomLayer: false, synthesis: false });
     setSaved(false);
     setShowAddForm(false);
     setDeleteConfirm(null);
@@ -614,11 +616,11 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
   // ── 保存 ──
   const handleSave = useCallback(() => {
-    saveSettings({ model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont });
+    saveSettings({ model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont, experimental });
     applyFontMode(latinFont, jpFont);
     setSaved(true);
     setTimeout(() => onClose(), 600);
-  }, [model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl, customLabels, latinFont, jpFont, onClose]);
+  }, [model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl, customLabels, latinFont, jpFont, experimental, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -648,12 +650,13 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
       {/* タブ */}
       <div className="flex border-b border-border px-6">
-        {(["display", "storage", "ai", "labels", "maintenance"] as Tab[]).map((tabId) => {
+        {(["display", "storage", "ai", "labels", "experimental", "maintenance"] as Tab[]).map((tabId) => {
           const labelKey =
             tabId === "display" ? "settings.section.display"
             : tabId === "storage" ? "settings.section.storage"
             : tabId === "ai" ? "settings.section.ai"
             : tabId === "labels" ? "settings.tab.labels"
+            : tabId === "experimental" ? "settings.tab.experimental"
             : "settings.tab.maintenance";
           return (
             <button
@@ -1559,6 +1562,68 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
             </div>
 
             </>}
+          </div>
+        )}
+
+        {/* ── Experimental タブ ── */}
+        {tab === "experimental" && (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border p-3">
+              <h3 className="text-xs font-semibold text-foreground mb-1">
+                {t("settings.experimental.title")}
+              </h3>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {t("settings.experimental.intro")}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={experimental.atomLayer}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setExperimental((prev) => ({
+                      atomLayer: next,
+                      // Atom OFF にするとき Synthesis も強制 OFF（依存関係）
+                      synthesis: next ? prev.synthesis : false,
+                    }));
+                    setSaved(false);
+                  }}
+                />
+                <span className="flex-1">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t("settings.experimental.atom.title")}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                    {t("settings.experimental.atom.help")}
+                  </span>
+                </span>
+              </label>
+
+              <label className={`flex items-start gap-3 ${experimental.atomLayer ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={experimental.synthesis}
+                  disabled={!experimental.atomLayer}
+                  onChange={(e) => {
+                    setExperimental((prev) => ({ ...prev, synthesis: e.target.checked }));
+                    setSaved(false);
+                  }}
+                />
+                <span className="flex-1">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t("settings.experimental.synthesis.title")}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                    {t("settings.experimental.synthesis.help")}
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
         )}
 

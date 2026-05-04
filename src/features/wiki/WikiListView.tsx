@@ -188,7 +188,11 @@ export function WikiListView({
     }
   }, [deleteTarget, onDeleteWiki]);
 
-  const kindLabel = wikiKind === "summary" ? "Summary" : wikiKind === "synthesis" ? "Synthesis" : "Concept";
+  const kindLabel =
+    wikiKind === "summary" ? "Summary"
+    : wikiKind === "synthesis" ? "Synthesis"
+    : wikiKind === "atom" ? "Atom"
+    : "Concept";
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">

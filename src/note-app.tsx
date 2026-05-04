@@ -76,7 +76,7 @@ import {
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import type { AgentChatMessage } from "./features/ai-assistant";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat, loadSettings, isAtomLayerEnabled, isSynthesisEnabled, type ExperimentalSettings } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -100,6 +100,8 @@ import {
   buildWikiIndex, formatWikiIndexForLLM,
   // Synthesis
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
+  // Atom（実験的）
+  atomizeConcepts, buildAtomDocument,
   // インライン引用リンク
   buildNoteIndex,
   // 操作ログ
@@ -2338,6 +2340,7 @@ export function NoteApp() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
+  const [experimentalFlags, setExperimentalFlags] = useState<ExperimentalSettings>(() => loadSettings().experimental);
   // AI バックエンド接続チェック（GitHub Pages 等の静的サイトでは false）
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   useEffect(() => {
@@ -2597,6 +2600,47 @@ export function NoteApp() {
           wikiLog.append("ingest", [newId], `Created "${wiki.title}" from "${job.noteTitle}"`).catch(() => {});
         }
 
+        // 自動 Atomize: experimental.atomLayer 有効時、新規作成した Concept を Atom 化する。
+        // 1 Concept = 1 Atom の最小単位で抽象化し、Atom 層を厚くしていく方針。
+        // fire-and-forget — 失敗しても ingest 自体は成功扱いとする。
+        if (isAtomLayerEnabled()) {
+          (async () => {
+            try {
+              for (let idx = 0; idx < result.wikis.length; idx++) {
+                const wiki = result.wikis[idx];
+                if (wiki.kind !== "concept") continue;
+                const conceptId = createdWikiIds[idx];
+                if (!conceptId) continue;
+                const conceptDoc = fm.getCachedDoc(`wiki:${conceptId}`);
+                if (!conceptDoc) continue;
+                const detail = extractWikiDetail(conceptId, conceptDoc);
+                if (!detail) continue;
+                const snapshot = {
+                  id: conceptId,
+                  title: wiki.title,
+                  sections: detail.sectionHeadings.map((h, i) => ({
+                    heading: h,
+                    preview: detail.sectionPreviews[i] ?? "",
+                  })),
+                  relatedConcepts: [],
+                };
+                const atomResult = await atomizeConcepts(
+                  [snapshot],
+                  "ja",
+                  getChatSynthesisLLMModel()?.name,
+                );
+                if (!atomResult.atom) continue;
+                const atomDoc = buildAtomDocument(atomResult.atom, atomResult.model ?? null, "ja");
+                const atomId = await fm.handleCreateWikiFile(atomDoc);
+                embedWikiSections(atomId, atomDoc).catch(() => {});
+                wikiLog.append("ingest", [atomId], `Atom: "${atomResult.atom.title}" (from "${wiki.title}")`).catch(() => {});
+              }
+            } catch (err) {
+              console.error("Atomize failed:", err);
+            }
+          })();
+        }
+
         // 横断更新: 既存 Concept ページの自動更新
         if (existingWikis.length > 0 && job.doc) {
           (async () => {
@@ -2669,9 +2713,13 @@ export function NoteApp() {
       ingestQueueRef.current.shift();
     }
 
-    // 自動 Synthesis: Concept が 3 つ以上あれば統合ページ生成を試みる
-    try {
-      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
+    // 自動 Synthesis: 実験フラグで Synthesis レイヤが有効なときのみ動作する。
+    // 既定は OFF — 既存ユーザーの Synthesis ファイルは保持されるが新規自動生成は止まる。
+    // Synthesis のソースは Concept ではなく Atom に切り替わる（atomLayer 前提）。
+    if (isSynthesisEnabled()) try {
+      // Atom が 3 つ以上あれば結晶化を試みる。Atom は文脈が削がれているので、
+      // Concept より組み合わせの安定性が高く、誤差伝搬も抑えられる。
+      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc, "atom");
       if (conceptSnapshots.length >= 3) {
         const existingSynthesisTitles = [...fm.wikiMetas.entries()]
           .filter(([, m]) => m.kind === "synthesis")
@@ -3340,14 +3388,18 @@ export function NoteApp() {
     wikiCounts: (() => {
       let summary = 0;
       let concept = 0;
+      let atom = 0;
       let synthesis = 0;
       for (const meta of fm.wikiMetas.values()) {
         if (meta.kind === "summary") summary++;
         else if (meta.kind === "concept") concept++;
+        else if (meta.kind === "atom") atom++;
         else if (meta.kind === "synthesis") synthesis++;
       }
-      return { summary, concept, synthesis };
+      return { summary, concept, atom, synthesis };
     })(),
+    showAtomLayer: experimentalFlags.atomLayer,
+    showSynthesisLayer: experimentalFlags.atomLayer && experimentalFlags.synthesis,
     onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
     activeWikiKind: fm.activeWikiKind,
     aiAvailable: aiAvailable ?? false,
@@ -3996,6 +4048,7 @@ export function NoteApp() {
         onClose={() => {
           setShowSettings(false);
           setAgentConfigured(isAgentConfigured());
+          setExperimentalFlags(loadSettings().experimental);
         }}
         wikiSummaries={wikiSummariesForSettings}
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}

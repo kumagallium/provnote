@@ -4,8 +4,14 @@
 import type { DocumentProvenance } from "../features/document-provenance/types";
 
 // AI Wiki ドキュメントの種類
-// synthesis: 複数の Concept を統合して新しい洞察を生むページ
-export type WikiKind = "summary" | "concept" | "synthesis";
+// summary  : 1 ノートに対する内部向け要約
+// concept  : 複数ノート横断の整理（実施文脈をある程度残す）
+// atom     : 実験的レイヤ。Concept をさらに抽象化し、文脈を削いだ単一アイデア（Zettel atom）
+// synthesis: 実験的レイヤ。Atom 同士の結合から立ち上がる新しい洞察
+//
+// experimental.atomLayer / experimental.synthesis 設定で生成可否を制御する。
+// 既存ユーザーの synthesis ファイルは削除しないため、atom 同様に kind 文字列としては常に有効。
+export type WikiKind = "summary" | "concept" | "atom" | "synthesis";
 
 // Concept の抽象度レベル（concept のみで意味を持つ）
 // principle: ノートが推論ステップで依拠した一般原理（教科書知識でも、本人の研究で実際に使われたもの）
@@ -71,6 +77,8 @@ export type WikiMeta = {
   status?: ConceptStatus;
   /** principle が依拠していると判定された、ソースノート内の該当文（生成時の自己検証用） */
   evidenceSpan?: string;
+  /** Atom が抽象化した元 Concept の ID リスト（atom のみ） */
+  derivedFromConcepts?: string[];
   /** 生成時の自己評価された確度（0.0〜1.0）。主に Synthesis で誤差伝搬の指標として表示する */
   confidence?: number;
 };

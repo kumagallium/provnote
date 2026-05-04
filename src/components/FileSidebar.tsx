@@ -37,7 +37,10 @@ export type FileSidebarProps = {
   /** メモセクションがアクティブか */
   memosActive?: boolean;
   /** Wiki カテゴリ別カウント */
-  wikiCounts?: { summary: number; concept: number; synthesis: number };
+  wikiCounts?: { summary: number; concept: number; atom: number; synthesis: number };
+  /** 実験的レイヤ（Atom/Synthesis）を表示するか */
+  showAtomLayer?: boolean;
+  showSynthesisLayer?: boolean;
   /** Wiki リスト表示 */
   onShowWikiList?: (kind: WikiKind) => void;
   /** 現在アクティブな Wiki カテゴリ（ハイライト用） */
@@ -108,6 +111,8 @@ export function FileSidebar({
   onShowMemos,
   memosActive = false,
   wikiCounts,
+  showAtomLayer = false,
+  showSynthesisLayer = false,
   onShowWikiList,
   activeWikiKind,
   aiAvailable = true,
@@ -300,26 +305,47 @@ export function FileSidebar({
               AI
             </h3>
             <div className="space-y-0.5">
-              {(["summary", "concept", "synthesis"] as const).map((kind) => {
-                const count = wikiCounts?.[kind] ?? 0;
-                return (
-                  <button
-                    key={kind}
-                    onClick={() => onShowWikiList(kind)}
-                    className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-                      activeWikiKind === kind
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    }`}
-                  >
-                    <span className="text-muted-foreground shrink-0"><Bot size={14} /></span>
-                    <span className="flex-1 text-left capitalize">{kind === "summary" ? "Summary" : kind === "concept" ? "Concept" : "Synthesis"}</span>
-                    {count > 0 && (
-                      <span className="text-xs text-muted-foreground">{count}</span>
-                    )}
-                  </button>
-                );
-              })}
+              {(() => {
+                // 既定では Summary / Concept のみ表示。
+                // 実験フラグでオプトインしたとき、または既存ユーザーが残しているデータが
+                // ある場合（count > 0）は表示してアクセスを保つ。
+                const kinds: WikiKind[] = ["summary", "concept"];
+                if (showAtomLayer || (wikiCounts?.atom ?? 0) > 0) kinds.push("atom");
+                if (showSynthesisLayer || (wikiCounts?.synthesis ?? 0) > 0) kinds.push("synthesis");
+                return kinds.map((kind) => {
+                  const count = wikiCounts?.[kind] ?? 0;
+                  const label =
+                    kind === "summary" ? "Summary"
+                    : kind === "concept" ? "Concept"
+                    : kind === "atom" ? "Atom"
+                    : "Synthesis";
+                  const isExperimental = kind === "atom" || kind === "synthesis";
+                  return (
+                    <button
+                      key={kind}
+                      onClick={() => onShowWikiList(kind)}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+                        activeWikiKind === kind
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <span className="text-muted-foreground shrink-0"><Bot size={14} /></span>
+                      <span className="flex-1 text-left capitalize flex items-center gap-1.5">
+                        {label}
+                        {isExperimental && (
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 border border-muted-foreground/30 rounded px-1 py-px">
+                            exp
+                          </span>
+                        )}
+                      </span>
+                      {count > 0 && (
+                        <span className="text-xs text-muted-foreground">{count}</span>
+                      )}
+                    </button>
+                  );
+                });
+              })()}
               {onShowSkillList && (
                 <button
                   onClick={onShowSkillList}

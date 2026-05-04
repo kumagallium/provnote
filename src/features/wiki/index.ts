@@ -17,6 +17,8 @@ export {
   type WikiIndexEntry,
   // Synthesis
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
+  // Atom（実験的）
+  atomizeConcepts, buildAtomDocument,
   // インライン引用リンク
   buildNoteIndex,
 } from "./wiki-service";

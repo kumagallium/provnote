@@ -262,7 +262,7 @@ export function parseIngesterOutput(text: string): IngesterOutput[] {
     return wikis
       .filter((w: any) => w.title && w.sections && Array.isArray(w.sections))
       .map((w: any) => {
-        const kind: WikiKind = (w.kind === "summary" || w.kind === "concept" || w.kind === "synthesis") ? w.kind : "concept";
+        const kind: WikiKind = (w.kind === "summary" || w.kind === "concept" || w.kind === "atom" || w.kind === "synthesis") ? w.kind : "concept";
         const rawLevel = typeof w.level === "string" ? w.level : undefined;
         const level: ConceptLevel | undefined =
           kind === "concept" && (rawLevel === "principle" || rawLevel === "finding" || rawLevel === "bridge")

@@ -1544,6 +1544,133 @@ export function buildSynthesisDocument(
   };
 }
 
+// ── Atom（実験的レイヤ）──
+
+export type AtomCandidate = {
+  title: string;
+  body: string;
+  derivedFromConcepts: string[];
+  confidence: number;
+};
+
+export type AtomizeResult = { atom: AtomCandidate | null; model?: string };
+
+/**
+ * Concept(s) を Atom（文脈削減した単一アイデア）に再構成する。
+ * experimental.atomLayer 有効時にクライアントから呼ぶ。
+ */
+export async function atomizeConcepts(
+  concepts: ConceptSnapshot[],
+  language: string,
+  model?: string,
+): Promise<AtomizeResult> {
+  if (concepts.length === 0) return { atom: null };
+  const res = await fetch(`${API_BASE}/atomize`, {
+    method: "POST",
+    headers: wikiHeaders("chatSynthesis"),
+    body: JSON.stringify({
+      concepts,
+      language,
+      ...(model ? { model } : {}),
+    }),
+  });
+  if (!res.ok) {
+    console.error("Atomize API failed:", res.status);
+    return { atom: null };
+  }
+  return res.json();
+}
+
+/**
+ * AtomCandidate から GraphiumDocument を構築する。
+ * Atom は Zettel 1 アイデアなので、本文は短い段落のみ。見出しは付けない。
+ */
+export function buildAtomDocument(
+  candidate: AtomCandidate,
+  model: string | null,
+  language?: string,
+): GraphiumDocument {
+  const now = new Date().toISOString();
+  const blocks: any[] = candidate.body
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter((para) => para.length > 0)
+    .map((para) => ({
+      id: crypto.randomUUID(),
+      type: "paragraph",
+      props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+      content: [{ type: "text", text: para, styles: {} }],
+      children: [],
+    }));
+
+  // Source Concepts セクション
+  const knowledgeLinks: any[] = [];
+  if (candidate.derivedFromConcepts.length > 0) {
+    blocks.push({
+      id: crypto.randomUUID(),
+      type: "heading",
+      props: { textColor: "default", backgroundColor: "default", textAlignment: "left", level: 2 },
+      content: [{ type: "text", text: "Source Concepts", styles: {} }],
+      children: [],
+    });
+    for (const conceptId of candidate.derivedFromConcepts) {
+      const blockId = crypto.randomUUID();
+      blocks.push({
+        id: blockId,
+        type: "bulletListItem",
+        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+        content: [
+          { type: "text", text: `@🤖 ${conceptId}`, styles: { textColor: "blue" } },
+        ],
+        children: [],
+      });
+      knowledgeLinks.push({
+        id: crypto.randomUUID(),
+        sourceBlockId: blockId,
+        targetBlockId: "",
+        targetNoteId: conceptId,
+        type: "reference",
+        layer: "knowledge",
+        createdBy: "ai",
+      });
+    }
+  }
+
+  const wikiMeta: WikiMeta = {
+    kind: "atom",
+    derivedFromNotes: [],
+    derivedFromChats: [],
+    derivedFromConcepts: candidate.derivedFromConcepts,
+    generatedAt: now,
+    generatedBy: { model: model ?? "unknown", version: "1.0.0" },
+    lastIngestedAt: now,
+    language: language ?? undefined,
+    confidence: candidate.confidence,
+  };
+
+  return {
+    version: 2,
+    title: candidate.title,
+    pages: [{
+      id: "main",
+      title: candidate.title,
+      blocks,
+      labels: {},
+      provLinks: [],
+      knowledgeLinks,
+    }],
+    source: "ai",
+    wikiMeta,
+    generatedBy: {
+      agent: "ai",
+      sessionId: `wiki-atomize-${now}`,
+      model: model ?? undefined,
+    },
+    createdAt: now,
+    modifiedAt: now,
+  };
+}
+
 /**
  * 既存の Concept ページからスナップショットを構築する（Synthesis 入力用）
  *
@@ -1555,6 +1682,12 @@ export function buildConceptSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
   wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
+  /**
+   * Synthesizer に渡すソースの kind。
+   * Atom レイヤを有効にした構成では "atom" を渡し、Atom 同士の結晶化として Synthesis を生成する。
+   * 既定の "concept" は legacy 経路（実験フラグ OFF 時には呼ばれない想定）。
+   */
+  sourceKind: "concept" | "atom" = "concept",
 ): ConceptSnapshot[] {
   // Summary 索引: 派生元 noteId → { title, preview }
   // extractWikiDetail は Concept 専用のため、Summary は本ヘルパーで先頭セクションを抽出する
@@ -1576,7 +1709,7 @@ export function buildConceptSnapshots(
 
   for (const file of wikiFiles) {
     const meta = wikiMetas.get(file.id);
-    if (!meta || meta.kind !== "concept") continue;
+    if (!meta || meta.kind !== sourceKind) continue;
 
     const doc = getCachedDoc(`wiki:${file.id}`);
     const detail = doc ? extractWikiDetail(file.id, doc) : null;

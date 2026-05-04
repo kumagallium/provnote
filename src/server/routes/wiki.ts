@@ -33,6 +33,11 @@ import {
   type ConceptSnapshot,
 } from "../services/wiki-synthesizer.js";
 import {
+  buildAtomizerSystemPrompt,
+  buildAtomizerUserMessage,
+  parseAtomizerOutput,
+} from "../services/wiki-atomizer.js";
+import {
   buildRewriterSystemPrompt,
   buildRewriterUserMessage,
   parseRewriterOutput,
@@ -409,6 +414,44 @@ app.post("/synthesize", async (c) => {
     const message = err instanceof Error ? err.message : "不明なエラー";
     console.error("Wiki synthesize error:", err);
     return c.json({ candidates: [], error: message });
+  }
+});
+
+// Atomize（Concept から文脈削減した Atom を生成）
+//   experimental.atomLayer 有効時にクライアントから呼ばれる。
+//   Concept を 1〜N 件入力し、1 件の Atom 候補を返す（信頼度低なら null）。
+app.post("/atomize", async (c) => {
+  const body = await c.req.json<{
+    concepts: ConceptSnapshot[];
+    language: string;
+    model?: string;
+  }>();
+
+  if (!body.concepts || body.concepts.length === 0) {
+    return c.json({ atom: null });
+  }
+
+  const modelConfig = resolveModelConfig(c, { modelName: body.model });
+  if (!modelConfig) return c.json({ atom: null });
+
+  const systemPrompt = buildAtomizerSystemPrompt(body.language || "en");
+  const userMessage = buildAtomizerUserMessage(body.concepts);
+
+  try {
+    const model = createModel(modelConfig);
+    const result = await runAgentLoop({
+      model,
+      modelId: modelConfig.modelId,
+      systemPrompt,
+      messages: [{ role: "user" as const, content: userMessage }],
+      maxSteps: 1,
+    });
+    const atom = parseAtomizerOutput(result.message, body.concepts.map((c) => c.id));
+    return c.json({ atom, model: result.model, tokenUsage: result.tokenUsage });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "不明なエラー";
+    console.error("Wiki atomize error:", err);
+    return c.json({ atom: null, error: message });
   }
 });
 
