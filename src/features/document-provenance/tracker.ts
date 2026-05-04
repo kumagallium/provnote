@@ -152,13 +152,23 @@ export async function recordRevision(
   };
 }
 
-/** AI 操作による保存の場合、generatedBy から EditAgent 情報を抽出 */
+/**
+ * 保存時のアクティビティ種別を推定する。
+ *
+ * 設計方針:
+ * - `doc.generatedBy` は **ノート origin**（誰が生み出したか）の不変メタ。
+ * - 各リビジョンの attribution は **保存毎に決まる**（人間 or AI）。
+ *   AI 操作は明示的に recordRevision を呼んで AI を記録する設計に揃える。
+ * - したがってデフォルトは `human_edit`。例外は「origin が AI なのに
+ *   documentProvenance がまだ空」のレガシーデータのみで、初回保存時に
+ *   AI の origin リビジョンを 1 件補完する目的でのみ ai_generation/derivation を返す。
+ */
 export function detectActivityType(
   doc: GraphiumDocument,
 ): { type: EditActivityType; agentLabel?: string } {
-  if (doc.generatedBy) {
+  const hasRevisions = (doc.documentProvenance?.revisions?.length ?? 0) > 0;
+  if (!hasRevisions && doc.generatedBy) {
     // 旧 crucible-agent 連携は廃止されたので、その文字列が表示されないようマスクする。
-    // 新規データは agent: "ai" になっているが、過去データの後方互換のためここで吸収する。
     const rawAgent = doc.generatedBy.agent === "crucible-agent" ? "ai" : doc.generatedBy.agent;
     const model = doc.generatedBy.model ?? rawAgent;
     if (doc.derivedFromNoteId) {

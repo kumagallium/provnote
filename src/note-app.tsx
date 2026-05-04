@@ -2525,7 +2525,10 @@ export function NoteApp() {
               if (existingDoc) {
                 const nIdx = buildNoteIndex(fm.noteIndex);
                 const mergedDoc = await rewriteAndMerge(existingDoc, wiki, job.noteId, result.model, "ja", nIdx, ingestSkills);
-                await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc);
+                await fm.handleSaveWikiFile(wiki.mergeTargetId, mergedDoc, {
+                  activityType: "ai_generation",
+                  agentLabel: result.model ?? undefined,
+                });
                 embedWikiSections(wiki.mergeTargetId, mergedDoc).catch(() => {});
                 createdWikiIds.push(wiki.mergeTargetId);
                 createdWikiTitles.push(wiki.title);
@@ -2581,7 +2584,10 @@ export function NoteApp() {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
                   const updatedDoc = await applyCrossUpdate(targetDoc, proposal, job.noteId, result.model, buildNoteIndex(fm.noteIndex), ingestSkills);
-                  await fm.handleSaveWikiFile(proposal.targetWikiId, updatedDoc);
+                  await fm.handleSaveWikiFile(proposal.targetWikiId, updatedDoc, {
+                    activityType: "ai_generation",
+                    agentLabel: result.model ?? undefined,
+                  });
                   embedWikiSections(proposal.targetWikiId, updatedDoc).catch(() => {});
                   wikiLog.append(
                     "cross-update",
@@ -2703,7 +2709,9 @@ export function NoteApp() {
                   const targetDoc = fm.getCachedDoc(`wiki:${proposal.targetWikiId}`);
                   if (!targetDoc) continue;
                   const updated = await applyCrossUpdate(targetDoc, proposal, wikiId, null, buildNoteIndex(fm.noteIndex), orphanSkills);
-                  await fm.handleSaveWikiFile(proposal.targetWikiId, updated);
+                  await fm.handleSaveWikiFile(proposal.targetWikiId, updated, {
+                    activityType: "ai_generation",
+                  });
                   wikiLog.append("cross-update", [proposal.targetWikiId, wikiId],
                     `Auto-fix orphan: linked "${doc.title}" → "${proposal.targetWikiTitle}"`).catch(() => {});
                 }
@@ -2778,7 +2786,9 @@ export function NoteApp() {
                   ];
                 }
 
-                await fm.handleSaveWikiFile(keepId, mergedResult);
+                await fm.handleSaveWikiFile(keepId, mergedResult, {
+                  activityType: "ai_generation",
+                });
                 embedWikiSections(keepId, mergedResult).catch(() => {});
 
                 // 統合元を削除
@@ -2959,7 +2969,9 @@ export function NoteApp() {
                   ];
                 }
 
-                await fm.handleSaveWikiFile(keepId, mergedResult);
+                await fm.handleSaveWikiFile(keepId, mergedResult, {
+                  activityType: "ai_generation",
+                });
                 embedWikiSections(keepId, mergedResult).catch(() => {});
                 await fm.handleDeleteWikiFile(mergeId);
 
@@ -3098,7 +3110,10 @@ export function NoteApp() {
               version: "1.0.0",
             };
           }
-          await fm.handleSaveWikiFile(wikiId, newDoc);
+          await fm.handleSaveWikiFile(wikiId, newDoc, {
+            activityType: "ai_generation",
+            agentLabel: synthResult.model ?? selectedModel ?? undefined,
+          });
           embedWikiSections(wikiId, newDoc).catch(() => {});
           if (openAfter) fm.handleOpenWikiFile(wikiId);
           const modelLabel = synthResult.model ?? selectedModel ?? "default";
@@ -3179,7 +3194,10 @@ export function NoteApp() {
               },
             },
           };
-          await fm.handleSaveWikiFile(wikiId, rewritten);
+          await fm.handleSaveWikiFile(wikiId, rewritten, {
+            activityType: "ai_generation",
+            agentLabel: result.model ?? selectedModel ?? undefined,
+          });
           embedWikiSections(wikiId, rewritten).catch(() => {});
           if (openAfter) fm.handleOpenWikiFile(wikiId);
           const modelLabel = result.model ?? selectedModel ?? "default";
