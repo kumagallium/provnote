@@ -75,6 +75,21 @@ export type WikiMeta = {
   confidence?: number;
 };
 
+/**
+ * 一覧 UI と Snapshot ビルダーが共通で使う wiki メタの軽量サマリ。
+ * doc 全体ではなく頻繁にアクセスする最小限のフィールドだけを保持する。
+ */
+export type WikiMetaSummary = {
+  title: string;
+  kind: WikiKind;
+  /** 書記役 LLM のモデル ID (例: claude-opus-4-7) */
+  model?: string;
+  /** Concept のときのみ意味を持つ抽象度レベル */
+  level?: ConceptLevel;
+  /** principle のときのみ意味を持つ確度ステータス */
+  status?: ConceptStatus;
+};
+
 // Graphium ファイルのメタデータ
 export type GraphiumFile = {
   id: string;

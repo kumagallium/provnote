@@ -93,7 +93,7 @@ import {
   ingestNote, ingestFromUrl, ingestFromChat, ingestFromPdf,
   buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge, embedWikiSections,
   // 横断更新
-  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
+  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail, extractBodyPreview,
   // Lint（自動実行用）
   lintWikis, buildWikiSnapshots,
   // 構造化インデックス
@@ -3103,19 +3103,16 @@ export function NoteApp() {
     try {
       if (isSynthesis) {
         const sourceConceptIds = doc.wikiMeta.derivedFromNotes;
-        const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
+        const concepts: { id: string; title: string; bodyPreview: string; level?: "principle" | "finding" | "bridge"; relatedConcepts: string[] }[] = [];
         for (const cId of sourceConceptIds) {
           const cDoc = await fm.loadDoc(`wiki:${cId}`);
           if (!cDoc) continue;
-          const detail = extractWikiDetail(cId, cDoc);
-          if (!detail) continue;
+          if (cDoc.wikiMeta?.kind !== "concept") continue;
           concepts.push({
             id: cId,
             title: cDoc.title,
-            sections: detail.sectionHeadings.map((h, i) => ({
-              heading: h,
-              preview: detail.sectionPreviews[i] ?? "",
-            })),
+            bodyPreview: extractBodyPreview(cDoc, 240),
+            level: cDoc.wikiMeta?.level,
             relatedConcepts: [],
           });
         }
