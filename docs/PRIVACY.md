@@ -47,4 +47,4 @@ For questions about this policy, please open an issue on the [GitHub repository]
 
 ## Open Source
 
-Graphium is open-source software licensed under the MIT License. You can review all source code at [https://github.com/kumagallium/Graphium](https://github.com/kumagallium/Graphium).
+Graphium is open-source software licensed under the Apache License 2.0. You can review all source code at [https://github.com/kumagallium/Graphium](https://github.com/kumagallium/Graphium).

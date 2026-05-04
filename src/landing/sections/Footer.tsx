@@ -15,7 +15,7 @@ export function Footer() {
           >
             @kumagallium
           </a>
-          {" · "}MIT
+          {" · "}Apache 2.0
         </div>
         <div>
           <a
