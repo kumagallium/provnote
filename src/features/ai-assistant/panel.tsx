@@ -295,8 +295,8 @@ export function AiAssistantPanel({
       {/* 引用表示 */}
       {quotedMarkdown && messages.length === 0 && !showChatList && (
         <div className="px-3 py-2 border-b border-border">
-          <div className="text-[10px] text-muted-foreground mb-1">{t("aiChat.quote")}</div>
-          <div className="bg-muted/50 rounded p-2 text-[11px] text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
+          <div className="text-xs text-muted-foreground mb-1">{t("aiChat.quote")}</div>
+          <div className="bg-muted/50 rounded p-2 text-xs text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
             {quotedMarkdown}
           </div>
         </div>
@@ -358,7 +358,7 @@ export function AiAssistantPanel({
                 {attachedNotes.map((note) => (
                   <span
                     key={note.id}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-[10px] text-violet-700 dark:text-violet-300 max-w-[160px]"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-xs text-violet-700 dark:text-violet-300 max-w-[160px]"
                   >
                     <AtSign size={9} className="shrink-0" />
                     <span className="truncate">{note.isWiki ? `🤖 ${note.title}` : note.title}</span>
@@ -420,7 +420,7 @@ export function AiAssistantPanel({
                 <Send size={12} />
               </Button>
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {t("aiChat.sendHint")}
             </div>
           </div>
@@ -467,11 +467,11 @@ function ChatListView({
               className="w-full text-left px-3 py-2 rounded-lg hover:bg-background transition-colors mb-1"
             >
               <div className="flex items-center gap-1.5 mb-0.5">
-                {scopeLabel && <span className={`text-[10px] font-medium truncate ${isPageChat ? "text-emerald-600" : "text-violet-600"}`}>{scopeLabel}</span>}
-                <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{date}</span>
+                {scopeLabel && <span className={`text-xs font-medium truncate ${isPageChat ? "text-emerald-600" : "text-violet-600"}`}>{scopeLabel}</span>}
+                <span className="text-xs text-muted-foreground ml-auto shrink-0">{date}</span>
               </div>
-              <div className="text-xs text-foreground/70 truncate">{preview}</div>
-              <div className="text-[10px] text-muted-foreground">{t("aiChat.messageCount", { count: String(chat.messages.length) })}</div>
+              <div className="text-sm text-foreground/70 truncate">{preview}</div>
+              <div className="text-xs text-muted-foreground">{t("aiChat.messageCount", { count: String(chat.messages.length) })}</div>
             </button>
           );
         })}
@@ -501,7 +501,7 @@ function ChatBubble({
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
-        className={`rounded-lg px-3 py-2 text-xs max-w-[90%] whitespace-pre-wrap ${
+        className={`rounded-lg px-3 py-2 text-sm max-w-[90%] whitespace-pre-wrap leading-relaxed ${
           isUser
             ? "bg-primary text-primary-foreground"
             : "bg-muted text-foreground"
@@ -515,7 +515,7 @@ function ChatBubble({
             <button
               onClick={() => onReplace(message.content)}
               title={t("aiChat.replaceInNote")}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-blue-600 hover:text-blue-700 rounded hover:bg-blue-50 transition-colors font-medium"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-blue-600 hover:text-blue-700 rounded hover:bg-blue-50 transition-colors font-medium"
             >
               <Replace size={10} />
               {t("aiChat.replaceInNote")}
@@ -525,7 +525,7 @@ function ChatBubble({
             <button
               onClick={() => onInsert(message.content)}
               title={t("aiChat.insertToNote")}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
             >
               <FileDown size={10} />
               {t("aiChat.insertToNote")}
@@ -535,7 +535,7 @@ function ChatBubble({
             <button
               onClick={onDerive}
               title={t("aiChat.deriveAsNote")}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
             >
               <FilePlus size={10} />
               {t("aiChat.deriveAsNote")}
