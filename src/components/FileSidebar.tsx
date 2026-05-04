@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles, Trash2 } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles, Trash2, Settings as SettingsIcon } from "lucide-react";
 import { AiUpgradeNotice } from "./AiUpgradeNotice";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
@@ -368,14 +368,26 @@ export function FileSidebar({
       </div>
 
       {/* フッター */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
+      <div className="p-2 border-t border-sidebar-border space-y-0.5">
+        <button
+          onClick={onShowSettings}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors"
+        >
+          <SettingsIcon size={12} className="shrink-0" />
+          <span className="flex-1 text-left">{t("common.settings")}</span>
+          {aiAvailable && (agentConfigured ? (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" title={t("sidebar.aiConnected")} />
+          ) : (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" title={t("sidebar.aiNotConfigured")} />
+          ))}
+        </button>
         {onShowTrash && (
           <button
             onClick={onShowTrash}
-            className={`w-full flex items-center gap-1.5 text-xs transition-colors ${
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
               trashActive
-                ? "text-primary font-semibold"
-                : "text-muted-foreground hover:text-foreground"
+                ? "text-primary font-semibold bg-sidebar-accent/40"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
             }`}
           >
             <Trash2 size={12} className="shrink-0" />
@@ -386,21 +398,11 @@ export function FileSidebar({
           </button>
         )}
         <button
-          onClick={onShowSettings}
-          className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-        >
-          {t("common.settings")}
-          {aiAvailable && (agentConfigured ? (
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" title={t("sidebar.aiConnected")} />
-          ) : (
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" title={t("sidebar.aiNotConfigured")} />
-          ))}
-        </button>
-        <button
           onClick={onShowReleaseNotes}
-          className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors"
         >
-          {t("sidebar.releaseNotes")}
+          <History size={12} className="shrink-0" />
+          <span className="flex-1 text-left">{t("sidebar.releaseNotes")}</span>
         </button>
       </div>
     </aside>
