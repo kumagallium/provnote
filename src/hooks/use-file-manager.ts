@@ -6,6 +6,15 @@ import type { GraphiumFile, GraphiumDocument, WikiKind } from "../lib/document-t
 import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
+import type { EditActivityType } from "../features/document-provenance/types";
+
+/** Wiki 保存・新規作成時のリビジョン記録オプション */
+export type WikiSaveOptions = {
+  /** AI 由来の操作で明示的にリビジョン記録したい場合に指定。
+   *  エディタ経由のユーザー保存は呼び出し側で recordRevision 済みなので省略する。 */
+  activityType?: EditActivityType;
+  agentLabel?: string;
+};
 import {
   buildDerivedDocument,
   appendDerivedNoteLink,
@@ -1141,11 +1150,21 @@ export function useFileManager(authenticated: boolean) {
 
   // Wiki を保存
   const handleSaveWikiFile = useCallback(
-    async (wikiId: string, doc: GraphiumDocument) => {
+    async (wikiId: string, doc: GraphiumDocument, options?: WikiSaveOptions) => {
       if (savingRef.current) return;
       savingRef.current = true;
       setSaving(true);
       try {
+        // AI 由来の更新（merge / cross-update など）はここでリビジョンを刻む。
+        // エディタ経由のユーザー保存は buildDocument で記録済みなので options 未指定。
+        if (options?.activityType) {
+          const cached = docCacheRef.current.get(`wiki:${wikiId}`);
+          const prevPage = cached?.pages?.[0] ?? null;
+          doc = await recordRevision(doc, prevPage, options.activityType, {
+            agentLabel: options.agentLabel,
+            force: true,
+          });
+        }
         await saveWikiFile(wikiId, doc);
         docCacheRef.current.set(`wiki:${wikiId}`, doc);
         setWikiFiles((prev) =>
@@ -1270,8 +1289,17 @@ export function useFileManager(authenticated: boolean) {
   );
 
   // Wiki の新規作成（Ingest 結果の保存用）
+  // 呼び出し元はすべて AI 生成フローのため、デフォルトで ai_generation を記録する。
   const handleCreateWikiFile = useCallback(
-    async (doc: GraphiumDocument): Promise<string> => {
+    async (doc: GraphiumDocument, options?: WikiSaveOptions): Promise<string> => {
+      const activityType: EditActivityType = options?.activityType ?? "ai_generation";
+      const agentLabel =
+        options?.agentLabel
+          ?? doc.wikiMeta?.generatedBy?.model
+          ?? doc.generatedBy?.model
+          ?? doc.generatedBy?.agent
+          ?? "ai";
+      doc = await recordRevision(doc, null, activityType, { agentLabel, force: true });
       const newId = await createWikiFile(doc.title, doc);
       console.log(`[wiki-debug] createWikiFile: id=${newId}, title=${doc.title}`);
       docCacheRef.current.set(`wiki:${newId}`, doc);

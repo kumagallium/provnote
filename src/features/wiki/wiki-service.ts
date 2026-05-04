@@ -159,6 +159,14 @@ export function buildWikiDocument(
     }],
     source: "ai",
     wikiMeta,
+    // ドキュメント origin として AI による生成を明示する。
+    // documentProvenance の各リビジョン attribution とは別概念
+    // （origin は一度きり、attribution は保存毎）。
+    generatedBy: {
+      agent: "ai",
+      sessionId: `wiki-ingest-${now}`,
+      model: model ?? undefined,
+    },
     createdAt: now,
     modifiedAt: now,
   };
@@ -201,6 +209,11 @@ export function mergeIntoWikiDocument(
         model: model ?? existingDoc.wikiMeta?.generatedBy?.model ?? "unknown",
         version: "1.0.0",
       },
+    },
+    generatedBy: {
+      agent: "ai",
+      sessionId: existingDoc.generatedBy?.sessionId ?? `wiki-ingest-${now}`,
+      model: model ?? existingDoc.generatedBy?.model ?? undefined,
     },
     modifiedAt: now,
   };
@@ -303,6 +316,11 @@ export async function rewriteAndMerge(
           model: model ?? existingDoc.wikiMeta?.generatedBy?.model ?? "unknown",
           version: "1.0.0",
         },
+      },
+      generatedBy: {
+        agent: "ai",
+        sessionId: existingDoc.generatedBy?.sessionId ?? `wiki-ingest-${now}`,
+        model: model ?? existingDoc.generatedBy?.model ?? undefined,
       },
       modifiedAt: now,
     };
@@ -1196,6 +1214,11 @@ export async function applyCrossUpdate(
       derivedFromNotes,
       lastIngestedAt: now,
     },
+    generatedBy: {
+      agent: "ai",
+      sessionId: existingDoc.generatedBy?.sessionId ?? `wiki-cross-update-${now}`,
+      model: model ?? existingDoc.generatedBy?.model ?? undefined,
+    },
     modifiedAt: now,
   };
 }
@@ -1502,6 +1525,11 @@ export function buildSynthesisDocument(
     }],
     source: "ai",
     wikiMeta,
+    generatedBy: {
+      agent: "ai",
+      sessionId: `wiki-synthesis-${now}`,
+      model: model ?? undefined,
+    },
     createdAt: now,
     modifiedAt: now,
   };
