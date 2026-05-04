@@ -33,8 +33,15 @@ function apiHeaders(
   return h;
 }
 
+export type AgentChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type AgentRunRequest = {
   message: string;
+  /** 会話履歴（最新の user メッセージを含む完全な配列）。指定時は messages が優先される。 */
+  messages?: AgentChatMessage[];
   session_id?: string;
   custom_instructions?: string;
   server_names?: string[];

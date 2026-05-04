@@ -74,6 +74,7 @@ import {
   buildAiDerivedDocument,
 } from "./features/ai-assistant";
 import type { AttachedNote } from "./features/ai-assistant/panel";
+import type { AgentChatMessage } from "./features/ai-assistant";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
 import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
@@ -1213,8 +1214,15 @@ function NoteEditorInner({
         } catch {
           // Retriever 失敗は無視（embedding が無い場合など）
         }
+        // 会話履歴を組み立ててサーバーに送る。
+        // サーバーは stateless（session を保持しない）。履歴の正本はノート側の ScopeChat。
+        const history: AgentChatMessage[] = aiAssistant.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
         const response = await runAgent({
           message: userMessage,
+          messages: [...history, { role: "user", content: userMessage }],
           session_id: aiAssistant.sessionId ?? undefined,
           ...(disabledTools.length > 0 ? { disabled_tools: disabledTools } : {}),
           ...(wikiContext ? { wiki_context: wikiContext } : {}),
