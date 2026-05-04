@@ -469,16 +469,26 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate, wikiEntries, on
             <ProvIndicatorHoverHint wrapperEl={wrapperEl} zIndex={101} />
             <LabelDropdownPortal />
             <div style={{ padding: "16px 24px", paddingRight: 80 }}>
-              <input
-                type="text"
+              <textarea
                 value={effectiveDoc?.title ?? ""}
                 onChange={(e) => {
-                  const newTitle = e.target.value;
+                  const newTitle = e.target.value.replace(/\r?\n/g, "");
                   if (docRef.current) {
                     docRef.current = { ...docRef.current, title: newTitle };
                   }
                   setDoc((d) => (d ? { ...d, title: newTitle } : d));
                   handleChange();
+                }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    el.style.height = el.scrollHeight + "px";
+                  }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -486,9 +496,10 @@ function SidePeekInner({ noteId, cachedDoc, onClose, onNavigate, wikiEntries, on
                     editorRef.current?.focus();
                   }
                 }}
+                rows={1}
                 placeholder={tStatic("editor.titlePlaceholder")}
                 aria-label={tStatic("editor.titlePlaceholder")}
-                className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-1 mb-4 px-[54px]"
+                className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-1 mb-4 px-[54px] resize-none overflow-hidden break-words"
               />
               <SandboxEditor
                 key={noteId}

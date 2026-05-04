@@ -1796,8 +1796,9 @@ function NoteEditorInner({
 
   // タイトル変更時に自動保存トリガー
   const handleTitleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setTitle(e.target.value);
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      // 改行は単一行扱い（textarea で複数行入力されても 1 行に正規化）
+      setTitle(e.target.value.replace(/\r?\n/g, ""));
       markDirty();
     },
     [markDirty]
@@ -1987,19 +1988,30 @@ function NoteEditorInner({
         {/* 左: エディタ */}
         <div data-label-wrapper className="flex-1 min-w-0 overflow-auto relative">
           <div style={{ padding: "16px 0", paddingLeft: isDesktop ? 100 : 16, paddingRight: isDesktop ? 100 : 16, paddingBottom: isDesktop ? 16 : 72 }}>
-            <input
-              type="text"
+            <textarea
               value={title}
               onChange={handleTitleChange}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = el.scrollHeight + "px";
+              }}
+              ref={(el) => {
+                if (el) {
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   editorRef.current?.focus();
                 }
               }}
+              rows={1}
               placeholder={t("editor.titlePlaceholder")}
               aria-label={t("editor.titlePlaceholder")}
-              className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-3 mb-5 px-[54px]"
+              className="block w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/50 text-3xl font-bold leading-tight mt-3 mb-5 px-[54px] resize-none overflow-hidden break-words"
             />
             <SandboxEditor
               key={fileId || "new"}
