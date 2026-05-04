@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.4](https://github.com/kumagallium/Graphium/compare/v0.5.3...v0.5.4) - 2026-05-04
+- Add Word (.docx) import with bulk knowledge ingestion by @kumagallium in https://github.com/kumagallium/Graphium/pull/210
+
 ## [v0.5.3](https://github.com/kumagallium/Graphium/compare/v0.5.2...v0.5.3) - 2026-05-04
 - Wrap long titles & fix SidePeek label position by @kumagallium in https://github.com/kumagallium/Graphium/pull/206
 - Reorganize settings, sidebar, and trash header by @kumagallium in https://github.com/kumagallium/Graphium/pull/207
