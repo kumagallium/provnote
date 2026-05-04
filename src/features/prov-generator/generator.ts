@@ -860,6 +860,34 @@ export function generateProvDocument(input: GeneratorInput): ProvJsonLd {
       }
     }
 
+    // fallback (階層): 同ブロックに Entity が無ければ、親ブロックを遡って
+    // 最も近い Entity (block-level label / inline style どちらでも) を探す。
+    //   - Bread flour (inline material)
+    //     - Amount: 300g (inline attribute)  ← parent block の Bread flour に紐づく
+    if (!chosenNodeId && !bindToActivity && sameBlockEntities.length === 0) {
+      // ブロックレベルラベル経由 (block-level material/tool/output 用)
+      const parentLabeledId = findParentLabeledNodeId(agg.blockId, blocks, labels, labeledBlocks);
+      if (parentLabeledId && nodes.some((n) => n["@id"] === parentLabeledId)) {
+        chosenNodeId = parentLabeledId;
+      } else {
+        // インライン Entity 経由: 親ブロックを遡り、aggregatedList に
+        // 非 attribute の entry を持つ最も近い祖先ブロックを採用する。
+        let cursorId = findParentBlockId(blocks, agg.blockId);
+        while (cursorId) {
+          const parentEntities = aggregatedList.filter(
+            (other) => other.blockId === cursorId && other.label !== "attribute",
+          );
+          if (parentEntities.length > 0) {
+            // 親ブロックに複数 entity がある場合は先頭（=最初に出現したもの）。
+            // 通常 1 つを想定（Bread flour のような single-entity ブロック）。
+            chosenNodeId = nodeIdFor(parentEntities[0]);
+            break;
+          }
+          cursorId = findParentBlockId(blocks, cursorId);
+        }
+      }
+    }
+
     const attrEntry = { label: agg.text || agg.entityId, blockId: agg.blockId };
 
     if (chosenNodeId) {
