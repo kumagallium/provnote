@@ -292,8 +292,8 @@ export function AiAssistantPanel({
         </div>
       )}
 
-      {/* 引用表示 */}
-      {quotedMarkdown && messages.length === 0 && !showChatList && (
+      {/* 引用表示（会話開始後も「何を引用したか」が分かるように残す） */}
+      {quotedMarkdown && !showChatList && (
         <div className="px-3 py-2 border-b border-border">
           <div className="text-xs text-muted-foreground mb-1">{t("aiChat.quote")}</div>
           <div className="bg-muted/50 rounded p-2 text-xs text-foreground/70 max-h-20 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">

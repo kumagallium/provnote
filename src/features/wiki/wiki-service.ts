@@ -1431,13 +1431,22 @@ export async function fetchSynthesisCandidates(
   concepts: ConceptSnapshot[],
   existingSynthesisTitles: string[],
   language: string,
+  /** 使用するモデル名。省略時はサーバー側のデフォルト。
+   *  Tauri モードではヘッダーで API キーを送らないため、ここで明示しないと
+   *  ユーザーが Settings で選んだ Chat & Synthesis モデルが反映されない。 */
+  model?: string,
 ): Promise<SynthesisResult> {
   if (concepts.length < 3) return { candidates: [] };
 
   const res = await fetch(`${API_BASE}/synthesize`, {
     method: "POST",
     headers: wikiHeaders("chatSynthesis"),
-    body: JSON.stringify({ concepts, existingSynthesisTitles, language }),
+    body: JSON.stringify({
+      concepts,
+      existingSynthesisTitles,
+      language,
+      ...(model ? { model } : {}),
+    }),
   });
 
   if (!res.ok) {
