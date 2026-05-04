@@ -10,7 +10,9 @@ const STORAGE_KEY = "graphium_storage_provider";
 
 const providers = new Map<string, StorageProvider>();
 let activeProvider: StorageProvider | null = null;
-let serverProbeDone = false;
+// 進行中の probe Promise をキャッシュして、並行呼び出しが
+// 同じ probe の完了を待つようにする（StrictMode 二重 useEffect 対策）
+let serverProbePromise: Promise<void> | null = null;
 
 /** プロバイダーを登録 */
 export function registerProvider(provider: StorageProvider): void {
@@ -80,27 +82,28 @@ export function initProviders(): void {
  * - 既に server-fs を保存していたが今は使えない → local にフォールバック
  */
 export async function probeServerProvider(): Promise<void> {
-  if (serverProbeDone) return;
-  serverProbeDone = true;
+  if (serverProbePromise) return serverProbePromise;
+  serverProbePromise = (async () => {
+    // Tauri は対象外（ローカル FS で完結）
+    if (isTauri()) return;
+    // SSR / 非ブラウザ環境
+    if (typeof fetch === "undefined") return;
 
-  // Tauri は対象外（ローカル FS で完結）
-  if (isTauri()) return;
-  // SSR / 非ブラウザ環境
-  if (typeof fetch === "undefined") return;
+    const caps = await fetchCapabilities();
+    if (!caps?.serverStorage) return;
 
-  const caps = await fetchCapabilities();
-  if (!caps?.serverStorage) return;
+    registerProvider(new ServerFilesystemProvider());
 
-  registerProvider(new ServerFilesystemProvider());
-
-  // 既存ユーザー（local 選択）はそのまま、未選択の新規ユーザーには server-fs を薦める
-  const savedId = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-  if (!savedId) {
-    activeProvider = pickActive("server-fs", "server-fs");
-  } else if (savedId === "server-fs") {
-    activeProvider = pickActive("server-fs", "local");
-  }
-  // savedId === "local" の場合は尊重して維持（明示的に IndexedDB を選んでいるユーザー）
+    // 既存ユーザー（local 選択）はそのまま、未選択の新規ユーザーには server-fs を薦める
+    const savedId = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    if (!savedId) {
+      activeProvider = pickActive("server-fs", "server-fs");
+    } else if (savedId === "server-fs") {
+      activeProvider = pickActive("server-fs", "local");
+    }
+    // savedId === "local" の場合は尊重して維持（明示的に IndexedDB を選んでいるユーザー）
+  })();
+  return serverProbePromise;
 }
 
 // モジュール読み込み時に即座に初期化（同期分のみ）
