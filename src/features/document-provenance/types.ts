@@ -68,6 +68,33 @@ export type EditActivity = {
   wasAssociatedWith: string;
 };
 
+/**
+ * AuthorIdentity — ユーザーの自己申告 identity（v1）。
+ *
+ * Graphium は v0.4 で OAuth を撤去しており、改ざん困難な identity を持たない。
+ * v1 は self-asserted（name + email のみ）で運用し、データモデルは将来の
+ * 暗号署名（Ed25519 keypair）や eureco 連携時の検証済 identity 受け入れを
+ * 想定して optional フィールドを並べて拡張可能にしておく。
+ *
+ * 設計詳細は docs/internal/team-shared-storage-design.md §AuthorIdentity 参照。
+ */
+export type AuthorIdentity = {
+  /** 表示名 */
+  name: string;
+  /** 連絡先 email（簡易バリデーションのみ） */
+  email: string;
+
+  /** Ed25519 公開鍵（v1.5+ オプトイン暗号署名） */
+  public_key?: string;
+  /** 本エントリの hash に対する署名（v1.5+） */
+  signature?: string;
+
+  /** 外部 IdP による検証（v2 マネージド連携） */
+  verified_by?: "eureco" | "github" | string;
+  /** Provider 内の検証済 ID */
+  subject?: string;
+};
+
 /** prov:Agent — 編集者 */
 export type EditAgent = {
   id: string;
@@ -75,6 +102,13 @@ export type EditAgent = {
   label: string;
   /** Google アカウントのメールアドレス（人間エージェントの識別用） */
   email?: string;
+  /**
+   * 自己申告 author identity（Phase 0, team-shared-storage 基盤）。
+   * 既存ノートとの互換のため optional。Settings で identity を登録した
+   * 後の保存（recordRevision）から埋まる。shared エントリでは将来 hash
+   * の入力に含めて改ざん検知に使う想定。
+   */
+  author?: AuthorIdentity;
 };
 
 /** ドキュメント来歴全体 */

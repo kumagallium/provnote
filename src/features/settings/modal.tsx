@@ -37,6 +37,11 @@ import { CORE_LABELS, CORE_LABEL_PROV, type CoreLabel } from "../context-label/l
 import type { WikiKind } from "../../lib/document-types";
 import { fetchCapabilities, setServerStorageToken } from "../../lib/storage/providers/server-fs";
 import { AiUpgradeNotice } from "../../components/AiUpgradeNotice";
+import {
+  loadAuthorIdentity,
+  saveAuthorIdentity,
+  validateAuthorIdentity,
+} from "../identity";
 
 // ── プロバイダー定義 ──
 const PROVIDERS = [
@@ -157,6 +162,12 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [graphiumRoot, setGraphiumRootState] = useState<GraphiumRootInfo | null>(null);
   const [rootBusy, setRootBusy] = useState(false);
   const [rootError, setRootError] = useState<string | null>(null);
+
+  // AuthorIdentity（team-shared-storage Phase 0）
+  const [authorName, setAuthorName] = useState("");
+  const [authorEmail, setAuthorEmail] = useState("");
+  const [identitySaved, setIdentitySaved] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   // サーバーストレージ機能（Docker / セルフホスト Web）
   const [serverCaps, setServerCaps] = useState<{ serverStorage: boolean; requiresAuth: boolean } | null>(null);
@@ -331,6 +342,13 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
       setGraphiumRootState(null);
     }
 
+    // AuthorIdentity を読み込む
+    const identity = loadAuthorIdentity();
+    setAuthorName(identity?.name ?? "");
+    setAuthorEmail(identity?.email ?? "");
+    setIdentitySaved(false);
+    setIdentityError(null);
+
     // Web/Docker: サーバーストレージ機能を検出
     if (!isTauri()) {
       fetchCapabilities()
@@ -338,6 +356,22 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
         .catch(() => setServerCaps(null));
     }
   }, [isOpen, refreshModels]);
+
+  const handleSaveIdentity = useCallback(() => {
+    setIdentityError(null);
+    setIdentitySaved(false);
+    const validation = validateAuthorIdentity({ name: authorName, email: authorEmail });
+    if (!validation.ok) {
+      setIdentityError(t(`settings.identity.error.${validation.field}`));
+      return;
+    }
+    try {
+      saveAuthorIdentity({ name: authorName, email: authorEmail });
+      setIdentitySaved(true);
+    } catch (e) {
+      setIdentityError(e instanceof Error ? e.message : String(e));
+    }
+  }, [authorName, authorEmail, t]);
 
   const handleSaveServerToken = useCallback(() => {
     setServerStorageToken(serverToken.trim() || null);
@@ -863,6 +897,70 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
         {/* ── Storage タブ ── */}
         {tab === "storage" && (
           <div className="space-y-4">
+            {/* AuthorIdentity（team-shared-storage Phase 0） */}
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">
+                {t("settings.identity.title")}
+              </label>
+              <p className="text-xs text-muted-foreground mb-2">
+                {t("settings.identity.help")}
+              </p>
+              <div className="space-y-2">
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">
+                    {t("settings.identity.name")}
+                  </div>
+                  <Input
+                    type="text"
+                    value={authorName}
+                    onChange={(e) => {
+                      setAuthorName(e.target.value);
+                      setIdentitySaved(false);
+                      setIdentityError(null);
+                    }}
+                    placeholder={t("settings.identity.namePlaceholder")}
+                    autoComplete="name"
+                  />
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">
+                    {t("settings.identity.email")}
+                  </div>
+                  <Input
+                    type="email"
+                    value={authorEmail}
+                    onChange={(e) => {
+                      setAuthorEmail(e.target.value);
+                      setIdentitySaved(false);
+                      setIdentityError(null);
+                    }}
+                    placeholder={t("settings.identity.emailPlaceholder")}
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveIdentity}
+                    disabled={!authorName.trim() || !authorEmail.trim()}
+                  >
+                    {t("settings.identity.save")}
+                  </Button>
+                  {identitySaved && (
+                    <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                      <CheckCircle size={12} className="text-green-600" />
+                      {t("settings.identity.saved")}
+                    </span>
+                  )}
+                </div>
+                {identityError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} /> {identityError}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* サーバーストレージ（Docker / セルフホスト Web のみ） */}
             {!isTauri() && serverCaps?.serverStorage && (
               <div>

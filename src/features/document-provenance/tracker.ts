@@ -6,6 +6,7 @@ import type {
   RevisionEntity,
   EditActivity,
   EditActivityType,
+  AuthorIdentity,
 } from "./types";
 import { computeRevisionSummary, computePageHash, isEmptySummary } from "./diff";
 import type { GraphiumDocument, GraphiumPage } from "../../lib/document-types";
@@ -25,12 +26,13 @@ function nextId(prefix: string, existing: { id: string }[]): string {
   return `${prefix}_${String(max + 1).padStart(3, "0")}`;
 }
 
-/** エージェントが存在しなければ追加（email があれば更新） */
+/** エージェントが存在しなければ追加（email / author があれば更新） */
 function ensureAgent(
   provenance: DocumentProvenance,
   type: "human" | "ai",
   label: string,
   email?: string,
+  author?: AuthorIdentity,
 ): string {
   const existing = provenance.agents.find(
     (a) => a.type === type && a.label === label,
@@ -38,6 +40,8 @@ function ensureAgent(
   if (existing) {
     // email が新たに判明した場合は更新
     if (email && !existing.email) existing.email = email;
+    // author は最新値で上書きする（name / email を Settings で更新した場合に反映）
+    if (author) existing.author = author;
     return existing.id;
   }
 
@@ -46,10 +50,11 @@ function ensureAgent(
   const byId = provenance.agents.find((a) => a.id === id);
   if (byId) {
     if (email && !byId.email) byId.email = email;
+    if (author) byId.author = author;
     return byId.id;
   }
 
-  provenance.agents.push({ id, type, label, email });
+  provenance.agents.push({ id, type, label, email, author });
   return id;
 }
 
@@ -67,6 +72,12 @@ export type RecordRevisionOptions = {
   agentLabel?: string;
   /** Google アカウントのメールアドレス */
   email?: string;
+  /**
+   * 自己申告 author identity（Phase 0, team-shared-storage）。
+   * 人間エージェント（human_edit / human_derivation / derive_source）に対して
+   * のみ EditAgent.author に書き込まれる。AI エージェントには付与しない。
+   */
+  author?: AuthorIdentity;
   /** true にすると diff が空でもリビジョンを記録する（アクティビティログ用） */
   force?: boolean;
 };
@@ -78,7 +89,7 @@ export async function recordRevision(
   activityType: EditActivityType,
   options?: RecordRevisionOptions,
 ): Promise<GraphiumDocument> {
-  const { agentLabel, email, force } = options ?? {};
+  const { agentLabel, email, author, force } = options ?? {};
   const provenance = doc.documentProvenance
     ? structuredClone(doc.documentProvenance)
     : createEmptyProvenance();
@@ -102,7 +113,9 @@ export async function recordRevision(
     activityType === "human_edit" || activityType === "human_derivation" || activityType === "derive_source"
       ? "human" : "ai";
   const label = agentLabel ?? (agentType === "human" ? "user" : "ai");
-  const agentId = ensureAgent(provenance, agentType, label, email);
+  // author は人間エージェントにのみ付与（AI には self-asserted identity を持たせない）
+  const effectiveAuthor = agentType === "human" ? author : undefined;
+  const agentId = ensureAgent(provenance, agentType, label, email, effectiveAuthor);
 
   // Activity 作成
   const activityId = nextId("edit", provenance.activities);

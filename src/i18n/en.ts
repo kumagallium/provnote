@@ -401,6 +401,17 @@ export const en: Record<string, string> = {
   "settings.saveDir.restartNote": "Restart Graphium after changing this for the new location to take effect everywhere.",
   "settings.saveDir.pickFailed": "Failed to select folder",
   "settings.saveDir.saveFailed": "Failed to update save location",
+  // ── Author identity (team-shared-storage Phase 0) ──
+  "settings.identity.title": "Your identity",
+  "settings.identity.help": "Used as the author for shared notes and PROV provenance entries. Self-asserted only — no verification.",
+  "settings.identity.name": "Display name",
+  "settings.identity.namePlaceholder": "Ada Lovelace",
+  "settings.identity.email": "Email",
+  "settings.identity.emailPlaceholder": "you@example.com",
+  "settings.identity.save": "Save identity",
+  "settings.identity.saved": "Saved",
+  "settings.identity.error.name": "Display name is required.",
+  "settings.identity.error.email": "Email looks invalid (must contain @).",
   // ── Server storage (Docker / self-host Web) ──
   "settings.serverStorage.title": "Server storage",
   "settings.serverStorage.help": "Notes are saved on this server's filesystem and shared across every browser that visits the same URL.",

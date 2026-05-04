@@ -174,14 +174,24 @@ export function DocumentProvenancePanel({ provenance, onHighlightBlocks }: Props
                   {activityTypeLabel(activity.type, t)}
                 </span>
               )}
-              {agent && (
-                <span className="text-muted-foreground">
-                  {agent.type === "ai" ? "AI" : ""} {agent.label}
-                  {agent.email && (
-                    <span className="ml-1 text-muted-foreground/60">({agent.email})</span>
-                  )}
-                </span>
-              )}
+              {agent && (() => {
+                // 人間エージェントは AuthorIdentity > email > label の順で表示する
+                const isHuman = agent.type === "human";
+                const displayName = isHuman
+                  ? (agent.author?.name ?? agent.label)
+                  : agent.label;
+                const subText = isHuman
+                  ? (agent.author?.email ?? agent.email)
+                  : agent.email;
+                return (
+                  <span className="text-muted-foreground">
+                    {agent.type === "ai" ? "AI" : ""} {displayName}
+                    {subText && (
+                      <span className="ml-1 text-muted-foreground/60">({subText})</span>
+                    )}
+                  </span>
+                );
+              })()}
             </div>
             {summaryParts.length > 0 && (
               <div className="text-muted-foreground">
