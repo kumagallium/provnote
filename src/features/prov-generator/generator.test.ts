@@ -1828,3 +1828,162 @@ describe("Parameter 親 Entity 明示指定（Phase F）", () => {
     expect(matAttrs.find((a: any) => a["rdfs:label"] === "5g")).toBeDefined();
   });
 });
+
+// ──────────────────────────────────
+// シナリオ: 階層的に書かれた parameter (ネストされた子ブロック)
+// 例:
+//   ## Ingredients [step]
+//     - Bread flour [material]
+//       - Amount: 300g [attribute]
+//   parameter は親ブロック (Bread flour Entity) に紐づくべき
+// ──────────────────────────────────
+describe("階層的 parameter の親解決", () => {
+  it("ネストされた attribute は親ブロックの material Entity に紐づく", () => {
+    const blocks = [
+      {
+        id: "h-ingredients",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Ingredients" }],
+        children: [
+          {
+            id: "b-flour",
+            type: "bulletListItem",
+            content: [{ type: "text", text: "Bread flour" }],
+            children: [
+              {
+                id: "b-flour-amount",
+                type: "bulletListItem",
+                content: [{ type: "text", text: "Amount: 300g" }],
+                children: [],
+              },
+            ],
+          },
+          {
+            id: "b-water",
+            type: "bulletListItem",
+            content: [{ type: "text", text: "Water" }],
+            children: [
+              {
+                id: "b-water-amount",
+                type: "bulletListItem",
+                content: [{ type: "text", text: "Amount: 200g" }],
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const labels = new Map([
+      ["h-ingredients", "procedure"],
+      ["b-flour", "material"],
+      ["b-flour-amount", "attribute"],
+      ["b-water", "material"],
+      ["b-water-amount", "attribute"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const flourEnt = doc["@graph"].find((n) => n["@id"] === "entity_b-flour");
+    const waterEnt = doc["@graph"].find((n) => n["@id"] === "entity_b-water");
+    const ingredientsAct = doc["@graph"].find((n) => n["@id"] === "activity_h-ingredients");
+
+    // parameter は対応する Entity に attach される
+    expect(flourEnt?.["graphium:attributes"]?.some((a: any) => a["rdfs:label"] === "Amount: 300g")).toBe(true);
+    expect(waterEnt?.["graphium:attributes"]?.some((a: any) => a["rdfs:label"] === "Amount: 200g")).toBe(true);
+
+    // Activity 側には parameter が漏れない
+    const actAttrs = (ingredientsAct as any)?.["graphium:attributes"] ?? [];
+    expect(actAttrs.some((a: any) => a["rdfs:label"]?.startsWith("Amount"))).toBe(false);
+  });
+
+  it("インラインスタイル（inlineMaterial/inlineAttribute）でも親ブロックを遡って解決する", () => {
+    // 実ノートの構造:
+    //   paragraph "Bread flour" (inlineMaterial)
+    //     └ paragraph "Amount: 300g" (inlineAttribute)
+    // ブロックレベル label は付かず、style 経由でインライン entity が付与される。
+    const blocks = [
+      {
+        id: "h-ingredients",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "Ingredients" }],
+        children: [],
+      },
+      {
+        id: "p-flour",
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: "Bread flour",
+            styles: { inlineMaterial: "ent_material_flour" },
+          },
+        ],
+        children: [
+          {
+            id: "p-flour-amount",
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "Amount: 300g",
+                styles: { inlineAttribute: "ent_attribute_amount300" },
+              },
+            ],
+            children: [],
+          },
+        ],
+      },
+    ];
+    const labels = new Map([["h-ingredients", "procedure"]]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+
+    const flourEnt = doc["@graph"].find(
+      (n) => n["@id"] === "inline_material_ent_material_flour",
+    );
+    expect(flourEnt).toBeDefined();
+    expect(
+      flourEnt?.["graphium:attributes"]?.some(
+        (a: any) => a["rdfs:label"] === "Amount: 300g",
+      ),
+    ).toBe(true);
+
+    // Activity に parameter が漏れていないこと
+    const ingredientsAct = doc["@graph"].find(
+      (n) => n["@id"] === "activity_h-ingredients",
+    );
+    const actAttrs = (ingredientsAct as any)?.["graphium:attributes"] ?? [];
+    expect(actAttrs.some((a: any) => a["rdfs:label"]?.startsWith("Amount"))).toBe(false);
+  });
+
+  it("同ブロック内 Entity がある場合は従来どおり距離ベース解決（インラインハイライト維持）", () => {
+    // 「中火 5分」(attribute) は同ブロックの「フライパン」(tool) に紐づくべき
+    const blocks = [
+      {
+        id: "h-fry",
+        type: "heading",
+        props: { level: 2 },
+        content: [{ type: "text", text: "炒める" }],
+        children: [],
+      },
+      {
+        id: "p-mixed",
+        type: "paragraph",
+        content: [{ type: "text", text: "フライパンで中火 5分" }],
+        children: [],
+      },
+    ];
+    const labels = new Map([
+      ["h-fry", "procedure"],
+      // ブロックレベル label ではなくインラインで擬似的にテストするのは難しいので
+      // ここでは block-level の attribute が同ブロック scope の Activity に落ちることだけ確認
+      ["p-mixed", "attribute"],
+    ]);
+    const doc = generateProvDocument({ blocks, labels, links: [] });
+    // 親ブロック (h-fry) は procedure なので、findParentLabeledNodeId は null を返し、
+    // 従来どおり scope の Activity にフォールバックする
+    const fryAct = doc["@graph"].find((n) => n["@id"] === "activity_h-fry");
+    expect(fryAct?.["graphium:attributes"]?.some((a: any) => a["rdfs:label"] === "フライパンで中火 5分")).toBe(true);
+  });
+});

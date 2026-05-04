@@ -2003,7 +2003,12 @@ function NoteEditorInner({
                 }
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                // IME 変換確定の Enter を奪わない。
+                // isComposing (および Safari 互換のための keyCode 229) を見て
+                // 変換中の Enter は素通しする。これを忘れると、変換確定の
+                // Enter で focus が editor に移り、確定文字がエディタの
+                // 1 行目へ流れ込む（タイトル直下に同じ文字が現れる）バグになる。
+                if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                   e.preventDefault();
                   editorRef.current?.focus();
                 }
