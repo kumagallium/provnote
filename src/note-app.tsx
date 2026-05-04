@@ -2504,7 +2504,9 @@ export function NoteApp() {
           "ja",
         );
 
-        const result = await ingestNote(job.noteId, job.doc, existingWikis, "ja", undefined, ingestSkills);
+        // 設定で選んだ既定モデル名を渡す。Tauri モードではヘッダーに API キーを乗せないため、
+        // body.model 経由でサーバーに伝えないと models.json 先頭のモデルにフォールバックしてしまう。
+        const result = await ingestNote(job.noteId, job.doc, existingWikis, "ja", getSelectedModel() || undefined, ingestSkills);
 
         if (result.wikis.length === 0) {
           setIngestToast((prev) => ({
@@ -2638,7 +2640,14 @@ export function NoteApp() {
           .filter(([, m]) => m.kind === "synthesis")
           .map(([, m]) => m.title);
 
-        const synthResult = await fetchSynthesisCandidates(conceptSnapshots, existingSynthesisTitles, "ja");
+        // Synthesis は Chat & Synthesis モデルを使う。Tauri モードではヘッダーに API キーが
+        // 乗らないので body.model でサーバーに明示する必要がある。
+        const synthResult = await fetchSynthesisCandidates(
+          conceptSnapshots,
+          existingSynthesisTitles,
+          "ja",
+          getChatSynthesisLLMModel()?.name,
+        );
         for (const candidate of synthResult.candidates) {
           const synthDoc = buildSynthesisDocument(candidate, synthResult.model ?? null, "ja", buildNoteIndex(fm.noteIndex));
           const newId = await fm.handleCreateWikiFile(synthDoc);
