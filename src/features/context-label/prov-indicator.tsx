@@ -134,7 +134,7 @@ export function ProvIndicatorLayer() {
     // ラベルを SidePeek の左端より内側に収める（z-index で重なるのを防ぐ）
     let effectiveRight = wrapperRect.right;
     const sidePeek = document.querySelector("[data-side-peek]");
-    if (sidePeek && !wrapper.contains(sidePeek)) {
+    if (sidePeek && !sidePeek.contains(wrapper)) {
       const peekRect = sidePeek.getBoundingClientRect();
       if (peekRect.left < effectiveRight) {
         effectiveRight = peekRect.left;
