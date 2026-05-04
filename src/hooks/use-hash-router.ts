@@ -91,9 +91,11 @@ export type RouteActions = {
 
 // ─── Hook ───
 
-export function useHashRouter(actions: RouteActions) {
+export function useHashRouter(actions: RouteActions, ready: boolean = true) {
   // 内部フラグ: プログラムからの遷移中は popstate を無視する
   const suppressRef = useRef(false);
+  // 初回マウント時の URL 反映を一度だけ行うためのフラグ
+  const initialAppliedRef = useRef(false);
 
   // ルートをアプリ状態に反映
   const applyRoute = useCallback((route: AppRoute) => {
@@ -166,6 +168,18 @@ export function useHashRouter(actions: RouteActions) {
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, [applyRoute]);
+
+  // 初回マウント時に URL ハッシュからルートを復元する
+  // ファイル一覧の読み込み完了（ready=true）を待ってから適用しないと、
+  // openFile が「ファイル不在」と判定して何も起きないため。
+  useEffect(() => {
+    if (!ready || initialAppliedRef.current) return;
+    initialAppliedRef.current = true;
+    const route = parseHash(window.location.hash);
+    if (route.view !== "home") {
+      applyRoute(route);
+    }
+  }, [ready, applyRoute]);
 
   return { navigate, parseHash: () => parseHash(window.location.hash) };
 }

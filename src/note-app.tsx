@@ -2123,10 +2123,12 @@ function NoteEditorInner({
               }}
             />
             {/* 空ノート予示: ⌘K / # / @ / / の入口をさりげなく案内 */}
-            <EmptyNoteGuide
-              visible={showEmptyNoteGuide}
-              onOpenComposer={onOpenComposer}
-            />
+            <div className="px-[54px]">
+              <EmptyNoteGuide
+                visible={showEmptyNoteGuide}
+                onOpenComposer={onOpenComposer}
+              />
+            </div>
           </div>
         </div>
 
@@ -2448,7 +2450,7 @@ export function NoteApp() {
       setShowMemos(false);
     },
   }), [fm]);
-  const router = useHashRouter(routeActions);
+  const router = useHashRouter(routeActions, !fm.filesLoading);
 
   // Ingest キューを処理する関数
   const processIngestQueue = useCallback(async () => {

@@ -1155,6 +1155,22 @@ export function useFileManager(authenticated: boolean) {
               : f
           )
         );
+        // wikiMetas を即座に更新（サイドバー・リストの title 表示は wikiMetas を参照しているため）
+        setWikiMetas((prev) => {
+          const next = new Map(prev);
+          const headings = (doc.pages[0]?.blocks ?? [])
+            .filter((b: any) => b.type === "heading" && b.props?.level === 2)
+            .map((b: any) => Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? "").join("") : "")
+            .filter(Boolean);
+          const existing = next.get(wikiId);
+          next.set(wikiId, {
+            title: doc.title,
+            kind: doc.wikiMeta?.kind ?? existing?.kind ?? "concept",
+            headings,
+            model: doc.wikiMeta?.generatedBy?.model ?? existing?.model,
+          });
+          return next;
+        });
         // インデックスを更新
         if (noteIndexRef.current) {
           const updated = updateIndexEntry(noteIndexRef.current, wikiId, doc);
