@@ -28,3 +28,9 @@ export {
   getBlobRoot,
   setBlobRoot,
 } from "./config";
+export { pickSharedRoot, pickBlobRoot } from "./picker";
+export {
+  testSharedConnection,
+  testBlobConnection,
+  type ConnectionTestResult,
+} from "./test-connection";
