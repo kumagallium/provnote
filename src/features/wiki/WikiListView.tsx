@@ -4,10 +4,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Bot, Search, Trash2 } from "lucide-react";
-import type { WikiKind } from "../../lib/document-types";
+import type { WikiKind, WikiMetaSummary, ConceptLevel, ConceptStatus } from "../../lib/document-types";
 import type { GraphiumFile } from "../../lib/document-types";
 import type { GraphiumIndex } from "../navigation/index-file";
 import { Breadcrumb } from "../../components/Breadcrumb";
+import { useT } from "../../i18n";
 
 // 日付を YYYY-MM-DD 形式で表示
 function formatDate(iso: string): string {
@@ -19,22 +20,14 @@ function formatDate(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
-type WikiMeta = {
-  title: string;
-  kind: WikiKind;
-  headings: string[];
-  /** 書記役 LLM のモデル ID (例: claude-opus-4-7) */
-  model?: string;
-};
-
-type SortKey = "title" | "modifiedAt" | "createdAt";
+type SortKey = "title" | "modifiedAt" | "createdAt" | "sources" | "incoming" | "outgoing";
 type SortDirection = "asc" | "desc";
 
 type Props = {
   noteIndex: GraphiumIndex | null;
   wikiKind: WikiKind;
   wikiFiles: GraphiumFile[];
-  wikiMetas: Map<string, WikiMeta>;
+  wikiMetas: Map<string, WikiMetaSummary>;
   /** クリック時（サイドピーク表示用） */
   onOpenWiki: (wikiId: string) => void;
   /** ダブルクリック or フルで開く */
@@ -55,14 +48,17 @@ function DeleteConfirmDialog({
   onCancel: () => void;
   deleting: boolean;
 }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-popover border border-border rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
         <h3 className="text-sm font-semibold text-foreground mb-2">
-          Delete {count} {count === 1 ? "wiki" : "wikis"}?
+          {count === 1
+            ? t("wikiList.deleteConfirmTitleSingle")
+            : t("wikiList.deleteConfirmTitleMulti", { count: String(count) })}
         </h3>
         <p className="text-xs text-muted-foreground mb-4">
-          This action cannot be undone.
+          {t("wikiList.deleteConfirmMessage")}
         </p>
         <div className="flex justify-end gap-2">
           <button
@@ -70,14 +66,14 @@ function DeleteConfirmDialog({
             disabled={deleting}
             className="px-3 py-1.5 text-xs rounded border border-border text-foreground hover:bg-muted transition-colors disabled:opacity-50"
           >
-            Cancel
+            {t("wikiList.deleteConfirmCancel")}
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
             className="px-3 py-1.5 text-xs rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
           >
-            {deleting ? "Deleting…" : "Delete"}
+            {deleting ? t("wikiList.deleting") : t("wikiList.deleteConfirmOk")}
           </button>
         </div>
       </div>
@@ -85,7 +81,60 @@ function DeleteConfirmDialog({
   );
 }
 
+// Wiki エントリの種別を一目で示すバッジ。
+// kind=concept のみ level / status を併記する。
+function TypeBadge({
+  kind,
+  level,
+  status,
+}: {
+  kind: WikiKind;
+  level?: ConceptLevel;
+  status?: ConceptStatus;
+}) {
+  const t = useT();
+  if (kind === "summary") {
+    return <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[11px] font-medium">{t("wikiList.kindSummary")}</span>;
+  }
+  if (kind === "synthesis") {
+    return <span className="inline-block px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium">{t("wikiList.kindSynthesis")}</span>;
+  }
+  // concept
+  const levelLabel =
+    level === "principle"
+      ? t("wikiList.levelPrinciple")
+      : level === "finding"
+        ? t("wikiList.levelFinding")
+        : level === "bridge"
+          ? t("wikiList.levelBridge")
+          : t("wikiList.kindConcept");
+  const colorClass =
+    level === "principle"
+      ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+      : level === "bridge"
+        ? "bg-violet-500/15 text-violet-700 dark:text-violet-400"
+        : level === "finding"
+          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+          : "bg-muted text-muted-foreground";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${colorClass}`}>
+        {levelLabel}
+      </span>
+      {level === "principle" && status && (
+        <span
+          className={`text-[10px] ${status === "verified" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}
+          title={status === "verified" ? t("wikiList.statusVerifiedTooltip") : t("wikiList.statusCandidateTooltip")}
+        >
+          {status === "verified" ? t("wikiList.statusVerified") : t("wikiList.statusCandidate")}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function WikiListView({
+  noteIndex,
   wikiKind,
   wikiFiles,
   wikiMetas,
@@ -94,12 +143,57 @@ export function WikiListView({
   onBack,
   onDeleteWiki,
 }: Props) {
+  const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("modifiedAt");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 被参照カウント（このページを参照している「distinct なノート/wiki」の数）
+  // 1 ノートが本文で同じ wiki を複数回引用しても 1 と数える。
+  const incomingRefCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!noteIndex) return counts;
+    for (const entry of noteIndex.notes) {
+      const targets = new Set<string>();
+      for (const link of entry.outgoingLinks ?? []) {
+        if (link.targetNoteId) targets.add(link.targetNoteId);
+      }
+      for (const target of targets) {
+        counts.set(target, (counts.get(target) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [noteIndex]);
+
+  // 参照先カウント（この Wiki が参照している distinct な targetNoteId 数）
+  // 同一 target を複数回引用しても 1 と数える。
+  const outgoingRefCountById = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!noteIndex) return counts;
+    for (const entry of noteIndex.notes) {
+      const targets = new Set<string>();
+      for (const link of entry.outgoingLinks ?? []) {
+        if (link.targetNoteId) targets.add(link.targetNoteId);
+      }
+      counts.set(entry.noteId, targets.size);
+    }
+    return counts;
+  }, [noteIndex]);
+
+  // 生成元ノート数を index から引く（doc を読み込まなくても済むように）
+  // 同一ノートが derivedFromNotes に重複登録されている場合に備えて Set で dedupe する。
+  const sourcesCountById = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!noteIndex) return counts;
+    for (const entry of noteIndex.notes) {
+      const unique = new Set(entry.derivedFromNotes ?? []);
+      counts.set(entry.noteId, unique.size);
+    }
+    return counts;
+  }, [noteIndex]);
 
   const wikiEntries = useMemo(() => {
     return wikiFiles
@@ -112,10 +206,15 @@ export function WikiListView({
         title: wikiMetas.get(f.id)!.title,
         modifiedAt: f.modifiedTime,
         createdAt: f.createdTime,
-        headings: wikiMetas.get(f.id)!.headings,
+        kind: wikiMetas.get(f.id)!.kind,
+        level: wikiMetas.get(f.id)!.level,
+        status: wikiMetas.get(f.id)!.status,
         model: wikiMetas.get(f.id)!.model,
+        sources: sourcesCountById.get(f.id) ?? 0,
+        incoming: incomingRefCount.get(f.id) ?? 0,
+        outgoing: outgoingRefCountById.get(f.id) ?? 0,
       }));
-  }, [wikiFiles, wikiMetas, wikiKind]);
+  }, [wikiFiles, wikiMetas, wikiKind, sourcesCountById, incomingRefCount, outgoingRefCountById]);
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -145,6 +244,15 @@ export function WikiListView({
           break;
         case "createdAt":
           cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case "sources":
+          cmp = a.sources - b.sources;
+          break;
+        case "incoming":
+          cmp = a.incoming - b.incoming;
+          break;
+        case "outgoing":
+          cmp = a.outgoing - b.outgoing;
           break;
       }
       return sortDir === "desc" ? -cmp : cmp;
@@ -188,26 +296,31 @@ export function WikiListView({
     }
   }, [deleteTarget, onDeleteWiki]);
 
-  const kindLabel = wikiKind === "summary" ? "Summary" : wikiKind === "synthesis" ? "Synthesis" : "Concept";
+  const kindLabel =
+    wikiKind === "summary"
+      ? t("wikiList.kindSummary")
+      : wikiKind === "synthesis"
+        ? t("wikiList.kindSynthesis")
+        : t("wikiList.kindConcept");
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       {/* ヘッダー */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
         <Breadcrumb items={[
-          { label: "Home", onClick: onBack },
-          { label: "Wiki" },
+          { label: t("nav.home"), onClick: onBack },
+          { label: t("wikiList.crumbWiki") },
           { label: kindLabel },
         ]} />
         <span className="text-xs text-muted-foreground">
-          ({filtered.length}/{wikiEntries.length})
+          {t("wikiList.count", { filtered: String(filtered.length), total: String(wikiEntries.length) })}
         </span>
         {someSelected && (
           <button
             onClick={() => setDeleteTarget([...selectedIds])}
             className="ml-auto px-3 py-1 text-xs font-medium rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
           >
-            Delete {selectedIds.size}
+            {t("wikiList.deleteSelected", { count: String(selectedIds.size) })}
           </button>
         )}
       </div>
@@ -221,7 +334,7 @@ export function WikiListView({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
+            placeholder={t("wikiList.search")}
             className="pl-7 pr-2.5 py-1 text-xs rounded border border-border bg-background text-foreground placeholder:text-muted-foreground/60 w-48 focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
         </div>
@@ -231,13 +344,13 @@ export function WikiListView({
       <div className="flex-1 overflow-auto px-6">
         {wikiMetas.size === 0 && wikiFiles.length > 0 ? (
           <div className="flex items-center justify-center py-16">
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-muted-foreground">{t("wikiList.loading")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <Bot size={24} className="opacity-30" />
             <p className="text-sm text-muted-foreground">
-              {searchQuery ? "No matching wikis found" : `No ${kindLabel} wikis yet`}
+              {searchQuery ? t("wikiList.noMatching") : t("wikiList.noWikisYet", { kind: kindLabel })}
             </p>
           </div>
         ) : (
@@ -250,28 +363,49 @@ export function WikiListView({
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="w-3.5 h-3.5 rounded border-border accent-primary cursor-pointer"
-                    title={allSelected ? "Deselect all" : "Select all"}
+                    title={allSelected ? t("wikiList.deselectAll") : t("wikiList.selectAll")}
                   />
                 </th>
                 <th
                   className="py-2 px-3 cursor-pointer hover:text-foreground"
                   onClick={() => handleSort("title")}
                 >
-                  Title{sortKey === "title" && (sortDir === "desc" ? " ↓" : " ↑")}
+                  {t("wikiList.colTitle")}{sortKey === "title" && (sortDir === "desc" ? " ↓" : " ↑")}
                 </th>
-                <th className="py-2 px-3">Headings</th>
-                <th className="py-2 px-2 w-[120px]">Model</th>
+                <th className="py-2 px-3 w-[140px]">{t("wikiList.colType")}</th>
+                <th
+                  className="py-2 pl-3 w-[80px] cursor-pointer hover:text-foreground tabular-nums"
+                  onClick={() => handleSort("sources")}
+                  title={t("wikiList.colSourcesTooltip")}
+                >
+                  {t("wikiList.colSources")}{sortKey === "sources" && (sortDir === "desc" ? " ↓" : " ↑")}
+                </th>
+                <th
+                  className="py-2 pl-3 w-[70px] cursor-pointer hover:text-foreground tabular-nums"
+                  onClick={() => handleSort("outgoing")}
+                  title={t("wikiList.colOutgoingTooltip")}
+                >
+                  {t("wikiList.colOutgoing")}{sortKey === "outgoing" && (sortDir === "desc" ? " ↓" : " ↑")}
+                </th>
+                <th
+                  className="py-2 pl-3 w-[70px] cursor-pointer hover:text-foreground tabular-nums"
+                  onClick={() => handleSort("incoming")}
+                  title={t("wikiList.colIncomingTooltip")}
+                >
+                  {t("wikiList.colIncoming")}{sortKey === "incoming" && (sortDir === "desc" ? " ↓" : " ↑")}
+                </th>
+                <th className="py-2 px-2 w-[120px]">{t("wikiList.colModel")}</th>
                 <th
                   className="py-2 pl-3 w-[100px] cursor-pointer hover:text-foreground"
                   onClick={() => handleSort("createdAt")}
                 >
-                  Created{sortKey === "createdAt" && (sortDir === "desc" ? " ↓" : " ↑")}
+                  {t("wikiList.colCreated")}{sortKey === "createdAt" && (sortDir === "desc" ? " ↓" : " ↑")}
                 </th>
                 <th
                   className="py-2 pl-3 w-[100px] cursor-pointer hover:text-foreground"
                   onClick={() => handleSort("modifiedAt")}
                 >
-                  Modified{sortKey === "modifiedAt" && (sortDir === "desc" ? " ↓" : " ↑")}
+                  {t("wikiList.colModified")}{sortKey === "modifiedAt" && (sortDir === "desc" ? " ↓" : " ↑")}
                 </th>
                 <th className="py-2 px-2 w-[40px]" />
               </tr>
@@ -302,8 +436,17 @@ export function WikiListView({
                       </span>
                     </span>
                   </td>
-                  <td className="py-2 px-3 text-xs text-muted-foreground truncate max-w-[280px]" title={entry.headings.join(" / ")}>
-                    {entry.headings.length > 0 ? entry.headings.join(" / ") : <span className="text-muted-foreground/40">—</span>}
+                  <td className="py-2 px-3 text-xs">
+                    <TypeBadge kind={entry.kind} level={entry.level} status={entry.status} />
+                  </td>
+                  <td className="py-2 pl-3 text-xs text-muted-foreground tabular-nums">
+                    {entry.sources > 0 ? entry.sources : <span className="text-muted-foreground/40">—</span>}
+                  </td>
+                  <td className="py-2 pl-3 text-xs text-muted-foreground tabular-nums">
+                    {entry.outgoing > 0 ? entry.outgoing : <span className="text-muted-foreground/40">—</span>}
+                  </td>
+                  <td className="py-2 pl-3 text-xs text-muted-foreground tabular-nums">
+                    {entry.incoming > 0 ? entry.incoming : <span className="text-muted-foreground/40">—</span>}
                   </td>
                   <td className="py-2 px-2 text-xs text-muted-foreground truncate" title={entry.model ?? ""}>
                     {entry.model ? (
@@ -325,7 +468,7 @@ export function WikiListView({
                     <button
                       onClick={() => setDeleteTarget([entry.id])}
                       className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
-                      title="Delete"
+                      title={t("wikiList.deleteRowTitle")}
                     >
                       <Trash2 size={14} />
                     </button>

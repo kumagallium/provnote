@@ -1,7 +1,7 @@
 // Wiki サービス（フロントエンド側）
 // Ingest フロー・Wiki ドキュメント構築・Embedding 保存のオーケストレーション
 
-import type { GraphiumDocument, WikiKind, WikiMeta } from "../../lib/document-types";
+import type { GraphiumDocument, WikiKind, WikiMeta, WikiMetaSummary } from "../../lib/document-types";
 import { embeddingStore } from "../../lib/embedding-store";
 import type { IngesterOutput } from "../../server/services/wiki-ingester";
 import { getEmbeddingModel, getDefaultLLMModel, getChatSynthesisLLMModel, getEmbeddingLLMModel } from "../settings/store";
@@ -1299,7 +1299,7 @@ export async function lintWikis(
  */
 export function buildWikiSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
+  wikiMetas: Map<string, WikiMetaSummary>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): WikiSnapshot[] {
   const snapshots: WikiSnapshot[] = [];
@@ -1317,7 +1317,8 @@ export function buildWikiSnapshots(
       kind: meta.kind,
       derivedFromNotes: wikiMeta?.derivedFromNotes ?? [],
       relatedConcepts: extractRelatedConcepts(doc),
-      sections: meta.headings,
+      bodyPreview: doc ? extractBodyPreview(doc, 240) : "",
+      level: meta.kind === "concept" ? meta.level : undefined,
       lastIngestedAt: wikiMeta?.lastIngestedAt,
       modifiedAt: file.modifiedTime,
     });
@@ -1349,7 +1350,10 @@ export type WikiIndexEntry = {
   id: string;
   title: string;
   kind: WikiKind;
-  sections: string[];
+  /** 本文先頭のプレビュー（1ノート1知見前提で sections は廃止） */
+  bodyPreview: string;
+  /** Concept のとき principle / finding / bridge */
+  level?: "principle" | "finding" | "bridge";
   derivedFromNotes: string[];
   relatedConcepts: string[];
   modifiedAt: string;
@@ -1361,7 +1365,7 @@ export type WikiIndexEntry = {
  */
 export function buildWikiIndex(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
+  wikiMetas: Map<string, WikiMetaSummary>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): WikiIndexEntry[] {
   const entries: WikiIndexEntry[] = [];
@@ -1376,7 +1380,8 @@ export function buildWikiIndex(
       id: file.id,
       title: meta.title,
       kind: meta.kind,
-      sections: meta.headings,
+      bodyPreview: doc ? extractBodyPreview(doc, 200) : "",
+      level: meta.kind === "concept" ? meta.level : undefined,
       derivedFromNotes: doc?.wikiMeta?.derivedFromNotes ?? [],
       relatedConcepts: extractRelatedConcepts(doc),
       modifiedAt: file.modifiedTime,
@@ -1394,13 +1399,15 @@ export function formatWikiIndexForLLM(entries: WikiIndexEntry[]): string {
 
   const summaries = entries.filter((e) => e.kind === "summary");
   const concepts = entries.filter((e) => e.kind === "concept");
+  const syntheses = entries.filter((e) => e.kind === "synthesis");
 
   let text = `## Wiki Index (${entries.length} pages)\n\n`;
 
   if (concepts.length > 0) {
     text += `### Concepts (${concepts.length})\n`;
     for (const c of concepts) {
-      text += `- **${c.title}**: ${c.sections.join(", ")}\n`;
+      const tag = c.level ? ` [${c.level}]` : "";
+      text += `- **${c.title}**${tag}: ${c.bodyPreview}\n`;
     }
     text += "\n";
   }
@@ -1408,7 +1415,15 @@ export function formatWikiIndexForLLM(entries: WikiIndexEntry[]): string {
   if (summaries.length > 0) {
     text += `### Summaries (${summaries.length})\n`;
     for (const s of summaries) {
-      text += `- **${s.title}**: ${s.sections.join(", ")}\n`;
+      text += `- **${s.title}**: ${s.bodyPreview}\n`;
+    }
+    text += "\n";
+  }
+
+  if (syntheses.length > 0) {
+    text += `### Syntheses (${syntheses.length})\n`;
+    for (const s of syntheses) {
+      text += `- **${s.title}**: ${s.bodyPreview}\n`;
     }
   }
 
@@ -1553,18 +1568,17 @@ export function buildSynthesisDocument(
  */
 export function buildConceptSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
-  wikiMetas: Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>,
+  wikiMetas: Map<string, WikiMetaSummary>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
 ): ConceptSnapshot[] {
   // Summary 索引: 派生元 noteId → { title, preview }
-  // extractWikiDetail は Concept 専用のため、Summary は本ヘルパーで先頭セクションを抽出する
   const summaryByNote = new Map<string, { title: string; preview: string }>();
   for (const file of wikiFiles) {
     const meta = wikiMetas.get(file.id);
     if (!meta || meta.kind !== "summary") continue;
     const doc = getCachedDoc(`wiki:${file.id}`);
     if (!doc) continue;
-    const preview = extractFirstSectionPreview(doc, 240);
+    const preview = extractBodyPreview(doc, 240);
     for (const noteId of doc.wikiMeta?.derivedFromNotes ?? []) {
       if (!summaryByNote.has(noteId)) {
         summaryByNote.set(noteId, { title: meta.title, preview });
@@ -1579,7 +1593,6 @@ export function buildConceptSnapshots(
     if (!meta || meta.kind !== "concept") continue;
 
     const doc = getCachedDoc(`wiki:${file.id}`);
-    const detail = doc ? extractWikiDetail(file.id, doc) : null;
 
     // この Concept が依拠している Summary を集める（重複除去）
     const summarySet = new Map<string, string>();
@@ -1592,12 +1605,8 @@ export function buildConceptSnapshots(
     snapshots.push({
       id: file.id,
       title: meta.title,
-      sections: detail
-        ? detail.sectionHeadings.map((h, i) => ({
-            heading: h,
-            preview: detail.sectionPreviews[i] ?? "",
-          }))
-        : meta.headings.map((h) => ({ heading: h, preview: "" })),
+      bodyPreview: doc ? extractBodyPreview(doc, 240) : "",
+      level: meta.level,
       relatedConcepts: doc ? extractRelatedConcepts(doc).map(String) : [],
       sourceSummaryPreviews,
     });
@@ -1607,25 +1616,19 @@ export function buildConceptSnapshots(
 }
 
 /**
- * Wiki ドキュメントから先頭 H2 セクションの本文プレビューを抽出する。
- * Synthesizer の Summary 併読用。kind を問わず動作する。
+ * Wiki ドキュメントから本文の先頭プレビューを抽出する。
+ * 1ノート1知見前提のため H2 を区切りに使わず、本文（heading 以外）から
+ * 最初の `maxLen` 文字を集める。Synthesizer / Linter / 一覧で共通利用する。
  */
-function extractFirstSectionPreview(doc: GraphiumDocument, maxLen: number): string {
+export function extractBodyPreview(doc: GraphiumDocument, maxLen: number): string {
   const page = doc.pages[0];
   if (!page) return "";
   const lines: string[] = [];
-  let inFirstSection = false;
   for (const block of page.blocks) {
-    if (block.type === "heading" && block.props?.level === 2) {
-      if (inFirstSection) break;
-      inFirstSection = true;
-      continue;
-    }
-    if (inFirstSection) {
-      const t = extractInlineText(block.content);
-      if (t) lines.push(t);
-      if (lines.join(" ").length >= maxLen) break;
-    }
+    if (block.type === "heading") continue; // H1/H2/H3 はスキップ — タイトルや節見出しは preview に入れない
+    const t = extractInlineText(block.content);
+    if (t) lines.push(t);
+    if (lines.join(" ").length >= maxLen) break;
   }
   return lines.join(" ").slice(0, maxLen);
 }
