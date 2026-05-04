@@ -817,6 +817,41 @@ function NoteEditorInner({
 
     // paste: Graphium ペイロードを最優先で処理し、なければ既存の URL 検知に流す
     const pasteListener = (e: ClipboardEvent) => {
+      // 空のリスト系ブロック（checkListItem / bulletListItem / numberedListItem）に
+      // テキストを paste すると BlockNote (prosemirror) がブロック自体を paragraph に
+      // 置換してしまう。ユーザー視点では「リスト項目が消える」現象。
+      // 該当ケースのみ介入し、ブロック型を保ったまま編集 API でテキストを差し込む。
+      const cursorBlock = editor.getTextCursorPosition?.()?.block;
+      const listBlockTypes = new Set(["checkListItem", "bulletListItem", "numberedListItem"]);
+      if (
+        cursorBlock &&
+        listBlockTypes.has(cursorBlock.type) &&
+        Array.isArray(cursorBlock.content) &&
+        cursorBlock.content.length === 0 &&
+        e.clipboardData
+      ) {
+        const graphiumRaw = e.clipboardData.getData(GRAPHIUM_CLIPBOARD_MIME);
+        const htmlForPayload = e.clipboardData.getData("text/html");
+        const hasGraphiumPayload =
+          parseClipboardPayload(graphiumRaw) ?? extractPayloadFromHtml(htmlForPayload);
+        const plain = e.clipboardData.getData("text/plain");
+        // Graphium ペイロード（複数ブロック想定）はブロック置換でも構造が保たれるためスルー。
+        // ここではプレーンテキスト相当の paste のみ救済する。
+        if (!hasGraphiumPayload && plain) {
+          // ProseMirror / BlockNote の paste handler も同じ DOM に付いており、
+          // preventDefault だけだと続けて走ってブロックを改行追加 + paragraph 置換してしまう。
+          // capture phase で完全に乗っ取るため stopImmediatePropagation も呼ぶ。
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          // 末尾の改行はクリップボードに含まれる「行末コピー」由来で、ブロック内に
+          // 持ち込むと BlockNote が hard break を増やすため除去する。
+          const cleaned = plain.replace(/\r?\n+$/g, "");
+          editor.updateBlock(cursorBlock, {
+            content: [{ type: "text", text: cleaned, styles: {} }],
+          });
+          return;
+        }
+      }
       // 全コピペ共通: 挿入後にインライン entityId を再発番する後処理（Phase E, 2026-04-30）
       // 同 entityId 共有は意図しない場合が多いので、コピー範囲内では一貫した
       // 新 ID に置き換える（旧 ID 同一なら新 ID も同一になる remap）。
