@@ -185,13 +185,15 @@ export function TrashView({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
-      <Breadcrumb
-        items={[
-          { label: t("nav.home"), onClick: onBack },
-          { label: t("nav.trash") },
-        ]}
-      />
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
+        <Breadcrumb
+          items={[
+            { label: t("nav.home"), onClick: onBack },
+            { label: t("nav.trash") },
+          ]}
+        />
+      </div>
+      <div className="px-6 py-3 border-b border-border flex items-center gap-2">
         <Trash2 size={16} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">
           {t("nav.trash")}

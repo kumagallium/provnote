@@ -78,7 +78,7 @@ type ToolsResponse = {
   };
 };
 
-type Tab = "general" | "labels" | "ai-setup" | "maintenance";
+type Tab = "display" | "storage" | "ai" | "labels" | "maintenance";
 
 // Settings → Maintenance タブで使う Wiki サマリー
 export type WikiSummaryForSettings = {
@@ -99,6 +99,7 @@ type BulkProgress = {
   total: number;
   failed: number;
   current?: string;
+  currentModel?: string;
   failedItems: BulkFailedItem[];
 };
 
@@ -124,7 +125,7 @@ type SettingsModalProps = {
 
 export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
-  const [tab, setTab] = useState<Tab>("general");
+  const [tab, setTab] = useState<Tab>("display");
 
   // 設定値
   const [model, setModel] = useState("");
@@ -171,6 +172,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   // Maintenance タブ — Wiki 一括 Regenerate
   const [bulkKinds, setBulkKinds] = useState<Set<WikiKind>>(new Set(["concept", "summary", "synthesis"]));
   const [bulkModelOverride, setBulkModelOverride] = useState("");
+  const [bulkSynthesisModelOverride, setBulkSynthesisModelOverride] = useState("");
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
   const cancelBulkRef = useRef(false);
@@ -612,32 +614,36 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
       {/* タブ */}
       <div className="flex border-b border-border px-6">
-        {(["general", "labels", "ai-setup", "maintenance"] as Tab[]).map((tabId) => (
-          <button
-            key={tabId}
-            onClick={() => setTab(tabId)}
-            className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
-              tab === tabId
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t(`settings.tab.${tabId === "ai-setup" ? "aiSetup" : tabId}`)}
-          </button>
-        ))}
+        {(["display", "storage", "ai", "labels", "maintenance"] as Tab[]).map((tabId) => {
+          const labelKey =
+            tabId === "display" ? "settings.section.display"
+            : tabId === "storage" ? "settings.section.storage"
+            : tabId === "ai" ? "settings.section.ai"
+            : tabId === "labels" ? "settings.tab.labels"
+            : "settings.tab.maintenance";
+          return (
+            <button
+              key={tabId}
+              onClick={() => setTab(tabId)}
+              className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                tab === tabId
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t(labelKey)}
+            </button>
+          );
+        })}
       </div>
 
       <ModalBody className="w-full min-w-[460px] max-w-lg" onKeyDown={handleKeyDown}>
-        {/* ── General タブ ── */}
-        {tab === "general" && (
+        {/* ── Display タブ ── */}
+        {tab === "display" && (
           <div className="space-y-4">
-            {/* ── Display & Locale ── */}
-            <div className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground/80 border-b border-border pb-1">
-              {t("settings.section.display")}
-            </div>
             {/* 言語 */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 {t("settings.language")}
               </label>
               <div className="flex gap-2">
@@ -659,7 +665,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
             {/* 読みやすさ（フォント） — ラテン用と日本語用を独立に設定 */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 {t("settings.font")}
               </label>
               <div className="space-y-2">
@@ -742,16 +748,17 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">{t("settings.fontHelp")}</p>
+              <p className="text-xs text-muted-foreground mt-2">{t("settings.fontHelp")}</p>
             </div>
+          </div>
+        )}
 
-            {/* ── AI ── */}
-            <div className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground/80 border-b border-border pb-1 pt-2">
-              {t("settings.section.ai")}
-            </div>
+        {/* ── AI タブ：利用設定 ── */}
+        {tab === "ai" && (
+          <div className="space-y-4">
             {/* モデル選択 */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 {t("settings.model")}
               </label>
               <div className="relative">
@@ -772,12 +779,12 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">{t("settings.modelHelp")}</p>
+              <p className="text-xs text-muted-foreground mt-2">{t("settings.modelHelp")}</p>
             </div>
 
             {/* Embedding モデル選択 */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 Embedding Model
               </label>
               <div className="relative">
@@ -798,14 +805,14 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-xs text-muted-foreground mt-2">
                 Embedding requires OpenAI or OpenAI-compatible provider. Leave empty to use text-match fallback.
               </p>
             </div>
 
             {/* Chat & Synthesis モデル選択（対話と統合用 — default より上のモデルを当てる場面用） */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 {t("settings.chatSynthesisModel")}
               </label>
               <div className="relative">
@@ -826,7 +833,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-xs text-muted-foreground mt-2">
                 {t("settings.chatSynthesisModelHelp")}
               </p>
             </div>
@@ -850,14 +857,12 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 </span>
               </label>
             </div>
+          </div>
+        )}
 
-            {/* ── Storage ── */}
-            {(isTauri() || serverCaps?.serverStorage) && (
-              <div className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground/80 border-b border-border pb-1 pt-2">
-                {t("settings.section.storage")}
-              </div>
-            )}
-
+        {/* ── Storage タブ ── */}
+        {tab === "storage" && (
+          <div className="space-y-4">
             {/* サーバーストレージ（Docker / セルフホスト Web のみ） */}
             {!isTauri() && serverCaps?.serverStorage && (
               <div>
@@ -1036,80 +1041,20 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
           </div>
         )}
 
-        {/* ── AI Setup タブ ── */}
-        {tab === "ai-setup" && (
-          <div className="space-y-5">
-            {/* AI バックエンド未接続時はアップグレード CTA を最上部に表示 */}
+        {/* ── AI タブ：モデル管理 ── */}
+        {tab === "ai" && (
+          <div className="space-y-5 mt-6 pt-6 border-t border-border">
+            {/* AI バックエンド未接続時はアップグレード CTA を表示 */}
             {!healthLoading && !health && (
               <AiUpgradeNotice variant="card" />
             )}
-            {/* 接続状態パネル */}
-            <div className="rounded-lg border border-border p-3">
-              <h3 className="text-xs font-semibold text-foreground mb-2">{t("settings.health.title")}</h3>
-              {healthLoading ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 size={14} className="animate-spin" /> {t("settings.health.checking")}
-                </div>
-              ) : health ? (
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {Object.entries(health.components).map(([name, status]) => (
-                    <div key={name} className="flex items-center gap-1.5 text-xs text-foreground">
-                      <StatusIcon status={status} />
-                      <span className="capitalize">{name}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs text-red-500">
-                  <XCircle size={14} />
-                  {t("settings.health.unavailable")}
-                </div>
-              )}
-            </div>
 
-            {/* バックエンド未接続時は案内 + 再起動オプション */}
+            {/* バックエンド未接続時は案内のみ。詳細はメンテナンスタブで確認・再起動 */}
             {!healthLoading && !health ? (
-              <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
+              <div className="rounded-lg border border-dashed border-border p-4">
                 <p className="text-xs text-muted-foreground text-center">
                   {t("settings.health.unavailable")}
                 </p>
-                {isTauri() && (
-                  <div className="flex flex-col items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleRestartSidecar}
-                      disabled={restartingSidecar}
-                    >
-                      {restartingSidecar ? (
-                        <><Loader2 size={12} className="animate-spin mr-1.5" />{t("settings.health.restarting")}</>
-                      ) : (
-                        <><RotateCcw size={12} className="mr-1.5" />{t("settings.health.restart")}</>
-                      )}
-                    </Button>
-                    {sidecarError && (
-                      <div className="w-full rounded-md border border-red-500/30 bg-red-500/5 p-2 text-xs">
-                        <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
-                          <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium mb-0.5">{t("settings.health.restartFailed")}</div>
-                            <div className="text-foreground/80 break-words">{sidecarError}</div>
-                            {sidecarLog.length > 0 && (
-                              <button
-                                onClick={() => setShowSidecarLog((v) => !v)}
-                                className="mt-1 text-[11px] text-muted-foreground hover:text-foreground underline"
-                              >
-                                {showSidecarLog ? t("settings.health.hideLog") : t("settings.health.showLog")}
-                              </button>
-                            )}
-                            {showSidecarLog && sidecarLog.length > 0 && (
-                              <pre className="mt-1.5 text-[10px] bg-background/50 rounded p-1.5 overflow-auto max-h-32 font-mono whitespace-pre-wrap">{sidecarLog.join("\n")}</pre>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ) : <>
 
@@ -1146,15 +1091,15 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                   {models.map((m) => editingId === m.id ? (
                     <div key={m.id} className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
                       <div>
-                        <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.displayName")}</label>
+                        <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.displayName")}</label>
                         <Input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} />
                       </div>
                       <div>
-                        <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.models.editApiKey")}</label>
+                        <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.models.editApiKey")}</label>
                         <Input type="password" value={editApiKey} onChange={(e) => setEditApiKey(e.target.value)} placeholder={t("settings.models.editApiKeyPlaceholder")} className="font-mono text-sm" />
                       </div>
                       <div>
-                        <label className="text-xs font-medium text-foreground mb-1 block">API Base URL</label>
+                        <label className="text-xs font-medium text-foreground mb-2 block">API Base URL</label>
                         <Input type="url" value={editApiBase} onChange={(e) => setEditApiBase(e.target.value)} placeholder={API_BASE_HINTS[m.provider] ?? ""} />
                       </div>
                       <div className="flex gap-2 justify-end">
@@ -1257,7 +1202,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 {addMode === "existing" && providerGroups.length > 0 ? (
                   <>
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.selectProvider")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.selectProvider")}</label>
                       <div className="relative">
                         <select
                           value={sourceModelId ?? ""}
@@ -1301,7 +1246,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                   <>
                     {/* 新規プロバイダーモード: プロバイダー + API キー */}
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.provider")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.provider")}</label>
                       <div className="relative">
                         <select
                           value={addProvider}
@@ -1323,7 +1268,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.apiKey")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.apiKey")}</label>
                       <Input
                         type="password"
                         value={addApiKey}
@@ -1335,7 +1280,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
                     {/* API Base URL（openai-compatible の場合は必須、他はオプション） */}
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">
+                      <label className="text-xs font-medium text-foreground mb-2 block">
                         API Base URL
                         {addProvider === "openai-compatible" && <span className="text-red-500 ml-1">*</span>}
                       </label>
@@ -1366,7 +1311,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 {availableModels.length > 0 && (
                   <>
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.selectModel")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.selectModel")}</label>
                       <div className="relative">
                         <select
                           value={selectedModelId}
@@ -1386,7 +1331,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.customId")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.customId")}</label>
                       <Input
                         type="text"
                         value={customModelId}
@@ -1399,7 +1344,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">{t("settings.addModel.displayName")}</label>
+                      <label className="text-xs font-medium text-foreground mb-2 block">{t("settings.addModel.displayName")}</label>
                       <Input
                         type="text"
                         value={modelDisplayName}
@@ -1447,7 +1392,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
             {/* MCP ツール状態 */}
             {/* Crucible Registry URL */}
             <div>
-              <label className="text-xs font-semibold text-foreground mb-1 block">
+              <label className="text-xs font-semibold text-foreground mb-2 block">
                 {t("settings.registry.title")}
               </label>
               <Input
@@ -1456,7 +1401,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                 onChange={(e) => { setRegistryUrl(e.target.value); setSaved(false); }}
                 placeholder={t("settings.registry.placeholder")}
               />
-              <p className="text-xs text-muted-foreground mt-1.5">{t("settings.registry.help")}</p>
+              <p className="text-xs text-muted-foreground mt-2">{t("settings.registry.help")}</p>
             </div>
 
             {/* ツール一覧 */}
@@ -1510,7 +1455,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               ) : (
                 <p className="text-xs text-muted-foreground">{t("settings.tools.loading")}</p>
               )}
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-xs text-muted-foreground mt-2">
                 {t("settings.tools.help")}
               </p>
             </div>
@@ -1521,22 +1466,92 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
         {/* ── Maintenance タブ ── */}
         {tab === "maintenance" && (
-          <MaintenanceTab
-            t={t}
-            wikiSummaries={wikiSummaries ?? []}
-            onRegenerateWiki={onRegenerateWiki}
-            availableModels={models}
-            defaultModel={defaultModel}
-            bulkKinds={bulkKinds}
-            setBulkKinds={setBulkKinds}
-            bulkModelOverride={bulkModelOverride}
-            setBulkModelOverride={setBulkModelOverride}
-            bulkRunning={bulkRunning}
-            setBulkRunning={setBulkRunning}
-            bulkProgress={bulkProgress}
-            setBulkProgress={setBulkProgress}
-            cancelBulkRef={cancelBulkRef}
-          />
+          <div className="space-y-5">
+            {/* 接続状態パネル */}
+            <div className="rounded-lg border border-border p-3">
+              <h3 className="text-xs font-semibold text-foreground mb-2">{t("settings.health.title")}</h3>
+              {healthLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 size={14} className="animate-spin" /> {t("settings.health.checking")}
+                </div>
+              ) : health ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {Object.entries(health.components).map(([name, status]) => (
+                    <div key={name} className="flex items-center gap-1.5 text-xs text-foreground">
+                      <StatusIcon status={status} />
+                      <span className="capitalize">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-red-500">
+                  <XCircle size={14} />
+                  {t("settings.health.unavailable")}
+                </div>
+              )}
+            </div>
+
+            {/* バックエンド未接続時の再起動オプション (Tauri のみ) */}
+            {!healthLoading && !health && isTauri() && (
+              <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
+                <div className="flex flex-col items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleRestartSidecar}
+                    disabled={restartingSidecar}
+                  >
+                    {restartingSidecar ? (
+                      <><Loader2 size={12} className="animate-spin mr-1.5" />{t("settings.health.restarting")}</>
+                    ) : (
+                      <><RotateCcw size={12} className="mr-1.5" />{t("settings.health.restart")}</>
+                    )}
+                  </Button>
+                  {sidecarError && (
+                    <div className="w-full rounded-md border border-red-500/30 bg-red-500/5 p-2 text-xs">
+                      <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
+                        <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium mb-0.5">{t("settings.health.restartFailed")}</div>
+                          <div className="text-foreground/80 break-words">{sidecarError}</div>
+                          {sidecarLog.length > 0 && (
+                            <button
+                              onClick={() => setShowSidecarLog((v) => !v)}
+                              className="mt-1 text-[11px] text-muted-foreground hover:text-foreground underline"
+                            >
+                              {showSidecarLog ? t("settings.health.hideLog") : t("settings.health.showLog")}
+                            </button>
+                          )}
+                          {showSidecarLog && sidecarLog.length > 0 && (
+                            <pre className="mt-1.5 text-[10px] bg-background/50 rounded p-1.5 overflow-auto max-h-32 font-mono whitespace-pre-wrap">{sidecarLog.join("\n")}</pre>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <MaintenanceTab
+              t={t}
+              wikiSummaries={wikiSummaries ?? []}
+              onRegenerateWiki={onRegenerateWiki}
+              availableModels={models}
+              defaultModel={model || defaultModel}
+              chatSynthesisModel={chatSynthesisModel}
+              bulkKinds={bulkKinds}
+              setBulkKinds={setBulkKinds}
+              bulkModelOverride={bulkModelOverride}
+              setBulkModelOverride={setBulkModelOverride}
+              bulkSynthesisModelOverride={bulkSynthesisModelOverride}
+              setBulkSynthesisModelOverride={setBulkSynthesisModelOverride}
+              bulkRunning={bulkRunning}
+              setBulkRunning={setBulkRunning}
+              bulkProgress={bulkProgress}
+              setBulkProgress={setBulkProgress}
+              cancelBulkRef={cancelBulkRef}
+            />
+          </div>
         )}
       </ModalBody>
 
@@ -1560,10 +1575,13 @@ type MaintenanceTabProps = {
   onRegenerateWiki?: RegenerateWikiHandler;
   availableModels: ModelInfo[];
   defaultModel: string;
+  chatSynthesisModel: string;
   bulkKinds: Set<WikiKind>;
   setBulkKinds: (s: Set<WikiKind>) => void;
   bulkModelOverride: string;
   setBulkModelOverride: (s: string) => void;
+  bulkSynthesisModelOverride: string;
+  setBulkSynthesisModelOverride: (s: string) => void;
   bulkRunning: boolean;
   setBulkRunning: (b: boolean) => void;
   bulkProgress: BulkProgress | null;
@@ -1577,10 +1595,13 @@ function MaintenanceTab({
   onRegenerateWiki,
   availableModels,
   defaultModel,
+  chatSynthesisModel,
   bulkKinds,
   setBulkKinds,
   bulkModelOverride,
   setBulkModelOverride,
+  bulkSynthesisModelOverride,
+  setBulkSynthesisModelOverride,
   bulkRunning,
   setBulkRunning,
   bulkProgress,
@@ -1589,6 +1610,11 @@ function MaintenanceTab({
 }: MaintenanceTabProps) {
   const KINDS: WikiKind[] = ["concept", "summary", "synthesis"];
   const [cancelling, setCancelling] = useState(false);
+
+  // 表示値: 明示的に指定されていなければ設定の現在値をライブで反映する
+  const effectiveDefaultModel = bulkModelOverride || defaultModel;
+  const effectiveSynthesisModel =
+    bulkSynthesisModelOverride || chatSynthesisModel || defaultModel;
 
   const targets = useMemo(
     () => wikiSummaries.filter((w) => bulkKinds.has(w.kind)),
@@ -1617,8 +1643,10 @@ function MaintenanceTab({
     const failedItems: BulkFailedItem[] = [];
     for (const w of items) {
       if (cancelBulkRef.current) break;
-      setBulkProgress({ done, total: items.length, failed, current: w.title, failedItems });
-      const result = await onRegenerateWiki(w.id, bulkModelOverride.trim() ? { model: bulkModelOverride.trim() } : undefined);
+      const kind = wikiSummaries.find((s) => s.id === w.id)?.kind;
+      const modelForKind = kind === "synthesis" ? effectiveSynthesisModel : effectiveDefaultModel;
+      setBulkProgress({ done, total: items.length, failed, current: w.title, currentModel: modelForKind, failedItems });
+      const result = await onRegenerateWiki(w.id, modelForKind ? { model: modelForKind } : undefined);
       if (!result.ok) {
         failed += 1;
         failedItems.push({ id: w.id, title: w.title, error: result.error });
@@ -1660,7 +1688,7 @@ function MaintenanceTab({
 
       {/* kind フィルタ */}
       <div>
-        <label className="text-xs font-semibold text-foreground mb-1 block">
+        <label className="text-xs font-semibold text-foreground mb-2 block">
           {t("settings.maintenance.kindFilter")}
         </label>
         <div className="flex gap-2 flex-wrap">
@@ -1686,35 +1714,65 @@ function MaintenanceTab({
         </div>
       </div>
 
-      {/* モデル指定（任意） */}
-      <div>
-        <label className="text-xs font-semibold text-foreground mb-1 block">
-          {t("settings.maintenance.modelOverride")}
-        </label>
-        <div className="relative">
-          <select
-            value={bulkModelOverride}
-            onChange={(e) => setBulkModelOverride(e.target.value)}
-            disabled={bulkRunning}
-            className="w-full appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-          >
-            <option value="">
-              {t("settings.maintenance.modelOverrideDefault")}
-              {defaultModel ? ` (${defaultModel})` : ""}
-            </option>
-            {availableModels.map((m) => (
-              <option key={m.id || m.name} value={m.name}>
-                {m.name}
-                {m.provider ? ` — ${m.provider}` : ""}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
-          />
+      {/* モデル指定（kind 別） */}
+      <div className="space-y-3">
+        {/* Concept / Summary */}
+        <div>
+          <label className="text-xs font-semibold text-foreground mb-2 block">
+            Concept / Summary モデル
+          </label>
+          <div className="relative">
+            <select
+              value={effectiveDefaultModel}
+              onChange={(e) => setBulkModelOverride(e.target.value)}
+              disabled={bulkRunning}
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            >
+              {availableModels.length === 0 && <option value="">{t("settings.modelNone")}</option>}
+              {availableModels.map((m) => (
+                <option key={m.id || m.name} value={m.name}>
+                  {m.name}
+                  {m.provider ? ` — ${m.provider}` : ""}
+                  {m.name === defaultModel ? ` (${t("settings.modelDefaultLabel")})` : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
+            />
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
+
+        {/* Synthesis */}
+        <div>
+          <label className="text-xs font-semibold text-foreground mb-2 block">
+            Synthesis モデル
+          </label>
+          <div className="relative">
+            <select
+              value={effectiveSynthesisModel}
+              onChange={(e) => setBulkSynthesisModelOverride(e.target.value)}
+              disabled={bulkRunning}
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            >
+              {availableModels.length === 0 && <option value="">{t("settings.modelNone")}</option>}
+              {availableModels.map((m) => (
+                <option key={m.id || m.name} value={m.name}>
+                  {m.name}
+                  {m.provider ? ` — ${m.provider}` : ""}
+                  {m.name === (chatSynthesisModel || defaultModel) ? " (現在の設定)" : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
           {t("settings.maintenance.modelOverrideHelp")}
         </p>
       </div>
@@ -1758,6 +1816,9 @@ function MaintenanceTab({
           {bulkProgress.current && bulkRunning && (
             <div className="text-[11px] text-muted-foreground truncate">
               {t("settings.maintenance.current")}: {bulkProgress.current}
+              {bulkProgress.currentModel && (
+                <span className="ml-2 opacity-70">— {bulkProgress.currentModel}</span>
+              )}
             </div>
           )}
           {cancelling && bulkRunning && (
@@ -1812,7 +1873,7 @@ function MaintenanceTab({
             : t("settings.maintenance.regenerate")}
         </Button>
         {!onRegenerateWiki && (
-          <p className="text-xs text-muted-foreground mt-1.5">
+          <p className="text-xs text-muted-foreground mt-2">
             {t("settings.maintenance.unavailable")}
           </p>
         )}
