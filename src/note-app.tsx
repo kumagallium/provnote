@@ -3331,6 +3331,94 @@ export function NoteApp() {
     }
   }, [fm]);
 
+  // 既存の Concept から Atom を作る（WikiBanner ボタン / Maintenance 一括の両方から呼ばれる）。
+  // force=false（既定）のときは、その Concept を `derivedFromConcepts` に含む Atom が
+  // すでに 1 件以上あればスキップする（重複防止）。
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const atomizeConceptById = useCallback(async (
+    conceptId: string,
+    options?: { force?: boolean },
+  ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
+    if (!isAtomLayerEnabled()) {
+      return { ok: false, error: "Atom layer is disabled" };
+    }
+    const force = options?.force ?? false;
+    const conceptDoc = fm.getCachedDoc(`wiki:${conceptId}`) ?? (await fm.loadDoc(`wiki:${conceptId}`)) ?? null;
+    if (!conceptDoc || conceptDoc.wikiMeta?.kind !== "concept") {
+      return { ok: false, error: "Concept not found" };
+    }
+
+    if (!force) {
+      // すでに Atom が紐づいている Concept はスキップ
+      for (const meta of fm.wikiMetas.values()) {
+        if (meta.kind !== "atom") continue;
+      }
+      // wikiMetas には derivedFromConcepts が無いので、cached doc を覗く
+      for (const wf of fm.wikiFiles) {
+        const m = fm.wikiMetas.get(wf.id);
+        if (m?.kind !== "atom") continue;
+        const aDoc = fm.getCachedDoc(`wiki:${wf.id}`);
+        if (aDoc?.wikiMeta?.derivedFromConcepts?.includes(conceptId)) {
+          return { ok: true, skipped: true };
+        }
+      }
+    }
+
+    const detail = extractWikiDetail(conceptId, conceptDoc);
+    if (!detail) return { ok: false, error: "Concept has no extractable detail" };
+
+    const toastId = `atomize:${conceptId}`;
+    setIngestToast((prev) => ({
+      items: [
+        ...(prev?.items ?? []),
+        { id: toastId, status: "generating" as const, noteTitle: `Atomizing "${conceptDoc.title}"` },
+      ],
+    }));
+
+    try {
+      const snapshot = {
+        id: conceptId,
+        title: conceptDoc.title,
+        sections: detail.sectionHeadings.map((h, i) => ({
+          heading: h,
+          preview: detail.sectionPreviews[i] ?? "",
+        })),
+        relatedConcepts: [],
+      };
+      const atomResult = await atomizeConcepts(
+        [snapshot],
+        "ja",
+        getChatSynthesisLLMModel()?.name,
+      );
+      if (!atomResult.atom) {
+        setIngestToast((prev) => ({
+          items: (prev?.items ?? []).map((i) =>
+            i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No atom generated" } : i
+          ),
+        }));
+        return { ok: false, error: "No atom generated" };
+      }
+      const atomDoc = buildAtomDocument(atomResult.atom, atomResult.model ?? null, "ja");
+      const atomId = await fm.handleCreateWikiFile(atomDoc);
+      embedWikiSections(atomId, atomDoc).catch(() => {});
+      wikiLog.append("ingest", [atomId], `Atom: "${atomResult.atom.title}" (from "${conceptDoc.title}")`).catch(() => {});
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: atomResult.atom!.title } : i
+        ),
+      }));
+      return { ok: true };
+    } catch (err) {
+      console.error("Atomize failed:", err);
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+        ),
+      }));
+      return { ok: false, error: err instanceof Error ? err.message : "Failed" };
+    }
+  }, [fm]);
+
   // Settings → Maintenance タブから呼ばれる Wiki サマリー
   // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
   const wikiSummariesForSettings = useMemo(() => {
@@ -3798,6 +3886,14 @@ export function NoteApp() {
                 fm.handleDeleteWikiFile(wikiId);
                 wikiLog.append("delete", [wikiId], `Deleted "${title}"`).catch(() => {});
               }}
+              canAtomize={experimentalFlags.atomLayer && fm.activeDoc.wikiMeta.kind === "concept"}
+              atomizing={ingestToast?.items?.some((i) => i.id === `atomize:${fm.activeFileId?.replace("wiki:", "")}` && i.status === "generating")}
+              onAtomize={async () => {
+                if (!fm.activeFileId) return;
+                const conceptId = fm.activeFileId.replace("wiki:", "");
+                // 手動トリガはユーザーの意図的な操作なので force=true（重複チェックをスキップ）
+                await atomizeConceptById(conceptId, { force: true });
+              }}
             />
           )}
           <NoteEditor
@@ -4052,6 +4148,7 @@ export function NoteApp() {
         }}
         wikiSummaries={wikiSummariesForSettings}
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
+        onAtomizeConcept={(conceptId, options) => atomizeConceptById(conceptId, options)}
       />
       <Composer
         open={composer.open}
