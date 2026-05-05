@@ -1061,8 +1061,25 @@ function NoteEditorInner({
     return doc;
   }, [title, labelStore, linkStore, indexTableStore, mediaInlineLabelStore, aiAssistant, initialDoc, currentProvenance]);
 
+  // sharedRef は initialDoc から初期化し、Share 成功時に即時更新する。
+  // initialDoc は親が新しい doc に差し替えない限り変わらないため、ローカル state で持つ。
+  // 注意: handleSave より上で宣言しないと、handleSave が buildDocument() の結果に
+  //       sharedRef を再注入する経路で参照できない（buildDocument は state から
+  //       完全にスクラッチで組むため、毎回保存時に sharedRef が落ちるバグになる）。
+  const [sharedRefState, setSharedRefState] = useState(initialDoc?.sharedRef);
+  // 別のノートを開いた（initialDoc が変わった）ときは新しい sharedRef に追従する
+  useEffect(() => {
+    setSharedRefState(initialDoc?.sharedRef);
+  }, [initialDoc]);
+
   const handleSave = useCallback(async () => {
-    const doc = await buildDocument();
+    const baseDoc = await buildDocument();
+    // 通常保存時にも sharedRef を持たせる（buildDocument が落とすため）。
+    // これがないと auto-save ごとに sharedRef がディスクから消え、再共有時に
+    // 既存 entry を見つけられず author check が発動しない、という連鎖バグになる。
+    const doc: GraphiumDocument = sharedRefState
+      ? { ...baseDoc, sharedRef: sharedRefState }
+      : baseDoc;
     onSave(doc);
     // 保存後に documentProvenance を state に反映（History パネル更新用）
     if (doc.documentProvenance) {
@@ -1078,20 +1095,14 @@ function NoteEditorInner({
         });
       }
     }
-  }, [onSave, buildDocument, fileId]);
+  }, [onSave, buildDocument, fileId, sharedRefState]);
 
   // ── オートセーブ ──
   const { dirty, setDirty, markDirty, saveNow } = useAutoSave(handleSave);
 
-  // ── team-shared storage（Phase 2a） ──
+  // ── team-shared storage（Phase 2a / 2b-1） ──
+  // sharedRefState は handleSave の上で宣言済み（buildDocument 結果への再注入用）
   const [shareBusy, setShareBusy] = useState(false);
-  // sharedRef は initialDoc から初期化し、Share 成功時に即時更新する。
-  // initialDoc は親が新しい doc に差し替えない限り変わらないため、ローカル state で持つ。
-  const [sharedRefState, setSharedRefState] = useState(initialDoc?.sharedRef);
-  // 別のノートを開いた（initialDoc が変わった）ときは新しい sharedRef に追従する
-  useEffect(() => {
-    setSharedRefState(initialDoc?.sharedRef);
-  }, [initialDoc]);
   const isShared = !!sharedRefState;
   const sharedRoot = getSharedRoot();
   const sharedAuthor = loadAuthorIdentity();
