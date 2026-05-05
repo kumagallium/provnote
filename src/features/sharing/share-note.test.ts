@@ -16,6 +16,7 @@ const author: AuthorIdentity = { name: "Ada", email: "a@b.co" };
 
 class FakeFs {
   entries = new Map<string, string>();
+  blobs = new Map<string, string>(); // hash → base64
   install() {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (cmd: string, args: any) => {
@@ -28,6 +29,16 @@ class FakeFs {
           if (!v) throw new Error("not found");
           return v;
         }
+        case "shared_blob_write":
+          this.blobs.set(args.hash, args.contentBase64);
+          return null;
+        case "shared_blob_read": {
+          const v = this.blobs.get(args.hash);
+          if (!v) throw new Error("blob not found");
+          return v;
+        }
+        case "shared_blob_exists":
+          return this.blobs.has(args.hash);
         default:
           throw new Error(`unmocked: ${cmd}`);
       }
@@ -125,5 +136,94 @@ describe("shareNote — failure paths", () => {
     const r = await shareNote(makeDoc(), { root: "/tmp/shared", author });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("disk full");
+  });
+});
+
+describe("shareNote — Phase 2c-1 自動 blob 化", () => {
+  function docWithMedia(): GraphiumDocument {
+    return makeDoc({
+      pages: [
+        {
+          id: "p1",
+          title: "Test note",
+          blocks: [
+            { id: "b1", type: "image", props: { url: "file-media://A" } },
+            { id: "b2", type: "image", props: { url: "file-media://A" } }, // 重複
+            { id: "b3", type: "video", props: { url: "file-media://B" } },
+          ],
+          labels: {},
+          provLinks: [],
+          knowledgeLinks: [],
+        },
+      ],
+    });
+  }
+
+  const extractFileId = (url: string): string | null => {
+    const m = url.match(/^file-media:\/\/(.+)$/);
+    return m ? m[1] : null;
+  };
+
+  const fetchBytes = async (id: string): Promise<Uint8Array> => {
+    if (id === "A") return new Uint8Array([1, 2, 3]);
+    if (id === "B") return new Uint8Array([4, 5, 6]);
+    throw new Error(`unknown ${id}`);
+  };
+
+  it("shared 側 doc の image url は shared-blob: に置換され、extra.blobs に dedup 済 BlobRef が載る", async () => {
+    const r = await shareNote(docWithMedia(), {
+      root: "/tmp/shared",
+      author,
+      blobRoot: "/tmp/blob",
+      __test: { extractFileId, fetchBytes },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const stored = JSON.parse([...fs.entries.values()][0]);
+    const bodyJson = atob(stored.body_base64);
+    const blocks = JSON.parse(bodyJson).pages[0].blocks;
+    expect(blocks[0].props.url).toMatch(/^shared-blob:sha256:[0-9a-f]{64}$/);
+    expect(blocks[0].props.url).toBe(blocks[1].props.url); // 同 hash
+    expect(blocks[2].props.url).not.toBe(blocks[0].props.url);
+
+    expect(stored.entry.extra.blobs).toHaveLength(2); // A と B、重複は dedup
+    expect(stored.entry.extra.blobs[0].provider).toBe("local-folder");
+
+    // 実際に blob root にバイト列が書かれている
+    expect(fs.blobs.size).toBe(2);
+  });
+
+  it("personal 側の doc は無変更（immutable）", async () => {
+    const original = docWithMedia();
+    const beforeUrl = original.pages[0].blocks[0].props.url;
+    await shareNote(original, {
+      root: "/tmp/shared",
+      author,
+      blobRoot: "/tmp/blob",
+      __test: { extractFileId, fetchBytes },
+    });
+    expect(original.pages[0].blocks[0].props.url).toBe(beforeUrl);
+  });
+
+  it("blobRoot 未設定で media を含むなら ok=false", async () => {
+    const r = await shareNote(docWithMedia(), {
+      root: "/tmp/shared",
+      author,
+      __test: { extractFileId, fetchBytes },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/Blob root/i);
+  });
+
+  it("テキストのみのノートは blobRoot 未設定でも ok=true、extra.blobs は無い", async () => {
+    const r = await shareNote(makeDoc(), {
+      root: "/tmp/shared",
+      author,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const stored = JSON.parse([...fs.entries.values()][0]);
+    expect(stored.entry.extra.blobs).toBeUndefined();
   });
 });
