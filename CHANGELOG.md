@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.6.1](https://github.com/kumagallium/Graphium/compare/v0.6.0...v0.6.1) - 2026-05-05
+- feat(wiki-citation): clickable [Source: "title"] links + re-embed maintenance by @kumagallium in https://github.com/kumagallium/Graphium/pull/230
+
 ## [v0.6.0](https://github.com/kumagallium/Graphium/compare/v0.5.4...v0.6.0) - 2026-05-05
 - Fix AI agent attribution for Wiki creation and updates by @kumagallium in https://github.com/kumagallium/Graphium/pull/212
 - Fix AI chat session continuity and tighten panel typography by @kumagallium in https://github.com/kumagallium/Graphium/pull/214
