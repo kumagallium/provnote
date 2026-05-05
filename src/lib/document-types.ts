@@ -194,6 +194,22 @@ export type GraphiumDocument = {
     /** 共有時の SharedEntry.hash（変更検知用） */
     hash: string;
   };
+  /**
+   * team-shared エントリを fork して作られたローカルノートの起源情報（Phase 2c）。
+   * fork 元の SharedEntry は元の author 所有のままで、本ノートとは別人格として PROV で繋がる。
+   */
+  forkedFrom?: {
+    /** fork 元 SharedEntry.id */
+    sharedId: string;
+    /** fork 時点の SharedEntry.hash */
+    hash: string;
+    /** fork 元 author の表示名 */
+    authorName: string;
+    /** fork 元 author の email */
+    authorEmail: string;
+    /** ISO-8601 fork 実行日時 */
+    forkedAt: string;
+  };
   /** Skill メタデータ（source === "skill" の場合のみ） */
   skillMeta?: SkillMeta;
   /** 外部 URL から生成した場合の元 URL */
