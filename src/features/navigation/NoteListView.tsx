@@ -13,6 +13,7 @@ import type { GraphiumIndex } from "./index-file";
 import { NoteListToolbar, type SortKey, type SortDirection } from "./NoteListToolbar";
 import { useT, getDisplayLabelName } from "../../i18n";
 import { Breadcrumb } from "../../components/Breadcrumb";
+import { useRangeSelect } from "../../hooks/use-range-select";
 
 // 日付を YYYY-MM-DD 形式で表示
 function formatDate(iso: string): string {
@@ -204,18 +205,9 @@ export function NoteListView({
     return sorted;
   }, [entries, searchQuery, labelFilter, sortKey, sortDir]);
 
-  // 選択のトグル
-  const toggleSelect = useCallback((noteId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(noteId)) {
-        next.delete(noteId);
-      } else {
-        next.add(noteId);
-      }
-      return next;
-    });
-  }, []);
+  // ドラッグ範囲選択（チェックボックス列）
+  const orderedIds = useMemo(() => filtered.map((e) => e.noteId), [filtered]);
+  const range = useRangeSelect(orderedIds, selectedIds, setSelectedIds);
 
   // 全選択 / 全解除（フィルタ後のリストに対して）
   const toggleSelectAll = useCallback(() => {
@@ -475,23 +467,34 @@ export function NoteListView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((entry) => (
+              {filtered.map((entry, index) => (
                 <tr
                   key={entry.noteId}
                   className={`border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer group ${
                     selectedIds.has(entry.noteId) ? "bg-primary/5" : ""
                   }`}
-                  onClick={() => onOpenNote(entry.noteId)}
+                  onMouseDown={(e) => range.onRowMouseDown(e, index)}
+                  onMouseEnter={() => range.onRowMouseEnter(index)}
+                  onClick={() => {
+                    if (range.shouldSuppressClick()) return;
+                    onOpenNote(entry.noteId);
+                  }}
                   onDoubleClick={() => onOpenNoteFull?.(entry.noteId)}
                 >
-                  {/* チェックボックス */}
+                  {/* チェックボックス（クリックでトグル / 行ドラッグで範囲選択） */}
                   {onDeleteNotes && (
-                    <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="py-2 px-2 cursor-pointer"
+                      title={t("nav.dragToRangeSelect")}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => range.onCheckboxMouseDown(e, index)}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedIds.has(entry.noteId)}
-                        onChange={() => toggleSelect(entry.noteId)}
-                        className="w-3.5 h-3.5 rounded border-border accent-primary cursor-pointer"
+                        readOnly
+                        tabIndex={-1}
+                        className="w-3.5 h-3.5 rounded border-border accent-primary pointer-events-none"
                       />
                     </td>
                   )}
