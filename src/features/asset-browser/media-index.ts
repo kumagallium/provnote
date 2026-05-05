@@ -29,6 +29,31 @@ export type UrlMeta = {
   ogImage?: string;
 };
 
+/**
+ * team-shared storage への共有状態（Phase 2b-media）。
+ * data-manifest type の SharedEntry にメディアバイト列が blob として置かれ、
+ * その manifest メタデータの id / hash / sharedAt をここに保持する。
+ *
+ * 既存ユーザーとの後方互換のため optional。Phase 2b-1 と同じ pattern:
+ * Settings の identity と email が一致する author 本人のみ更新・unshare 可。
+ */
+export type MediaSharedRef = {
+  /** SharedEntry.id（uuidv7） */
+  id: string;
+  /**
+   * Phase 2b-media:
+   * - "data-manifest": バイト列を blob root に持つメディア（image / video / audio / pdf / file）
+   * - "reference": URL ブックマーク（バイト不要、メタデータのみ）
+   */
+  type: "data-manifest" | "reference";
+  /** ISO-8601 最終共有日時 */
+  sharedAt: string;
+  /** 共有時の SharedEntry.hash */
+  hash: string;
+  /** blob root に保存された実体の SHA-256（data-manifest のときのみ） */
+  blobHash?: string;
+};
+
 /** メディアインデックスのエントリ */
 export type MediaIndexEntry = {
   /** Google Drive ファイル ID（URL ブックマークの場合は生成 ID） */
@@ -49,6 +74,8 @@ export type MediaIndexEntry = {
   usedIn: MediaUsage[];
   /** URL ブックマーク用メタデータ（type === "url" のとき） */
   urlMeta?: UrlMeta;
+  /** team-shared storage への共有状態（Phase 2b-media、optional） */
+  sharedRef?: MediaSharedRef;
 };
 
 /** メディアインデックス全体 */

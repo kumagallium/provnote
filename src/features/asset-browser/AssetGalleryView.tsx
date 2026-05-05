@@ -293,6 +293,11 @@ export type AssetGalleryViewProps = {
    * 戻り値があれば MediaDetailModal は「In Knowledge」表示に切り替わる。
    */
   resolveKnowledgeWikiId?: (entry: MediaIndexEntry) => string | undefined;
+  /**
+   * メディアの team-shared 共有が成功したときに、media index へ sharedRef を反映する
+   * コールバック（Phase 2b-media）。親側で saveMediaIndex 経由で永続化する。
+   */
+  onSharedRefUpdated?: (entry: MediaIndexEntry, sharedRef: import("./media-index").MediaSharedRef) => Promise<void> | void;
 };
 
 export function AssetGalleryView({
@@ -307,6 +312,7 @@ export function AssetGalleryView({
   onIngestMedia,
   onCreateProvNote,
   resolveKnowledgeWikiId,
+  onSharedRefUpdated,
 }: AssetGalleryViewProps) {
   const t = useT();
   const [searchQuery, setSearchQuery] = useState("");
@@ -526,6 +532,11 @@ export function AssetGalleryView({
           onIngest={onIngestMedia}
           onCreateProvNote={onCreateProvNote}
           knowledgeWikiNoteId={resolveKnowledgeWikiId?.(detailEntry)}
+          onSharedRefUpdated={async (entry, sharedRef) => {
+            // モーダル内表示を即時反映 + 親に永続化を依頼
+            setDetailEntry({ ...entry, sharedRef });
+            if (onSharedRefUpdated) await onSharedRefUpdated(entry, sharedRef);
+          }}
         />
       )}
 
