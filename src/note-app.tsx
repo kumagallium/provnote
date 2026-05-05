@@ -89,7 +89,9 @@ import {
   forkSharedNote,
   unshareEntry,
   SharedLibraryView,
+  materializeSharedBlobs,
 } from "./features/sharing";
+import { LocalFolderBlobProvider, type BlobRef } from "./lib/storage/shared";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, TrashView, buildKnowledgeMap, findIncomingReferences, type GraphiumIndex, type NoteIndexEntry } from "./features/navigation";
@@ -4065,7 +4067,25 @@ export function NoteApp() {
                 alert(`Fork failed: ${result.error}`);
                 return;
               }
-              const newFileId = await fm.handleCreateNoteFromImport(result.doc);
+              // Phase 2c-2: shared-blob: 参照を自分のローカルメディアに materialize
+              let docToSave = result.doc;
+              const extraBlobs = (result.original.extra as { blobs?: BlobRef[] } | undefined)?.blobs;
+              const blobRoot = getBlobRoot();
+              if (Array.isArray(extraBlobs) && extraBlobs.length > 0 && blobRoot) {
+                const blobProvider = new LocalFolderBlobProvider(blobRoot);
+                const materialized = await materializeSharedBlobs(result.doc, {
+                  blobs: extraBlobs,
+                  fetchBytes: (ref) => blobProvider.get(ref),
+                  uploadMedia: async (file) => ({ url: await fm.handleUploadMedia(file) }),
+                });
+                docToSave = materialized.doc;
+                if (materialized.missing.length > 0) {
+                  alert(
+                    `Forked, but ${materialized.missing.length} embedded media could not be restored from blob root. They appear as broken references in the new note.`,
+                  );
+                }
+              }
+              const newFileId = await fm.handleCreateNoteFromImport(docToSave);
               setShowSharedLibrary(false);
               fm.handleOpenFile(newFileId);
               router.navigate({ view: "editor", fileId: newFileId });
