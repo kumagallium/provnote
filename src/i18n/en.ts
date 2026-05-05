@@ -728,6 +728,16 @@ export const en: Record<string, string> = {
   "share.disabled.noRoot": "Set a shared folder in Settings → Storage first.",
   "share.disabled.noIdentity": "Register your name and email in Settings → Storage first.",
   "share.disabled.unsavedNote": "Save the note before sharing.",
+  // Phase 2b-media (single-file share via gallery modal)
+  "share.media.disabled.urlBookmark": "URL bookmarks cannot be shared as media. Share them inside a note instead.",
+  "share.media.disabled.noBlobRoot": "Set a blob folder in Settings → Storage to share media.",
+  "share.media.dialog.titleFirst": "Share with team",
+  "share.media.dialog.titleReshare": "Update shared media",
+  "share.media.dialog.help": "This copies the file bytes to your blob folder and creates a data-manifest in the shared folder. Re-sharing keeps the same id.",
+  "share.media.dialog.titleLabel": "Title",
+  "share.media.dialog.descLabel": "Description (optional)",
+  "share.media.dialog.share": "Share",
+  "share.media.dialog.update": "Update",
 
   // ── Onboarding / Empty note guide ──
   "onboarding.guide.aria": "Empty note tips",

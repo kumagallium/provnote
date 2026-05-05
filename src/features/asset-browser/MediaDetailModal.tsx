@@ -2,13 +2,26 @@
 // 左: 画像拡大表示 / 右: 使用ノートのグラフ構造
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { ExternalLink, BookPlus, BookOpen, FlaskConical, RefreshCw } from "lucide-react";
+import {
+  ExternalLink,
+  BookPlus,
+  BookOpen,
+  FlaskConical,
+  RefreshCw,
+  Share2,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import cytoscape from "cytoscape";
 import { ensureCytoscapePlugins } from "../../lib/cytoscape-setup";
 import { getActiveProvider } from "../../lib/storage/registry";
 import { useT } from "../../i18n";
-import type { MediaIndexEntry } from "./media-index";
+import type { MediaIndexEntry, MediaSharedRef } from "./media-index";
 import { getFaviconUrl } from "./media-index";
+import { isTauri } from "../../lib/platform";
+import { loadAuthorIdentity } from "../identity";
+import { getSharedRoot, getBlobRoot } from "../../lib/storage/shared";
+import { shareMedia } from "../sharing";
 
 ensureCytoscapePlugins();
 
@@ -292,6 +305,11 @@ export type MediaDetailModalProps = {
   onCreateProvNote?: (entry: MediaIndexEntry) => void;
   /** この URL/PDF を派生元として参照する wiki ノート ID。あれば「In Knowledge」表示に切り替わる */
   knowledgeWikiNoteId?: string;
+  /**
+   * team-shared storage への共有が成功したときに呼ばれる（Phase 2b-media）。
+   * 親側で media index を更新（sharedRef を埋め込む）して再描画する想定。
+   */
+  onSharedRefUpdated?: (entry: MediaIndexEntry, sharedRef: MediaSharedRef) => Promise<void> | void;
 };
 
 export function MediaDetailModal({
@@ -302,6 +320,7 @@ export function MediaDetailModal({
   onIngest,
   onCreateProvNote,
   knowledgeWikiNoteId,
+  onSharedRefUpdated,
 }: MediaDetailModalProps) {
   const t = useT();
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -309,6 +328,71 @@ export function MediaDetailModal({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(entry.name);
   const [renaming, setRenaming] = useState(false);
+
+  // ── team-shared storage 共有（Phase 2b-media、Tauri 専用） ──
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTitle, setShareTitle] = useState(entry.name);
+  const [shareDescription, setShareDescription] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [sharedRefState, setSharedRefState] = useState(entry.sharedRef);
+  useEffect(() => {
+    setSharedRefState(entry.sharedRef);
+  }, [entry.sharedRef]);
+  const isShared = !!sharedRefState;
+
+  // 共有可能かどうか（前提: Tauri / shared root / blob root / identity / メディア種別が url 以外）
+  const sharedRoot = getSharedRoot();
+  const blobRoot = getBlobRoot();
+  const sharedAuthor = loadAuthorIdentity();
+  const shareDisabledReason: string | undefined = !isTauri()
+    ? t("share.disabled.desktopOnly")
+    : entry.type === "url"
+      ? t("share.media.disabled.urlBookmark")
+      : !sharedRoot
+        ? t("share.disabled.noRoot")
+        : !blobRoot
+          ? t("share.media.disabled.noBlobRoot")
+          : !sharedAuthor
+            ? t("share.disabled.noIdentity")
+            : undefined;
+
+  const openShareDialog = useCallback(() => {
+    setShareTitle(entry.name);
+    setShareDescription("");
+    setShareError(null);
+    setShareDialogOpen(true);
+  }, [entry.name]);
+
+  const handleShare = useCallback(async () => {
+    if (!sharedRoot || !blobRoot || !sharedAuthor) return;
+    setShareBusy(true);
+    setShareError(null);
+    try {
+      // 既存の sharedRef を保持したまま entry に反映
+      const entryWithRef: MediaIndexEntry = sharedRefState
+        ? { ...entry, sharedRef: sharedRefState }
+        : entry;
+      const result = await shareMedia(entryWithRef, {
+        sharedRoot,
+        blobRoot,
+        author: sharedAuthor,
+        title: shareTitle,
+        description: shareDescription,
+      });
+      if (!result.ok) {
+        setShareError(result.error);
+        return;
+      }
+      setSharedRefState(result.sharedRef);
+      if (onSharedRefUpdated) {
+        await onSharedRefUpdated(entryWithRef, result.sharedRef);
+      }
+      setShareDialogOpen(false);
+    } finally {
+      setShareBusy(false);
+    }
+  }, [sharedRoot, blobRoot, sharedAuthor, entry, sharedRefState, shareTitle, shareDescription, onSharedRefUpdated]);
 
   // entry prop が更新されたら editName も同期
   useEffect(() => {
@@ -425,7 +509,7 @@ export function MediaDetailModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-background border border-border rounded-lg shadow-2xl w-[90vw] max-w-5xl h-[75vh] flex flex-col overflow-hidden">
+      <div className="relative bg-background border border-border rounded-lg shadow-2xl w-[90vw] max-w-5xl h-[75vh] flex flex-col overflow-hidden">
         {/* ヘッダー */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -458,6 +542,15 @@ export function MediaDetailModal({
             {hasUsages && (
               <span className="text-[10px] text-muted-foreground shrink-0">
                 {t("asset.usedInCount", { count: String(new Set(entry.usedIn.map(u => u.noteId)).size) })}
+              </span>
+            )}
+            {isShared && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary shrink-0 inline-flex items-center gap-1"
+                title={t("share.badgeTooltip")}
+              >
+                <Share2 size={10} />
+                {t("share.badge")}
               </span>
             )}
           </div>
@@ -499,6 +592,18 @@ export function MediaDetailModal({
               >
                 <FlaskConical size={14} />
                 Create PROV Note
+              </button>
+            )}
+            {/* Share to team — entry.type !== "url" のときだけ表示。disabled 理由は title に */}
+            {entry.type !== "url" && (
+              <button
+                onClick={openShareDialog}
+                disabled={!!shareDisabledReason}
+                title={shareDisabledReason}
+                className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Share2 size={14} />
+                {isShared ? t("share.reshareToTeam") : t("share.shareToTeam")}
               </button>
             )}
             <button
@@ -550,6 +655,82 @@ export function MediaDetailModal({
             </div>
           )}
         </div>
+
+        {/* Share metadata ダイアログ（モーダル on モーダル） */}
+        {shareDialogOpen && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/40"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !shareBusy) setShareDialogOpen(false);
+            }}
+          >
+            <div className="bg-background border border-border rounded-lg shadow-2xl w-[90%] max-w-md p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  {isShared ? t("share.media.dialog.titleReshare") : t("share.media.dialog.titleFirst")}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {t("share.media.dialog.help")}
+                </p>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1">
+                  {t("share.media.dialog.titleLabel")}
+                </label>
+                <input
+                  type="text"
+                  value={shareTitle}
+                  onChange={(e) => setShareTitle(e.target.value)}
+                  disabled={shareBusy}
+                  className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1">
+                  {t("share.media.dialog.descLabel")}
+                </label>
+                <textarea
+                  value={shareDescription}
+                  onChange={(e) => setShareDescription(e.target.value)}
+                  disabled={shareBusy}
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:border-primary focus:outline-none resize-none"
+                />
+              </div>
+              {shareError && (
+                <p className="text-xs text-red-500 flex items-start gap-1">
+                  <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                  <span className="break-all">{shareError}</span>
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setShareDialogOpen(false)}
+                  disabled={shareBusy}
+                  className="text-xs px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  onClick={handleShare}
+                  disabled={shareBusy || !shareTitle.trim()}
+                  className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {shareBusy ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      {t("share.sharing")}
+                    </>
+                  ) : isShared ? (
+                    t("share.media.dialog.update")
+                  ) : (
+                    t("share.media.dialog.share")
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

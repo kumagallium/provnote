@@ -728,6 +728,16 @@ export const ja: Record<string, string> = {
   "share.disabled.noRoot": "先に「設定 → ストレージ」で共有フォルダを指定してください。",
   "share.disabled.noIdentity": "先に「設定 → ストレージ」で名前とメールを登録してください。",
   "share.disabled.unsavedNote": "ノートを保存してから共有してください。",
+  // Phase 2b-media（ギャラリーモーダルからの単体共有）
+  "share.media.disabled.urlBookmark": "URL ブックマークは単体共有できません。ノート内で共有してください。",
+  "share.media.disabled.noBlobRoot": "「設定 → ストレージ」で Blob フォルダを指定すると共有できます。",
+  "share.media.dialog.titleFirst": "チームと共有",
+  "share.media.dialog.titleReshare": "共有メディアを更新",
+  "share.media.dialog.help": "ファイルのバイト列を Blob フォルダにコピーし、共有フォルダに data-manifest を作成します。再共有は同じ id を維持します。",
+  "share.media.dialog.titleLabel": "タイトル",
+  "share.media.dialog.descLabel": "説明（任意）",
+  "share.media.dialog.share": "共有",
+  "share.media.dialog.update": "更新",
 
   // ── オンボーディング / 空ノート予示 ──
   "onboarding.guide.aria": "空のノートのヒント",

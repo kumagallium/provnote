@@ -1039,6 +1039,28 @@ export function useFileManager(authenticated: boolean) {
 
   // メディアリネーム（モーダルから呼ぶ）
   // Drive ファイル名・メディアインデックス・参照ノートのブロック props.name を一括更新
+  /**
+   * メディアの sharedRef を更新する（Phase 2b-media）。
+   * shared への書き込み自体は呼び出し側（モーダル）で済ませており、ここでは
+   * media index に sharedRef を埋め込んで永続化するだけ。
+   */
+  const handleUpdateMediaSharedRef = useCallback(async (
+    entry: MediaIndexEntry,
+    sharedRef: import("../features/asset-browser/media-index").MediaSharedRef,
+  ) => {
+    const current = mediaIndexRef.current ?? createEmptyIndex();
+    const updated: MediaIndex = {
+      ...current,
+      updatedAt: new Date().toISOString(),
+      media: current.media.map((m) =>
+        m.fileId === entry.fileId ? { ...m, sharedRef } : m,
+      ),
+    };
+    mediaIndexRef.current = updated;
+    setMediaIndex(updated);
+    saveMediaIndex(updated).catch((err) => console.warn("メディアインデックス保存失敗:", err));
+  }, []);
+
   const handleRenameMedia = useCallback(async (entry: MediaIndexEntry, newName: string) => {
     // URL ブックマークは Drive ファイルがないのでインデックスのみ更新
     if (entry.type !== "url") {
@@ -1496,6 +1518,7 @@ export function useFileManager(authenticated: boolean) {
     handleUploadMedia,
     handleDeleteMedia,
     handleRenameMedia,
+    handleUpdateMediaSharedRef,
     handleAddUrlBookmark,
     handleCreateNoteFromDocument,
     handleCreateNoteFromImport,
