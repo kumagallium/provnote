@@ -2873,6 +2873,17 @@ export function NoteApp() {
       }
     } catch (err) {
       console.error("Atomize failed:", err);
+      setIngestToast((prev) => ({
+        items: [
+          ...(prev?.items ?? []),
+          {
+            id: `atom-error:${Date.now()}`,
+            status: "error" as const,
+            noteTitle: "🔬 Atom 自動生成に失敗しました",
+            result: err instanceof Error ? err.message : String(err),
+          },
+        ],
+      }));
     }
 
     // 自動 Synthesis: 実験フラグで Synthesis レイヤが有効なときのみ動作する。
@@ -2913,8 +2924,19 @@ export function NoteApp() {
           }));
         }
       }
-    } catch {
-      // Synthesis 失敗は無視
+    } catch (err) {
+      console.error("Synthesis failed:", err);
+      setIngestToast((prev) => ({
+        items: [
+          ...(prev?.items ?? []),
+          {
+            id: `synth-error:${Date.now()}`,
+            status: "error" as const,
+            noteTitle: "🔗 Synthesis 自動生成に失敗しました",
+            result: err instanceof Error ? err.message : String(err),
+          },
+        ],
+      }));
     }
 
     // 自動 Lint: ローカル検出 + LLM 分析（5ページ以上で LLM 実行）

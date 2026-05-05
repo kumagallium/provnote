@@ -1465,11 +1465,12 @@ export async function fetchSynthesisCandidates(
   });
 
   if (!res.ok) {
-    console.error("Synthesis API failed:", res.status);
-    return { candidates: [] };
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Synthesis API failed (${res.status}): ${detail.slice(0, 200) || "no body"}`);
   }
-
-  return res.json();
+  const data = await res.json() as SynthesisResult & { error?: string };
+  if (data.error) throw new Error(`Synthesis failed on server: ${data.error}`);
+  return data;
 }
 
 /**
@@ -1662,10 +1663,13 @@ export async function atomizeConcepts(
     }),
   });
   if (!res.ok) {
-    console.error("Atomize API failed:", res.status);
-    return { atoms: [] };
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Atomize API failed (${res.status}): ${detail.slice(0, 200) || "no body"}`);
   }
-  return res.json();
+  // サーバーは内部例外時 200 + { atoms: [], error: "..." } を返すため、ここでも検出する
+  const data = await res.json() as AtomizeResult & { error?: string };
+  if (data.error) throw new Error(`Atomize failed on server: ${data.error}`);
+  return data;
 }
 
 /**
@@ -1769,6 +1773,13 @@ export function buildAtomDocument(
  * 引いて先頭セクションのプレビューを併記する。Synthesizer が Concept だけでなく
  * 上流の Summary にも触れることで、独立な誤差を集約・矛盾検出しやすくする。
  */
+/**
+ * Atomize/Synthesize の 1 リクエストに含める Concept/Atom の最大件数。
+ * 際限なく投入すると LLM のコンテキスト長を超えてサイレント失敗する。
+ * 直近更新分から優先して採用する。
+ */
+export const MAX_SNAPSHOTS_PER_RUN = 50;
+
 export function buildConceptSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
   wikiMetas: Map<string, WikiMetaSummary>,
@@ -1779,6 +1790,8 @@ export function buildConceptSnapshots(
    * 既定の "concept" は legacy 経路（実験フラグ OFF 時には呼ばれない想定）。
    */
   sourceKind: "concept" | "atom" = "concept",
+  /** 件数上限（既定: MAX_SNAPSHOTS_PER_RUN）。直近更新優先で切り詰める */
+  limit: number = MAX_SNAPSHOTS_PER_RUN,
 ): ConceptSnapshot[] {
   // Summary 索引: 派生元 noteId → { title, preview }
   const summaryByNote = new Map<string, { title: string; preview: string }>();
@@ -1797,7 +1810,11 @@ export function buildConceptSnapshots(
 
   const snapshots: ConceptSnapshot[] = [];
 
-  for (const file of wikiFiles) {
+  // 直近更新を優先したいので modifiedTime 降順で見る。
+  const orderedFiles = [...wikiFiles].sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime));
+
+  for (const file of orderedFiles) {
+    if (snapshots.length >= limit) break;
     const meta = wikiMetas.get(file.id);
     if (!meta || meta.kind !== sourceKind) continue;
 
