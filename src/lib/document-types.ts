@@ -170,6 +170,22 @@ export type GraphiumDocument = {
   source?: "human" | "ai" | "skill";
   /** AI Wiki ドキュメント���メタデータ（source === "ai" の場合のみ） */
   wikiMeta?: WikiMeta;
+  /**
+   * team-shared-storage への共有状態（Phase 2a）。
+   * 設定されていればこのノートは shared 側にコピーが書き出されている。
+   * Phase 2a ではコピーが残る運用（personal 側は消さない）。Phase 2b で
+   * 移動 semantics（personal → shared 参照）に進化する。
+   */
+  sharedRef?: {
+    /** SharedEntry.id（uuidv7） */
+    id: string;
+    /** SharedEntry.type（Phase 2a は "note" 固定） */
+    type: "note";
+    /** ISO-8601 最終共有日時 */
+    sharedAt: string;
+    /** 共有時の SharedEntry.hash（変更検知用） */
+    hash: string;
+  };
   /** Skill メタデータ（source === "skill" の場合のみ） */
   skillMeta?: SkillMeta;
   /** 外部 URL から生成した場合の元 URL */

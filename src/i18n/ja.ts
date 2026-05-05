@@ -715,6 +715,20 @@ export const ja: Record<string, string> = {
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "エクスポートするプロヴェナンスデータがありません",
 
+  // ── Team-shared storage Share / Unshare（Phase 2a） ──
+  "share.shareToTeam": "チームと共有",
+  "share.reshareToTeam": "共有コピーを更新",
+  "share.sharing": "共有中…",
+  "share.successFirst": "チームの共有ストレージに保存しました。",
+  "share.successReshare": "共有コピーを更新しました。",
+  "share.failed": "共有に失敗しました",
+  "share.badge": "共有済み",
+  "share.badgeTooltip": "このノートはチームの共有ストレージにコピーがあります。",
+  "share.disabled.desktopOnly": "共有は現在デスクトップ版のみ対応です。",
+  "share.disabled.noRoot": "先に「設定 → ストレージ」で共有フォルダを指定してください。",
+  "share.disabled.noIdentity": "先に「設定 → ストレージ」で名前とメールを登録してください。",
+  "share.disabled.unsavedNote": "ノートを保存してから共有してください。",
+
   // ── オンボーディング / 空ノート予示 ──
   "onboarding.guide.aria": "空のノートのヒント",
   "onboarding.guide.lead": "まずは普通に書いてみてください。以下でも始められます:",

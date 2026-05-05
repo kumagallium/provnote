@@ -715,6 +715,20 @@ export const en: Record<string, string> = {
   "prov.export": "PROV-JSON-LD",
   "prov.exportDisabled": "No provenance data to export",
 
+  // ── Team-shared storage Share / Unshare (Phase 2a) ──
+  "share.shareToTeam": "Share with team",
+  "share.reshareToTeam": "Update shared copy",
+  "share.sharing": "Sharing…",
+  "share.successFirst": "Shared to team storage.",
+  "share.successReshare": "Shared copy updated.",
+  "share.failed": "Sharing failed",
+  "share.badge": "Shared",
+  "share.badgeTooltip": "This note has a copy in team-shared storage.",
+  "share.disabled.desktopOnly": "Sharing is desktop-only for now.",
+  "share.disabled.noRoot": "Set a shared folder in Settings → Storage first.",
+  "share.disabled.noIdentity": "Register your name and email in Settings → Storage first.",
+  "share.disabled.unsavedNote": "Save the note before sharing.",
+
   // ── Onboarding / Empty note guide ──
   "onboarding.guide.aria": "Empty note tips",
   "onboarding.guide.lead": "Start writing, or try one of these:",
