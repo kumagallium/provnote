@@ -74,13 +74,73 @@ function parseStored(json: string): StoredEntry {
  * Local folder Provider for SharedStorageProvider。
  * Tauri コマンド経由で `<shared-root>/<type>/<id>.json` を読み書きする。
  */
+/**
+ * author-owned 強制で使う identity の最小形。
+ * `LocalFolderSharedProvider` の write/delete で「自分以外の shared を書き換えない」
+ * チェックに使う。読み取り（list/read）には不要。
+ */
+export type ProviderIdentity = { email: string };
+
+export class AuthorMismatchError extends Error {
+  constructor(
+    public readonly entryId: string,
+    public readonly entryAuthorEmail: string,
+    public readonly callerEmail: string | undefined,
+  ) {
+    super(
+      `Read-only: shared entry ${entryId} belongs to ${entryAuthorEmail}, ` +
+        `not ${callerEmail ?? "(unknown)"}. Fork it instead.`,
+    );
+    this.name = "AuthorMismatchError";
+  }
+}
+
 export class LocalFolderSharedProvider implements SharedStorageProvider {
   readonly kind = "local-folder";
   readonly visibility = "private" as const;
 
-  constructor(private readonly root: string) {
+  /**
+   * identity が指定されていれば write/delete で author 一致チェックを行う。
+   * 指定なしでも read/list は動くが、write/delete は安全のため拒否する。
+   */
+  constructor(
+    private readonly root: string,
+    private readonly identity?: ProviderIdentity,
+  ) {
     if (!root || root.trim() === "") {
       throw new Error("LocalFolderSharedProvider requires a non-empty root path");
+    }
+  }
+
+  /**
+   * 既存 entry の author と this.identity を比較し、不一致なら AuthorMismatchError を投げる。
+   * 既存 entry が存在しない（最初の Share）場合は何もしない。
+   *
+   * 設計判断: 一致比較は email 値のみ。name は表示名なので比較対象外。
+   * email 値は normalize 済み（trim 済み）の前提。
+   */
+  private async assertCanModify(folder: string, id: string): Promise<void> {
+    if (!this.identity) {
+      throw new Error(
+        "LocalFolderSharedProvider requires identity for write/delete. " +
+          "Construct it with `new LocalFolderSharedProvider(root, { email })`.",
+      );
+    }
+    let existingJson: string;
+    try {
+      existingJson = await invoke<string>("shared_read", {
+        root: this.root,
+        entryType: folder,
+        id,
+      });
+    } catch {
+      // 存在しない = 最初の write。チェック不要
+      return;
+    }
+    const existing = parseStored(existingJson);
+    const existingEmail = existing.entry.author?.email ?? "";
+    if (existingEmail !== this.identity.email) {
+      throw new AuthorMismatchError(id, existingEmail, this.identity.email);
     }
   }
 
@@ -124,6 +184,15 @@ export class LocalFolderSharedProvider implements SharedStorageProvider {
     const folder = TYPE_TO_FOLDER[entry.type];
     if (!folder) throw new Error(`Unknown entry type: ${entry.type}`);
 
+    // author-owned 強制: 既存 entry の author email と一致するか確認
+    await this.assertCanModify(folder, entry.id);
+    // 新規 entry の author もこの identity と一致していなければエラー（他人名義での偽造防止）
+    if (this.identity && entry.author?.email !== this.identity.email) {
+      throw new Error(
+        `Entry author (${entry.author?.email ?? "(none)"}) does not match the current identity (${this.identity.email})`,
+      );
+    }
+
     // hash を計算して entry にセット（呼び出し側が事前に計算していても上書き：データ整合性優先）
     const hash = await computeSharedEntryHash(entry, content);
     const finalEntry: SharedEntry = { ...entry, hash };
@@ -136,6 +205,7 @@ export class LocalFolderSharedProvider implements SharedStorageProvider {
       entryType: folder,
       id: entry.id,
       content: JSON.stringify(stored),
+      authorEmail: this.identity?.email,
     });
   }
 
@@ -143,6 +213,8 @@ export class LocalFolderSharedProvider implements SharedStorageProvider {
     if (!isValidSharedId(id)) throw new Error(`Invalid shared id: ${id}`);
     // tombstone を作るために、削除前に entry を読み直して status="unshared" を立てる
     const folder = await this.locateFolderById(id);
+    // author-owned 強制
+    await this.assertCanModify(folder, id);
     const json = await invoke<string>("shared_read", {
       root: this.root,
       entryType: folder,
@@ -162,6 +234,7 @@ export class LocalFolderSharedProvider implements SharedStorageProvider {
       root: this.root,
       entryType: folder,
       id,
+      authorEmail: this.identity?.email,
       tombstoneContent: JSON.stringify(tombstone),
     });
   }

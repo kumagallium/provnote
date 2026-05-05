@@ -815,16 +815,47 @@ fn shared_read(root: String, entry_type: String, id: String) -> Result<String, S
     fs::read_to_string(&path).map_err(|e| format!("ファイル読み取り失敗: {e}"))
 }
 
+/// 既存ファイルの author email を読み取って caller_email と比較する。
+/// 既存ファイルがなければ何もしない（最初の Share）。
+/// 一致しなければエラー — author-owned 強制の Rust 側 defense in depth。
+fn assert_existing_author(
+    path: &PathBuf,
+    caller_email: &Option<String>,
+) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(path).map_err(|e| format!("既存ファイル読み取り失敗: {e}"))?;
+    // JSON を完全パースせず、author.email だけ抜き出す（serde_json::Value で十分）
+    let v: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("既存ファイル JSON パース失敗: {e}"))?;
+    let existing_email = v
+        .get("entry")
+        .and_then(|e| e.get("author"))
+        .and_then(|a| a.get("email"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    let caller = caller_email.as_deref().unwrap_or("");
+    if existing_email != caller {
+        return Err(format!(
+            "Read-only: shared entry author is {existing_email}, not {caller}. Fork it instead."
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn shared_write(
     root: String,
     entry_type: String,
     id: String,
     content: String,
+    author_email: Option<String>,
 ) -> Result<(), String> {
     validate_id(&id)?;
     let dir = shared_type_dir(&root, &entry_type)?;
     let path = dir.join(format!("{id}.json"));
+    assert_existing_author(&path, &author_email)?;
     fs::write(&path, content).map_err(|e| format!("ファイル書き込み失敗: {e}"))
 }
 
@@ -836,10 +867,12 @@ fn shared_delete(
     entry_type: String,
     id: String,
     tombstone_content: String,
+    author_email: Option<String>,
 ) -> Result<(), String> {
     validate_id(&id)?;
     let body_dir = shared_type_dir(&root, &entry_type)?;
     let body_path = body_dir.join(format!("{id}.json"));
+    assert_existing_author(&body_path, &author_email)?;
     if body_path.exists() {
         fs::remove_file(&body_path).map_err(|e| format!("本体ファイル削除失敗: {e}"))?;
     }

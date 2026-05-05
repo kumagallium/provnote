@@ -24,7 +24,7 @@ export async function testSharedConnection(
   author: AuthorIdentity,
 ): Promise<ConnectionTestResult> {
   try {
-    const provider = new LocalFolderSharedProvider(root);
+    const provider = new LocalFolderSharedProvider(root, { email: author.email });
     const id = newSharedId();
     const now = new Date().toISOString();
     const body = new TextEncoder().encode(

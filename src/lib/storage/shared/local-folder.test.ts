@@ -13,12 +13,14 @@ vi.mock("@tauri-apps/api/core", () => ({
 import {
   LocalFolderSharedProvider,
   LocalFolderBlobProvider,
+  AuthorMismatchError,
 } from "./local-folder";
 import type { SharedEntry } from "./types";
 import { newSharedId } from "./id";
 import { computeSharedEntryHash, computeBlobHash } from "./hash";
+import type { AuthorIdentity } from "../../../features/document-provenance/types";
 
-const author = { name: "Ada", email: "a@b.co" };
+const author: AuthorIdentity = { name: "Ada", email: "a@b.co" };
 
 /** インメモリ FS シミュレーション。各 invoke 呼び出しをハンドルする。 */
 class FakeFs {
@@ -97,7 +99,7 @@ function makeEntry(overrides: Partial<SharedEntry> = {}): SharedEntry {
 
 describe("LocalFolderSharedProvider — write / read", () => {
   it("write した entry を read で取り戻せる、hash は自動計算される", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const entry = makeEntry();
     const body = new TextEncoder().encode("hello");
 
@@ -110,7 +112,7 @@ describe("LocalFolderSharedProvider — write / read", () => {
   });
 
   it("write 時に呼び出し側の hash 値は無視され、再計算される", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const entry = makeEntry({ hash: "sha256:fake" });
     const body = new TextEncoder().encode("payload");
 
@@ -126,14 +128,14 @@ describe("LocalFolderSharedProvider — write / read", () => {
   });
 
   it("verifyHash は書き込み時に成功する", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const entry = makeEntry();
     await provider.write(entry, new TextEncoder().encode("body"));
     expect(await provider.verifyHash(entry.id)).toBe(true);
   });
 
   it("verifyHash は本体改ざん時に失敗する", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const entry = makeEntry();
     await provider.write(entry, new TextEncoder().encode("body"));
     // ファイル本体を不正に書き換え（hash は元のまま、body だけ変える）
@@ -146,14 +148,14 @@ describe("LocalFolderSharedProvider — write / read", () => {
   });
 
   it("不正な id は弾く", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     await expect(provider.read("not-a-uuid")).rejects.toThrow(/Invalid shared id/);
   });
 });
 
 describe("LocalFolderSharedProvider — list", () => {
   it("type ごとに分離して列挙する", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const note = makeEntry({ type: "note" });
     const ref = makeEntry({ type: "reference" });
     await provider.write(note, new TextEncoder().encode("n"));
@@ -166,7 +168,7 @@ describe("LocalFolderSharedProvider — list", () => {
   });
 
   it("status='unshared' (tombstone) は list から除外される", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const a = makeEntry();
     const b = makeEntry();
     await provider.write(a, new TextEncoder().encode("a"));
@@ -180,7 +182,7 @@ describe("LocalFolderSharedProvider — list", () => {
 
 describe("LocalFolderSharedProvider — delete (tombstone)", () => {
   it("delete で本体は消え、tombstone が作られる", async () => {
-    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: author.email });
     const entry = makeEntry();
     await provider.write(entry, new TextEncoder().encode("x"));
     await provider.delete(entry.id);
@@ -238,5 +240,94 @@ describe("LocalFolderBlobProvider", () => {
     expect(await blobProv.exists(hash)).toBe(false);
     await blobProv.put(bytes);
     expect(await blobProv.exists(hash)).toBe(true);
+  });
+});
+
+describe("LocalFolderSharedProvider — author-owned enforcement", () => {
+  const ada: AuthorIdentity = author; // 既に { name: "Ada", email: "a@b.co" }
+  const mallory: AuthorIdentity = { name: "Mallory", email: "m@x.co" };
+
+  it("identity 未指定で write を呼ぶと拒否される", async () => {
+    const provider = new LocalFolderSharedProvider("/tmp/shared");
+    const entry = makeEntry({ author: ada });
+    await expect(
+      provider.write(entry, new TextEncoder().encode("x")),
+    ).rejects.toThrow(/identity for write/);
+  });
+
+  it("identity 未指定で delete を呼ぶと拒否される", async () => {
+    // 先に Ada として書き込んでおく
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: ada });
+    await provider.write(entry, new TextEncoder().encode("x"));
+    // identity なしで delete
+    const noIdentity = new LocalFolderSharedProvider("/tmp/shared");
+    await expect(noIdentity.delete(entry.id)).rejects.toThrow(/identity for write/);
+  });
+
+  it("自分の shared を更新（同 author）するのは成功する", async () => {
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: ada });
+    await provider.write(entry, new TextEncoder().encode("v1"));
+    await provider.write(entry, new TextEncoder().encode("v2")); // 上書き OK
+    const got = await provider.read(entry.id);
+    expect(new TextDecoder().decode(got.body)).toBe("v2");
+  });
+
+  it("他人の shared を上書きしようとすると AuthorMismatchError", async () => {
+    // Ada が書いた shared を Mallory が上書きしようとする
+    const adaProv = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: ada });
+    await adaProv.write(entry, new TextEncoder().encode("ada-version"));
+
+    const malloryProv = new LocalFolderSharedProvider("/tmp/shared", { email: mallory.email });
+    await expect(
+      malloryProv.write(
+        { ...entry, author: mallory },
+        new TextEncoder().encode("mallory-version"),
+      ),
+    ).rejects.toThrow(/Read-only/);
+
+    // 中身が書き換わっていないことも確認
+    const after = await adaProv.read(entry.id);
+    expect(new TextDecoder().decode(after.body)).toBe("ada-version");
+  });
+
+  it("entry.author と identity が一致しないと write できない（自分名義以外で書けない）", async () => {
+    const provider = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: mallory }); // identity=ada だが entry author は mallory
+    await expect(
+      provider.write(entry, new TextEncoder().encode("x")),
+    ).rejects.toThrow(/does not match the current identity/);
+  });
+
+  it("他人の shared を delete しようとすると AuthorMismatchError", async () => {
+    const adaProv = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: ada });
+    await adaProv.write(entry, new TextEncoder().encode("x"));
+
+    const malloryProv = new LocalFolderSharedProvider("/tmp/shared", { email: mallory.email });
+    await expect(malloryProv.delete(entry.id)).rejects.toThrow(/Read-only/);
+    // tombstone は作られず、本体も残っている
+    expect(fs.tombstones.has(entry.id)).toBe(false);
+    expect(fs.entries.has(`notes/${entry.id}`)).toBe(true);
+  });
+
+  it("AuthorMismatchError は entryId / 両者の email を持つ", async () => {
+    const adaProv = new LocalFolderSharedProvider("/tmp/shared", { email: ada.email });
+    const entry = makeEntry({ author: ada });
+    await adaProv.write(entry, new TextEncoder().encode("x"));
+
+    const malloryProv = new LocalFolderSharedProvider("/tmp/shared", { email: mallory.email });
+    try {
+      await malloryProv.delete(entry.id);
+      expect.fail("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(AuthorMismatchError);
+      const ame = e as AuthorMismatchError;
+      expect(ame.entryId).toBe(entry.id);
+      expect(ame.entryAuthorEmail).toBe(ada.email);
+      expect(ame.callerEmail).toBe(mallory.email);
+    }
   });
 });

@@ -68,6 +68,8 @@ describe("testSharedConnection", () => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "shared_write") throw new Error("permission denied");
+      // 既存 entry の author check は read を最初に呼ぶ。実環境では無いファイルへの read は throw する。
+      if (cmd === "shared_read") throw new Error("file not found");
       return null;
     });
     const res = await testSharedConnection("/tmp/shared", author);

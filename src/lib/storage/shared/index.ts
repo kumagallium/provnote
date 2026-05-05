@@ -21,6 +21,8 @@ export { computeSharedEntryHash, computeBlobHash } from "./hash";
 export {
   LocalFolderSharedProvider,
   LocalFolderBlobProvider,
+  AuthorMismatchError,
+  type ProviderIdentity,
 } from "./local-folder";
 export {
   getSharedRoot,
