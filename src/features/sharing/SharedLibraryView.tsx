@@ -24,6 +24,9 @@ import {
 import type { AuthorIdentity } from "../document-provenance/types";
 import {
   LocalFolderSharedProvider,
+  LocalFolderBlobProvider,
+  getBlobRoot,
+  type BlobRef,
   type SharedEntry,
   type SharedEntryType,
 } from "../../lib/storage/shared";
@@ -615,36 +618,7 @@ function SharedEntryBody({
   }
 
   if (entry.type === "data-manifest") {
-    const blobs = Array.isArray(extra.blobs) ? (extra.blobs as Record<string, unknown>[]) : [];
-    const mime = typeof extra.mime_type === "string" ? extra.mime_type : null;
-    const original =
-      typeof extra.original_filename === "string"
-        ? extra.original_filename
-        : null;
-    return (
-      <div className="space-y-2 text-sm">
-        {mime && (
-          <div className="text-xs text-muted-foreground">MIME: {mime}</div>
-        )}
-        {original && (
-          <div className="text-xs text-muted-foreground">
-            Original filename: {original}
-          </div>
-        )}
-        {blobs.map((b, i) => (
-          <div
-            key={i}
-            className="p-2 rounded border border-border text-xs space-y-0.5 bg-muted/30"
-          >
-            <div className="font-mono break-all">{String(b.uri ?? "")}</div>
-            <div className="text-muted-foreground">
-              {String(b.size ?? "?")} bytes ·{" "}
-              <span className="font-mono">{String(b.hash ?? "").slice(0, 16)}…</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    return <DataManifestPreview entry={entry} />;
   }
 
   if (entry.type === "note") {
@@ -686,5 +660,167 @@ function SharedEntryBody({
     <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-muted/30 p-3 rounded">
       {body.slice(0, 8000)}
     </pre>
+  );
+}
+
+// ── data-manifest の inline preview ──
+
+function DataManifestPreview({ entry }: { entry: SharedEntry }) {
+  const extra = (entry.extra ?? {}) as Record<string, unknown>;
+  const blobs: BlobRef[] = Array.isArray(extra.blobs)
+    ? (extra.blobs as BlobRef[]).filter(
+        (b) => b && typeof b.hash === "string" && typeof b.uri === "string",
+      )
+    : [];
+  const mime = typeof extra.mime_type === "string" ? extra.mime_type : null;
+  const mediaType = typeof extra.media_type === "string" ? extra.media_type : null;
+  const original =
+    typeof extra.original_filename === "string"
+      ? extra.original_filename
+      : null;
+
+  return (
+    <div className="space-y-3 text-sm">
+      {mime && (
+        <div className="text-xs text-muted-foreground">MIME: {mime}</div>
+      )}
+      {original && (
+        <div className="text-xs text-muted-foreground">
+          Original filename: {original}
+        </div>
+      )}
+      {blobs.map((b) => (
+        <BlobPreviewCard key={b.hash} blob={b} mime={mime} mediaType={mediaType} />
+      ))}
+    </div>
+  );
+}
+
+function BlobPreviewCard({
+  blob,
+  mime,
+  mediaType,
+}: {
+  blob: BlobRef;
+  mime: string | null;
+  mediaType: string | null;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const blobRoot = getBlobRoot();
+
+  // 画像は自動ロード（軽量）。PDF / 動画 / 音声はクリックでロード
+  const isImage = (mime ?? "").startsWith("image/") || mediaType === "image";
+  const isPdf = mime === "application/pdf" || mediaType === "pdf";
+  const isVideo = (mime ?? "").startsWith("video/") || mediaType === "video";
+  const isAudio = (mime ?? "").startsWith("audio/") || mediaType === "audio";
+
+  const loadUrl = useCallback(async () => {
+    if (!blobRoot || url) return;
+    setLoading(true);
+    try {
+      const provider = new LocalFolderBlobProvider(blobRoot);
+      const u = await provider.url(blob);
+      setUrl(u);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [blobRoot, blob, url]);
+
+  // 画像は自動で blob URL を取りに行く
+  useEffect(() => {
+    if (isImage) void loadUrl();
+    return () => {
+      if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isImage]);
+
+  return (
+    <div className="rounded border border-border bg-muted/30 overflow-hidden">
+      {/* preview slot */}
+      {!blobRoot ? (
+        <div className="p-3 text-xs text-muted-foreground">
+          Blob root が未設定のためプレビューできません。
+        </div>
+      ) : error ? (
+        <div className="p-3 text-xs text-destructive flex items-center gap-2">
+          <AlertTriangle size={12} />
+          {error}
+        </div>
+      ) : isImage ? (
+        url ? (
+          <img
+            src={url}
+            alt={blob.filename ?? blob.hash}
+            className="w-full max-h-[480px] object-contain bg-checkerboard"
+          />
+        ) : (
+          <div className="p-6 text-xs text-muted-foreground text-center">
+            {loading ? "Loading…" : "Preparing…"}
+          </div>
+        )
+      ) : isPdf ? (
+        url ? (
+          <embed
+            src={url}
+            type="application/pdf"
+            className="w-full h-[640px] block"
+          />
+        ) : (
+          <button
+            onClick={() => void loadUrl()}
+            disabled={loading}
+            className="w-full p-6 text-xs text-muted-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "Click to load PDF preview"}
+          </button>
+        )
+      ) : isVideo ? (
+        url ? (
+          <video
+            src={url}
+            controls
+            className="w-full max-h-[480px] block bg-black"
+          />
+        ) : (
+          <button
+            onClick={() => void loadUrl()}
+            disabled={loading}
+            className="w-full p-6 text-xs text-muted-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "Click to load video"}
+          </button>
+        )
+      ) : isAudio ? (
+        url ? (
+          <audio src={url} controls className="w-full p-3" />
+        ) : (
+          <button
+            onClick={() => void loadUrl()}
+            disabled={loading}
+            className="w-full p-6 text-xs text-muted-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "Click to load audio"}
+          </button>
+        )
+      ) : (
+        <div className="p-3 text-xs text-muted-foreground">
+          (No inline preview for this file type)
+        </div>
+      )}
+
+      {/* meta */}
+      <div className="p-2 text-xs space-y-0.5 border-t border-border">
+        <div className="font-mono break-all">{blob.uri}</div>
+        <div className="text-muted-foreground">
+          {blob.size} bytes ·{" "}
+          <span className="font-mono">{blob.hash.slice(0, 16)}…</span>
+        </div>
+      </div>
+    </div>
   );
 }

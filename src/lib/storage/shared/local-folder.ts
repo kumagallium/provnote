@@ -322,4 +322,13 @@ export class LocalFolderBlobProvider implements BlobStorageProvider {
   async exists(hash: string): Promise<boolean> {
     return invoke<boolean>("shared_blob_exists", { root: this.root, hash });
   }
+
+  /**
+   * blob を削除する（GC 用）。idempotent — 存在しない hash でも成功扱い。
+   * 呼び出し側で「他の active manifest がこの hash を参照していない」ことを
+   * 確認した上で呼ぶこと。
+   */
+  async delete(hash: string): Promise<void> {
+    await invoke<void>("shared_blob_delete", { root: this.root, hash });
+  }
 }

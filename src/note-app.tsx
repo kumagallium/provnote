@@ -83,7 +83,7 @@ import type { GraphiumDocument, NoteLink } from "./lib/document-types";
 import { LATEST_DOCUMENT_VERSION } from "./lib/document-migration";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { loadAuthorIdentity } from "./features/identity";
-import { getSharedRoot } from "./lib/storage/shared";
+import { getSharedRoot, getBlobRoot } from "./lib/storage/shared";
 import {
   shareNote,
   forkSharedNote,
@@ -4073,7 +4073,11 @@ export function NoteApp() {
                 alert("Identity not registered or shared root not configured.");
                 return;
               }
-              const result = await unshareEntry(entry.id, { root, author });
+              const result = await unshareEntry(entry.id, {
+                root,
+                author,
+                blobRoot: getBlobRoot() ?? undefined,
+              });
               if (!result.ok) {
                 alert(`Unshare failed: ${result.error}`);
               }

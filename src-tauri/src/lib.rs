@@ -923,6 +923,20 @@ fn shared_blob_exists(root: String, hash: String) -> Result<bool, String> {
     Ok(dir.join(hex_part).exists())
 }
 
+/// Blob を hash 指定で削除する（GC 用）。
+/// 呼び出し側で「他の active manifest が参照していない」ことを確認した hash のみを渡すこと。
+/// 存在しない blob を渡しても No-op で成功する（idempotent）。
+#[tauri::command]
+fn shared_blob_delete(root: String, hash: String) -> Result<(), String> {
+    let dir = shared_blob_dir(&root, &hash)?;
+    let hex_part = &hash["sha256:".len()..];
+    let path = dir.join(hex_part);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("blob 削除失敗: {e}"))?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -963,6 +977,7 @@ pub fn run() {
             shared_blob_read,
             shared_blob_write,
             shared_blob_exists,
+            shared_blob_delete,
             shutdown_ack,
         ])
         .setup(|app| {
