@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.6.0](https://github.com/kumagallium/Graphium/compare/v0.5.4...v0.6.0) - 2026-05-05
+- Fix AI agent attribution for Wiki creation and updates by @kumagallium in https://github.com/kumagallium/Graphium/pull/212
+- Fix AI chat session continuity and tighten panel typography by @kumagallium in https://github.com/kumagallium/Graphium/pull/214
+- Polish AI chat: keep quote, fix bulk-knowledge model selection, fix list paste by @kumagallium in https://github.com/kumagallium/Graphium/pull/215
+- Reserve port 3001 strictly for desktop sidecar by @kumagallium in https://github.com/kumagallium/Graphium/pull/216
+- feat(identity): AuthorIdentity foundation for team-shared-storage (Phase 0) by @kumagallium in https://github.com/kumagallium/Graphium/pull/217
+- feat(shared-storage): types, hash, and id utils (Phase 1a) by @kumagallium in https://github.com/kumagallium/Graphium/pull/218
+- feat(shared-storage): Local folder Provider + Tauri backend (Phase 1b) by @kumagallium in https://github.com/kumagallium/Graphium/pull/219
+- feat(shared-storage): Settings UI for shared / blob roots (Phase 1c) by @kumagallium in https://github.com/kumagallium/Graphium/pull/220
+- refactor(wiki): type/sources/refs columns + i18n by @kumagallium in https://github.com/kumagallium/Graphium/pull/221
+- feat(sharing): Share-to-team button on notes (Phase 2a) by @kumagallium in https://github.com/kumagallium/Graphium/pull/222
+- feat(shared-storage): enforce author-owned semantics (Phase 2b-1) by @kumagallium in https://github.com/kumagallium/Graphium/pull/223
+- Experimental Atom layer + tighter Synthesis (with cross-cutting discovery) by @kumagallium in https://github.com/kumagallium/Graphium/pull/225
+- feat(sharing): single-file media Share via gallery modal (Phase 2b-media) by @kumagallium in https://github.com/kumagallium/Graphium/pull/224
+- fix(sidecar): detect and replace orphan sidecar on port 3001 by @kumagallium in https://github.com/kumagallium/Graphium/pull/227
+- feat(shared-library): Library view with fork & unshare (Phase 2c) by @kumagallium in https://github.com/kumagallium/Graphium/pull/226
+- feat(shared-storage): auto-upload embedded media as blobs (Phase 2c-1) by @kumagallium in https://github.com/kumagallium/Graphium/pull/228
+- feat(shared-storage): materialize shared-blob: refs on Fork (Phase 2c-2) by @kumagallium in https://github.com/kumagallium/Graphium/pull/229
+
 ## [v0.5.4](https://github.com/kumagallium/Graphium/compare/v0.5.3...v0.5.4) - 2026-05-04
 - Add Word (.docx) import with bulk knowledge ingestion by @kumagallium in https://github.com/kumagallium/Graphium/pull/210
 
