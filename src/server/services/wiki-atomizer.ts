@@ -33,10 +33,51 @@ Your job is to scan a set of Concept pages and **factor out** the abstract ideas
 
 ## What an Atom is
 - **One idea per Atom.** A noun-phrase title for a single, transferable principle / pattern / heuristic.
-- **Context-stripped.** Drop one-off specifics: project names, person names, exact dates, exact numeric values bound to a single experiment. Keep the general principle in form that survives outside the original Concepts.
+- **Context-stripped AND domain-lifted.** It is not enough to remove project names and exact numbers. **Domain-specific nouns must be lifted up at least one level of abstraction.** Atoms read at the level of a textbook chapter title, not a paper abstract.
 - **Cross-cutting.** Each Atom must \`sourceConceptIds\` >= 2. The whole point is to surface ideas that recur — not to re-describe a single Concept.
 - **Reusable.** A reader from another domain should still grasp the idea without knowing where it came from.
 - **Short.** Title (5-12 words) and 1-3 short paragraphs of body. No headings, no bullet lists. Prose only.
+
+## Domain-noun lifting (REQUIRED)
+
+When you write the Atom title and body, replace specific domain entities with the more abstract category they belong to. Specific names may appear inside the body **only** as a brief illustrative aside ("e.g., …"), never as the load-bearing subject.
+
+Lifting examples (apply this *kind* of move to whatever domain the Concepts are in):
+
+- "Ti" → "minor dopant element" / "trace addition"
+- "Al-V system alloy" → "multi-component alloy" / "ternary structural alloy"
+- "grain size and Debye temperature" → "bulk structural properties"
+- "React component re-render" → "fine-grained UI update"
+- "Postgres VACUUM" → "background storage maintenance"
+- "lysine residue" → "amino-acid side chain"
+
+If lifting two levels still leaves the claim narrow, lift one more. Stop when the claim would still be intelligible to a reader outside the source domain.
+
+## Self-check before emitting an Atom
+
+Ask yourself: *"Would this Atom still make sense to a reader who has never heard of the specific domain in the source Concepts?"*
+
+- If **yes** → emit the Atom.
+- If **no** → either (a) lift the nouns one more level and rewrite, or (b) drop the candidate. Prefer dropping over emitting an under-abstracted Atom; the system has a Concept layer for domain-specific knowledge already.
+
+## Bad / Good (read this carefully)
+
+❌ **Bad — under-abstracted (looks like a Concept summary):**
+> "Ti 添加は Al‑V 系合金の粒径やデバイ温度に顕著な影響を与えない"
+>
+> Why bad: keeps the specific element (Ti), the specific alloy system (Al-V), and specific structural properties (grain size, Debye temp). A reader outside metallurgy gets nothing. This is the Concept layer's job, not the Atom layer's.
+
+✅ **Good — domain-lifted, transferable:**
+> "三元系合金における少量の添加元素は、構造的なバルク特性に支配的な影響を与えないことがある"
+> (or equivalently: "Trace additions in multi-component alloys often leave bulk structural properties unaffected")
+>
+> Why good: "Ti" → "少量の添加元素", "Al-V" → "三元系合金", "粒径・デバイ温度" → "構造的なバルク特性". The claim now reads as a transferable heuristic that someone working on different alloy systems — or even adjacent fields like multi-component crystals — could anchor against.
+
+❌ **Bad:**
+> "PostgreSQL の VACUUM はインデックス断片化を回復させる"
+
+✅ **Good:**
+> "永続ストレージの背景メンテナンスは、参照構造のフラグメンテーションを段階的に回復させる"
 
 ## What an Atom is NOT
 - A summary of a single Concept (Concept already is one)
@@ -50,8 +91,8 @@ Respond with valid JSON only:
 {
   "atoms": [
     {
-      "title": "Atom title (5-12 words)",
-      "body": "1-3 short paragraphs of context-stripped prose.",
+      "title": "Atom title (5-12 words, domain-lifted)",
+      "body": "1-3 short paragraphs of context-stripped, domain-lifted prose.",
       "sourceConceptIds": ["concept-id-1", "concept-id-2", ...],
       "confidence": 0.0-1.0
     }
@@ -61,8 +102,8 @@ Respond with valid JSON only:
 ## Rules (strict)
 - **Each Atom MUST cite >= 2 Concepts** in \`sourceConceptIds\`. Use the EXACT id from the Concept list.
 - **Avoid duplicating existing Atoms.** If an Atom title in "Existing Atoms" already covers a pattern, do NOT propose it again. Propose only genuinely new abstractions.
-- **Quality over quantity.** Generate 0-5 candidates. If the Concepts don't share enough recurring patterns, return an empty list.
-- Only propose with \`confidence >= 0.7\`.
+- **Quality over quantity.** Generate 0-5 candidates. If the Concepts share only narrow domain-bound details and you cannot lift them honestly, **return an empty list**. An empty list is better than an under-abstracted Atom.
+- Only propose with \`confidence >= 0.7\`. Lower the confidence (and likely drop) if you find yourself wanting to keep specific nouns to make the claim feel meaningful — that is a signal the abstraction is not yet ready.
 - Do not invent citations, URLs, or author names.
 
 ## Style
