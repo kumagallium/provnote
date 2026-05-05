@@ -3,27 +3,36 @@
 </p>
 <h1 align="center">Graphium</h1>
 <p align="center">
-  Block-based note editor with <b>PROV-DM</b> provenance tracking — built on <a href="https://www.blocknotejs.org/">BlockNote.js</a>.
+  <b>A note editor that turns information into knowledge you can reuse, anytime.</b>
+</p>
+<p align="center">
+  Block-based note editor with <b>PROV-DM</b> provenance tracking, built on <a href="https://www.blocknotejs.org/">BlockNote.js</a>.
 </p>
 <p align="center">
   <b>English</b> | <a href="README.ja.md">日本語</a>
 </p>
 
-Graphium is an attempt to rethink how scientific notes work. It combines [Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten)-style atomic note-taking — where linking small ideas leads to unexpected discoveries — with [PROV-DM](https://www.w3.org/TR/prov-dm/), a W3C standard that gives those discoveries formal, traceable provenance. When AI enters the picture, it bridges both: AI-generated knowledge is recorded with the same provenance trail as human notes, so you always know where an idea came from.
+Graphium is a personal open-source project that combines [Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten)-style atomic note-taking with [PROV-DM](https://www.w3.org/TR/prov-dm/), a W3C provenance standard. The result is a notebook where every claim, including the ones an AI hands you, can be traced back to the notes and sources that justify it.
 
-## Use as much — or as little — as you need
+### Learn more before you install
 
-Graphium is designed around **progressive disclosure**. You choose how deep to go:
+- 📘 [**CONCEPT**](docs/CONCEPT.md) ([日本語](docs/CONCEPT.ja.md)) — the design philosophy: why provenance matters, the two brains, the hourglass.
+- 🏗️ [**ARCHITECTURE**](docs/ARCHITECTURE.md) — layers, distribution targets, the Wiki pipeline, known seams.
+- 🗂️ [**DATA_MODEL**](docs/DATA_MODEL.md) — the on-disk JSON shapes, schemas, and compatibility rules.
+
+## Use as much, or as little, as you need
+
+Graphium is designed around **progressive disclosure**. Labelling is optional, and it comes in two layers you can adopt independently.
 
 | Level | What you do | What you get |
 |-------|------------|--------------|
-| **Just notes** | Write and link notes with `@` references | A Zettelkasten-style linked notebook saved on your filesystem |
-| **Some labels** | Add `#` context labels to key blocks | Those blocks gain PROV-DM structure — a provenance graph emerges for the labeled parts |
-| **Full labeling** | Label all blocks systematically | Complete provenance tracking across your entire workflow |
+| **Just notes** | Write and link notes with `@` references | A linked notebook on your filesystem (or browser IndexedDB on the web) |
+| **Block-level structure** | Mark heading blocks as `[Step]` (or as a phase: `[Plan]` / `[Result]`) | The skeleton of a provenance graph — what happened, in what order |
+| **Inline detail** | Highlight spans inside a block as `[Input]` / `[Tool]` / `[Parameter]` / `[Output]` | A full provenance graph — what was used, with what conditions, what came out |
 
-**You don't need to label anything** to get value from Graphium. Start with plain linked notes. When you want traceability for a specific experiment or project, add labels to just the blocks that matter. The provenance layer activates only where you choose.
+The `#` block labels and the inline highlights are two passes over the same content, not a single all-or-nothing label. You can write a note with no labels, give it a step structure later, and add inline detail only on the parts that matter. **The provenance layer activates only where you choose** — that gradient *is* the design.
 
-This gradient of label density is a core design decision — not a limitation.
+For the deeper rationale, see [docs/CONCEPT.md §6](docs/CONCEPT.md#6-progressive-disclosure-use-as-much-or-as-little-as-you-need).
 
 ## Try it now
 
@@ -44,58 +53,37 @@ Download the desktop app to save notes as plain JSON files on your filesystem. P
 > **Other platforms**
 > The desktop build currently ships only for macOS Apple Silicon. If you are on Windows, Linux, or Intel macOS, please use the [browser version on GitHub Pages](https://kumagallium.github.io/Graphium/) (no install) or self-host with the [Docker setup](#option-2-run-with-docker--editor-only) described below. Bringing the desktop app back to other platforms is on the roadmap; see [issues](https://github.com/kumagallium/Graphium/issues) if you'd like to help test.
 
-### Mobile (iPhone / Android)
+### Mobile (paused)
 
-Graphium works as a **Progressive Web App (PWA)** on mobile browsers. No app store download needed — just add it to your home screen for an app-like experience.
+A mobile capture flow (PWA, quick memos, camera capture) was prototyped but is currently **paused** while the desktop and Knowledge Layer work matures. The browser version still installs on iOS / Android home screens, but mobile-specific features (timeline view, quick capture button) are not actively maintained at the moment.
 
-#### Add to Home Screen (iPhone)
-
-1. Open **https://kumagallium.github.io/Graphium/** in Safari
-2. Tap the **Share** button (square with arrow)
-3. Scroll down and tap **"Add to Home Screen"**
-4. Tap **"Add"** — Graphium appears as an app icon
-
-Once added, Graphium launches in full-screen mode without the browser navigation bar.
-
-#### Mobile features
-
-| Feature | Description |
-|---------|-------------|
-| **Quick capture** | Tap the + button to jot down memos instantly |
-| **Memo editing** | Tap any memo card to view and edit its content |
-| **Photo / Video / Audio** | Capture media directly from the camera or microphone |
-| **URL bookmarks** | Save web links with automatic metadata preview |
-| **Media preview** | Tap image/video/audio cards to view or play them |
-| **Pull-to-refresh** | Pull down the timeline to sync latest data |
-
-The mobile view is optimized for quick data capture in the field. For full editing with context labels and provenance features, use the desktop or tablet view.
-
-<table>
-  <tr>
-    <td><b>Capture timeline</b></td>
-    <td><b>New memo input</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/mobile-capture.png" alt="Mobile capture timeline" width="280" /></td>
-    <td><img src="docs/screenshots/mobile-memo-input.png" alt="Mobile memo input" width="280" /></td>
-  </tr>
-</table>
+If you want to follow or help restart this work, see the [issues](https://github.com/kumagallium/Graphium/issues).
 
 ## AI Knowledge Layer
 
-When you connect an LLM, Graphium builds a **second layer** on top of your notes — a wiki of concepts and summaries auto-generated from what you've written. Think of it as *Zettelkasten extended by an LLM*: the AI reads your notes, extracts stable ideas, keeps them cross-linked, and cites back to the source blocks — all while carrying the same PROV-DM provenance as the rest of the editor.
+When you connect an LLM, Graphium builds a **second layer** on top of your notes — an editable AI Wiki auto-generated from what you've written. Think of it as *Zettelkasten extended by an LLM*: the AI reads your notes, extracts stable ideas, keeps them cross-linked, and cites back to the source blocks — all while carrying the same PROV-DM provenance as the rest of the editor.
+
+The Wiki has four document kinds, each with a distinct role:
+
+| Kind | Role |
+|------|------|
+| **Summary** | Internal-facing summary of one note. |
+| **Concept** | Cross-note synthesis with key elements extracted. Concepts qualify by `level` (principle / finding / bridge) and `status` (candidate / verified). |
+| **Atom** | Experimental layer. One context-free claim with citations back to the source notes — the unit that travels across projects. |
+| **Synthesis** | Experimental layer. New insight built by weaving Atoms together. |
 
 | Capability | What it does |
 |-----------|--------------|
-| **Ingest from notes** | After you edit a note, the AI extracts knowledge-worthy sections and writes them into Wiki pages (Concept / Summary). |
+| **Five-stage pipeline** | Ingest → Atomize → Synthesize → Cross-update → Lint, all running on the companion server. Triggered when you save a note. |
+| **Ingest from notes** | The AI extracts knowledge-worthy sections and writes them into Wiki pages, citing back to source blocks. |
 | **Ingest from URL & chat** | Drop a URL or save an AI chat response — it becomes a Wiki page with the same provenance chain. |
-| **Synthesis pages** | Concepts that appear across multiple notes get auto-generated Synthesis pages that connect them. |
-| **Autonomous maintenance** | Periodic lint checks, cross-update proposals, and index rebuilds keep the wiki coherent as your notes grow. |
-| **Inline citations** | Every Wiki section links back to the source block in the original note, so nothing is orphaned. |
+| **Cross-update** | When one Wiki page changes, dependent pages are flagged or rewritten so the layer stays consistent. |
+| **Lint** | Detects orphan Atoms, broken citations, and redundant Concepts. |
+| **Edit protection** | Sections you manually edited are skipped during re-ingest, so your corrections survive. |
 | **Retriever for AI chat** | Wiki context is injected into AI responses — the assistant remembers what you wrote last week without re-reading every note. |
-| **Auto-labeled answers** | AI replies inserted into the editor are automatically tagged with PROV-DM context labels (`[Step]`, `[Input]`, `[Output]`, …) and consecutive steps get linked with `informed_by` — a provenance graph emerges from the chat itself, no manual labeling required. |
+| **Auto-labeled answers** | AI replies are inserted with PROV-DM structure already attached: `[Step]` labels on activity headings, inline highlights for `[Input]` / `[Tool]` / `[Parameter]` / `[Output]`, and `informed_by` links between consecutive steps. A provenance graph emerges from the chat itself, no manual labeling required. |
 
-Wiki pages live in the same storage as your notes (browser IndexedDB or Tauri filesystem) and are fully editable by hand. The AI will not overwrite your manual edits unless you explicitly ask it to rewrite a page. Every Wiki edit is recorded as a PROV-DM revision so you can always see **when** a page was generated, **which agent** (human or AI) wrote it, and **from which source**.
+Wiki pages live in the same storage as your notes (IndexedDB on web, filesystem on Tauri / Docker) and are fully editable by hand. Every Wiki edit is recorded as a PROV-DM revision so you can always see **when** a page was generated, **which agent** (human or AI) wrote it, and **from which source**.
 
 AI Knowledge is **opt-in**: configure an LLM in **⚙ Settings → AI Setup** to activate it. Without an LLM, Graphium works as a plain linked-note editor.
 
@@ -117,8 +105,8 @@ The Composer is the entry point that ties the editor, the AI Knowledge Layer, an
 
 The `/template` slash command opens a picker with reusable scaffolds:
 
-- **Plan template** — H1 title, Background / Goals, an index table (Item × Conditions), and Expected Outcomes. Each row of the table becomes a child note when you derive it.
-- **Run template** — a per-item record where steps are pre-labeled (`[Step]` / `[Input]` / `[Tool]` / `[Parameter]` / `[Output]`) and consecutive steps are pre-linked with `informed_by`. Use it as a working example of "what a fully labeled note looks like."
+- **Plan template** — H1 title, Background / Goals, a reference table (Item × Conditions), and Expected Outcomes. Each row of the table becomes a child note when you derive it.
+- **Run template** — a per-item record where blocks are pre-labeled (`[Step]` for activities; inline `[Input]` / `[Tool]` / `[Parameter]` / `[Output]` for entities) and consecutive steps are pre-linked with `informed_by`. Use it as a working example of "what a fully labeled note looks like."
 
 The vocabulary is generic: it fits lab experiments, cooking, manufacturing runs, or any project workflow. User-defined templates can be registered programmatically (`registerUserTemplate()`).
 
@@ -215,22 +203,25 @@ Notes are saved to your browser's IndexedDB by default. AI features require the 
 
 ## Features
 
-- **Context labels** — `[Step]`, `[Input]`, `[Tool]`, `[Parameter]`, `[Output]` mapped to PROV-DM roles
+- **Block-level context labels** — `[Step]` (PROV *Activity*), plus `[Plan]` / `[Result]` for phases
+- **Inline entity highlights** — highlight spans inside a block as `[Input]` / `[Tool]` / `[Parameter]` / `[Output]`. The first three become PROV-DM *Entity* nodes (with `material` / `tool` subtypes internally), and `[Parameter]` attaches as a *Property* on the parent. Identical referents share an `entityId` so they collapse into one node in the graph
+- **Media inline labels** — image / video / audio / PDF blocks can carry the same `[Input]` / `[Tool]` / `[Parameter]` / `[Output]` labels via a side-store (BlockNote inline styles don't apply to media)
 - **Block-to-block linking** with provenance semantics (`informed_by`, `derived_from`, `used`)
 - **Multi-page tabbed editor** with scope derivation
-- **Index table** — manage related notes in a tabular view with side-peek preview
-- **PROV-JSON-LD export** — W3C compliant per-page provenance export
+- **Reference table** — manage related notes in a tabular view with side-peek preview
+- **PROV-JSON-LD export** — W3C-compliant per-page provenance export
 - **Provenance graph** visualization (Cytoscape.js + ELK layout)
 - **Inter-note network graph** (Cytoscape.js + fcose layout)
 - **AI assistant** — derive notes from AI responses with full provenance metadata
 - **AI auto-labeling** — AI answers are inserted with PROV-DM context labels and `informed_by` chains already attached
-- **AI Knowledge Layer** — auto-generated Wiki pages (Concept / Summary / Synthesis) with inline citations, autonomous lint & cross-update
+- **AI Knowledge Layer** — editable AI Wiki with four document kinds (*Summary* / *Concept* / *Atom* / *Synthesis*), a five-stage pipeline (ingest → atomize → synthesize → cross-update → lint), and edit protection on re-ingest
 - **Composer (⌘K)** — unified palette for note search (`#label` / `@author` filters), discovery cards, and AI ask
+- **Skills** — reusable prompt templates stored as Graphium documents (`source: "skill"`); apply during ingest or chat
+- **Sharing & Library** — share a note to a content-addressed shared store; others can browse the Library and Fork. Embedded media is materialized as `shared-blob:` references on share
 - **Templates** — `/template` slash command with Plan and Run scaffolds (extensible)
-- **Reading-font setting** — pick between Atkinson Next, Inter, Lexend, and a default mix; tuned for dyslexia-aware reading
-- **Local-first storage** — plain JSON files on your filesystem (desktop) or IndexedDB (browser)
-- **Desktop app** — Tauri-based native app with local file storage; point the save folder at a synced cloud folder (Drive/iCloud/Dropbox) for cross-device sync without OAuth
-- **Mobile PWA** — Quick capture (memos, photos, video, audio, bookmarks) with pull-to-refresh and media preview
+- **Reading-font setting** — pick between Inter (default), Atkinson Hyperlegible Next, and Lexend; opt-in for dyslexia-aware reading
+- **Local-first storage** — plain JSON files on your filesystem (desktop / Docker) or IndexedDB (browser)
+- **Desktop app** — Tauri v2 native app with local file storage; point the save folder at a synced cloud folder (Drive / iCloud / Dropbox) for cross-device sync without OAuth
 
 ### Screenshots
 
@@ -257,19 +248,36 @@ Notes are saved to your browser's IndexedDB by default. AI features require the 
 
 Graphium implements a **two-layer provenance model**, both conforming to the [W3C PROV Data Model (PROV-DM)](https://www.w3.org/TR/prov-dm/).
 
-### Layer 1: Content Provenance — experimental workflow
+### Layer 1: World provenance — what the note is about
 
-Context labels on document blocks are mapped to PROV-DM concepts:
+Labels attach to content in two independent passes that compose into one PROV-DM graph:
 
-| Label | PROV-DM type | Entity subtype | Description |
-|-------|-------------|----------------|-------------|
-| `[Step]` | `prov:Activity` | — | Experimental step |
-| `[Input]` | `prov:Entity` | `material` | Substance / data transformed in a process |
-| `[Tool]` | `prov:Entity` | `tool` | Equipment or instrument |
-| `[Parameter]` | Property | — | Parameter / condition embedded in parent node |
-| `[Output]` | `prov:Entity` | — | Output generated by an activity |
+#### Block-level — the skeleton
 
-Relationships: `prov:used` (Usage), `prov:wasGeneratedBy` (Generation), `prov:wasInformedBy` (via prior-step links).
+A heading block can be tagged via the `#` menu:
+
+| UI label | Internal key | PROV-DM type | Description |
+|----------|--------------|--------------|-------------|
+| `[Step]` | `procedure` | `prov:Activity` | A step in a process. H2 boundaries also create implicit Activities via the heading `scopeStack`. |
+| `[Plan]` | `plan` | grouping | Phase: planning portion of a process. |
+| `[Result]` | `result` | grouping | Phase: result portion of a process. |
+
+#### Inline highlights — the detail
+
+Spans inside a block can be highlighted as one of:
+
+| UI label | Internal key | PROV-DM mapping |
+|----------|--------------|-----------------|
+| `[Input]` | `material` | `prov:Entity` with `material` subtype (substance / input transformed in a process) |
+| `[Tool]` | `tool` | `prov:Entity` with `tool` subtype (equipment / instrument) |
+| `[Parameter]` | `attribute` | A *Property* attached to the parent Activity or Entity (condition / setting) |
+| `[Output]` | `output` | `prov:Entity` (artifact the activity generated) |
+
+Highlights inside the same block can carry the same `entityId`, in which case they collapse to one PROV Entity node — the deduplication key for repeated references to the same referent. Image / video / audio / PDF blocks carry the same labels via a `mediaInlineLabels` side-store, since BlockNote inline styles don't apply to media.
+
+Relationships emitted: `prov:used` (Usage), `prov:wasGeneratedBy` (Generation), `prov:wasInformedBy` (via prior-step links).
+
+The two passes are independent. A note can have only block-level labels, only inline highlights, both, or neither — and you only get the parts of the graph you've labeled.
 
 ### Layer 2: Document Provenance — edit history
 
@@ -297,30 +305,21 @@ The per-page export conforms to the [W3C PROV-JSON-LD specification](https://www
 
 Graphium-specific extensions use the `graphium:` namespace (`https://graphium.app/ns#`), including `graphium:entityType`, `graphium:attributes`, `graphium:editType`, `graphium:summary`, and `graphium:contentHash`.
 
-## Architecture
+## Architecture (at a glance)
 
-Graphium is a **note editor with a built-in AI backend**. Notes are stored on your local filesystem (desktop app) or in the browser's IndexedDB (web). AI features are powered by [Vercel AI SDK](https://ai-sdk.dev/) running on a Node.js backend (Hono) — no external AI server required.
-
-```mermaid
-graph LR
-    Graphium["📝 <b>Graphium</b><br/><i>Provenance tracking editor<br/>+ AI agent runtime</i>"]
-    Registry["🔧 <b>Crucible</b><br/><i>AI tool management<br/>& deployment</i>"]
-
-    Registry -- "tool discovery<br/>(GET /servers → SSE)" --> Graphium
-
-    style Graphium fill:#e8f0f8,stroke:#5b8fb9,stroke-width:2px,color:#2d4a6e
-    style Registry fill:#edf5ee,stroke:#4B7A52,stroke-width:2px,color:#2d4a32
-```
+Graphium is a TypeScript / React app on top of [BlockNote.js](https://www.blocknotejs.org/), shipped three ways: as a web PWA (notes in IndexedDB), as a [Tauri v2](https://tauri.app/) desktop app (notes as JSON files on the filesystem), and as a [Docker](https://www.docker.com/) self-host with a Node.js companion server. The companion server is built on [Hono](https://hono.dev/) and runs the AI Knowledge Layer pipeline (ingest → atomize → synthesize → cross-update → lint).
 
 | Component | Technology |
 |-----------|------------|
 | Editor | TypeScript / React / BlockNote.js |
-| AI Runtime | Vercel AI SDK / @ai-sdk/mcp |
-| Backend | Node.js / Hono |
-| Storage | Local filesystem (Tauri) / Server filesystem (Docker) / Browser IndexedDB (Web) |
-| Desktop | Tauri v2 (macOS / Windows / Linux) |
-| Graph Visualization | Cytoscape.js |
-| Build | Vite / pnpm |
+| AI runtime | Vercel AI SDK |
+| Companion server | Node.js / Hono |
+| Storage | IndexedDB (web) / filesystem (Tauri / Docker) |
+| Desktop | Tauri v2 (currently macOS Apple Silicon only; see roadmap) |
+| Graph visualization | Cytoscape.js |
+| Build / pkg manager | Vite / pnpm |
+
+For the layered breakdown, the Wiki pipeline trigger flow, distribution targets, the auth model, and known seams, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). For on-disk JSON shapes and compatibility rules, read [docs/DATA_MODEL.md](docs/DATA_MODEL.md).
 
 ### Crucible Registry (optional)
 
@@ -364,6 +363,11 @@ pnpm build          # Production build (frontend)
 ```
 
 ## Project structure
+
+The tree below is a curated view of the most-touched directories. For
+the full source map (where every feature lives, and which file to look
+at first when you want to change something), see
+[ARCHITECTURE.md §8](docs/ARCHITECTURE.md#8-source-map).
 
 ```
 src/

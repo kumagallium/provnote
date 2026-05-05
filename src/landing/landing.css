@@ -17,7 +17,7 @@ body {
      body and BlockNote canvas use. Using --color-background here keeps the LP
      and the editor visually identical when a user crosses the /app/ boundary. */
   background: var(--color-background, #fafdf7);
-  color: var(--ink, #1d2620);
+  color: var(--ink, #1a2e1d);
   font-family: var(--ui, "Inter", system-ui, sans-serif);
   line-height: 1.55;
 }
@@ -40,23 +40,26 @@ body {
 
 .lp-eyebrow {
   font-size: 0.78rem;
+  font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--ink, #1d2620) 60%, transparent);
+  color: var(--forest, #4b7a52);
 }
 
 .lp-h1 {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
-  font-weight: 500;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  font-weight: 600;
   font-size: clamp(2.2rem, 5vw, 3.4rem);
   line-height: 1.12;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  color: #2d4a32;
   margin: 0;
 }
 
 .lp-h2 {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
-  font-weight: 500;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  font-weight: 600;
+  color: #2d4a32;
   font-size: clamp(1.6rem, 3.4vw, 2.2rem);
   line-height: 1.2;
   letter-spacing: -0.005em;
@@ -65,14 +68,14 @@ body {
 
 .lp-lead {
   font-size: clamp(1.05rem, 1.6vw, 1.2rem);
-  color: color-mix(in srgb, var(--ink, #1d2620) 78%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 78%, transparent);
   /* No prose-narrow cap: lead text uses the full section content width so
      Hero / Problem visually align with the Pillars / Trust / GetStarted grids
      below. The section itself is capped at 1080px so lines still stay readable. */
 }
 
 .lp-tagline {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
   font-style: italic;
   font-size: clamp(1.2rem, 2.4vw, 1.6rem);
   line-height: 1.35;
@@ -116,19 +119,19 @@ body {
 
 .lp-btn-secondary {
   background: transparent;
-  color: var(--ink, #1d2620);
-  border-color: color-mix(in srgb, var(--ink, #1d2620) 25%, transparent);
+  color: var(--ink, #1a2e1d);
+  border-color: color-mix(in srgb, var(--ink, #1a2e1d) 25%, transparent);
 }
 .lp-btn-secondary:hover {
-  border-color: var(--ink, #1d2620);
+  border-color: var(--ink, #1a2e1d);
 }
 
 .lp-btn-ghost {
   background: transparent;
-  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 70%, transparent);
 }
 .lp-btn-ghost:hover {
-  color: var(--ink, #1d2620);
+  color: var(--ink, #1a2e1d);
 }
 
 .lp-grid-3 {
@@ -156,16 +159,17 @@ body {
 }
 
 .lp-card h3 {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
-  font-weight: 500;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  font-weight: 600;
   font-size: 1.15rem;
+  color: #2d4a32;
   margin: 0 0 0.5rem;
 }
 
 .lp-card p {
   margin: 0;
   font-size: 0.95rem;
-  color: color-mix(in srgb, var(--ink, #1d2620) 75%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 75%, transparent);
 }
 
 .lp-card .lp-card-icon {
@@ -176,7 +180,7 @@ body {
 
 .lp-divider {
   border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--ink, #1a2e1d) 8%, transparent);
   margin: 0;
 }
 
@@ -205,10 +209,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  font-family: var(--serif, "Fraunces", Georgia, serif);
-  font-weight: 500;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  font-weight: 600;
   font-size: 1.1rem;
-  color: var(--ink, #1d2620);
+  color: var(--forest, #4b7a52);
   text-decoration: none;
 }
 
@@ -228,7 +232,7 @@ body {
 .lp-nav button {
   background: none;
   border: none;
-  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 70%, transparent);
   text-decoration: none;
   cursor: pointer;
   padding: 0.3rem 0.4rem;
@@ -237,14 +241,14 @@ body {
 
 .lp-nav a:hover,
 .lp-nav button:hover {
-  color: var(--ink, #1d2620);
+  color: var(--ink, #1a2e1d);
 }
 
 .lp-footer {
-  border-top: 1px solid color-mix(in srgb, var(--ink, #1d2620) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--ink, #1a2e1d) 8%, transparent);
   padding: 2.2rem clamp(24px, 6vw, 48px);
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--ink, #1d2620) 60%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 60%, transparent);
 }
 
 .lp-footer-inner {
@@ -264,7 +268,7 @@ body {
 }
 
 .lp-footer a:hover {
-  color: var(--ink, #1d2620);
+  color: var(--ink, #1a2e1d);
   text-decoration: underline;
 }
 
@@ -276,15 +280,16 @@ body {
 }
 
 .lp-pillar h3 {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
-  font-weight: 500;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
+  font-weight: 600;
   font-size: 1.4rem;
+  color: #2d4a32;
   margin: 0 0 0.5rem;
 }
 
 .lp-pillar .lp-pillar-num {
   display: inline-block;
-  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
   color: var(--forest, #4b7a52);
   font-size: 0.9rem;
   letter-spacing: 0.1em;
@@ -293,7 +298,7 @@ body {
 
 .lp-pillar p {
   margin: 0;
-  color: color-mix(in srgb, var(--ink, #1d2620) 75%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 75%, transparent);
   font-size: 0.98rem;
 }
 
@@ -328,7 +333,7 @@ body {
   flex-direction: column;
   gap: 0.4rem;
   padding: 1.6rem 1.5rem;
-  border: 1px solid color-mix(in srgb, var(--ink, #1d2620) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink, #1a2e1d) 12%, transparent);
   border-radius: 16px;
   background: var(--paper, #fafdf7);
   transition: border-color 120ms ease, transform 120ms ease;
@@ -340,7 +345,7 @@ body {
 }
 
 .lp-cta-card h3 {
-  font-family: var(--serif, "Fraunces", Georgia, serif);
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
   font-weight: 500;
   font-size: 1.2rem;
   margin: 0;
@@ -349,7 +354,7 @@ body {
 .lp-cta-card p {
   margin: 0;
   font-size: 0.92rem;
-  color: color-mix(in srgb, var(--ink, #1d2620) 70%, transparent);
+  color: color-mix(in srgb, var(--ink, #1a2e1d) 70%, transparent);
 }
 
 .lp-cta-card .lp-cta-link {
