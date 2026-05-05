@@ -21,7 +21,7 @@ import { getFaviconUrl } from "./media-index";
 import { isTauri } from "../../lib/platform";
 import { loadAuthorIdentity } from "../identity";
 import { getSharedRoot, getBlobRoot } from "../../lib/storage/shared";
-import { shareMedia } from "../sharing";
+import { shareMedia, shareReference } from "../sharing";
 
 ensureCytoscapePlugins();
 
@@ -341,21 +341,22 @@ export function MediaDetailModal({
   }, [entry.sharedRef]);
   const isShared = !!sharedRefState;
 
-  // 共有可能かどうか（前提: Tauri / shared root / blob root / identity / メディア種別が url 以外）
+  // 共有可能かどうか
+  // - URL ブックマーク: shared root + identity だけで OK（reference type、blob 不要）
+  // - それ以外: shared root + blob root + identity（data-manifest type、blob 必要）
   const sharedRoot = getSharedRoot();
   const blobRoot = getBlobRoot();
   const sharedAuthor = loadAuthorIdentity();
+  const isUrlEntry = entry.type === "url";
   const shareDisabledReason: string | undefined = !isTauri()
     ? t("share.disabled.desktopOnly")
-    : entry.type === "url"
-      ? t("share.media.disabled.urlBookmark")
-      : !sharedRoot
-        ? t("share.disabled.noRoot")
-        : !blobRoot
+    : !sharedRoot
+      ? t("share.disabled.noRoot")
+      : !sharedAuthor
+        ? t("share.disabled.noIdentity")
+        : !isUrlEntry && !blobRoot
           ? t("share.media.disabled.noBlobRoot")
-          : !sharedAuthor
-            ? t("share.disabled.noIdentity")
-            : undefined;
+          : undefined;
 
   const openShareDialog = useCallback(() => {
     setShareTitle(entry.name);
@@ -365,7 +366,8 @@ export function MediaDetailModal({
   }, [entry.name]);
 
   const handleShare = useCallback(async () => {
-    if (!sharedRoot || !blobRoot || !sharedAuthor) return;
+    if (!sharedRoot || !sharedAuthor) return;
+    if (!isUrlEntry && !blobRoot) return;
     setShareBusy(true);
     setShareError(null);
     try {
@@ -373,13 +375,21 @@ export function MediaDetailModal({
       const entryWithRef: MediaIndexEntry = sharedRefState
         ? { ...entry, sharedRef: sharedRefState }
         : entry;
-      const result = await shareMedia(entryWithRef, {
-        sharedRoot,
-        blobRoot,
-        author: sharedAuthor,
-        title: shareTitle,
-        description: shareDescription,
-      });
+      // URL ブックマークは reference として、それ以外は data-manifest として共有
+      const result = isUrlEntry
+        ? await shareReference(entryWithRef, {
+            sharedRoot,
+            author: sharedAuthor,
+            title: shareTitle,
+            description: shareDescription,
+          })
+        : await shareMedia(entryWithRef, {
+            sharedRoot,
+            blobRoot: blobRoot!,
+            author: sharedAuthor,
+            title: shareTitle,
+            description: shareDescription,
+          });
       if (!result.ok) {
         setShareError(result.error);
         return;
@@ -392,7 +402,7 @@ export function MediaDetailModal({
     } finally {
       setShareBusy(false);
     }
-  }, [sharedRoot, blobRoot, sharedAuthor, entry, sharedRefState, shareTitle, shareDescription, onSharedRefUpdated]);
+  }, [sharedRoot, blobRoot, sharedAuthor, isUrlEntry, entry, sharedRefState, shareTitle, shareDescription, onSharedRefUpdated]);
 
   // entry prop が更新されたら editName も同期
   useEffect(() => {
@@ -594,18 +604,16 @@ export function MediaDetailModal({
                 Create PROV Note
               </button>
             )}
-            {/* Share to team — entry.type !== "url" のときだけ表示。disabled 理由は title に */}
-            {entry.type !== "url" && (
-              <button
-                onClick={openShareDialog}
-                disabled={!!shareDisabledReason}
-                title={shareDisabledReason}
-                className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Share2 size={14} />
-                {isShared ? t("share.reshareToTeam") : t("share.shareToTeam")}
-              </button>
-            )}
+            {/* Share to team — URL ブックマークも reference として共有可。disabled 理由は title に */}
+            <button
+              onClick={openShareDialog}
+              disabled={!!shareDisabledReason}
+              title={shareDisabledReason}
+              className="text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Share2 size={14} />
+              {isShared ? t("share.reshareToTeam") : t("share.shareToTeam")}
+            </button>
             <button
               onClick={onClose}
               className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none px-1 ml-1"

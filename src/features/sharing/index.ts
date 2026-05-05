@@ -4,3 +4,8 @@ export {
   type ShareMediaResult,
   type ShareMediaOptions,
 } from "./share-media";
+export {
+  shareReference,
+  type ShareReferenceResult,
+  type ShareReferenceOptions,
+} from "./share-reference";

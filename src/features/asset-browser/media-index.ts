@@ -40,14 +40,18 @@ export type UrlMeta = {
 export type MediaSharedRef = {
   /** SharedEntry.id（uuidv7） */
   id: string;
-  /** Phase 2b-media では "data-manifest" 固定 */
-  type: "data-manifest";
+  /**
+   * Phase 2b-media:
+   * - "data-manifest": バイト列を blob root に持つメディア（image / video / audio / pdf / file）
+   * - "reference": URL ブックマーク（バイト不要、メタデータのみ）
+   */
+  type: "data-manifest" | "reference";
   /** ISO-8601 最終共有日時 */
   sharedAt: string;
   /** 共有時の SharedEntry.hash */
   hash: string;
-  /** blob root に保存された実体の SHA-256（BlobRef.hash） */
-  blobHash: string;
+  /** blob root に保存された実体の SHA-256（data-manifest のときのみ） */
+  blobHash?: string;
 };
 
 /** メディアインデックスのエントリ */
