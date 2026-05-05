@@ -3349,7 +3349,9 @@ export function NoteApp() {
       return { ok: false, created: 0, iterations: 0, error: "Need at least 2 Concepts" };
     }
 
-    const MAX_ITERATIONS = 5;
+    // Atom は Concept→Atom の抽象化なので、共通抽象が有限 → 収束しやすい。
+    // 上限は余裕をもって 10 に設定。実運用では 3〜5 で 0 件返却に到達することが多い。
+    const MAX_ITERATIONS = 10;
     const existingAtomTitles = [...fm.wikiMetas.entries()]
       .filter(([, m]) => m.kind === "atom")
       .map(([, m]) => m.title);
@@ -3427,7 +3429,10 @@ export function NoteApp() {
       return { ok: false, created: 0, iterations: 0, error: "Need at least 3 Atoms" };
     }
 
-    const MAX_ITERATIONS = 5;
+    // Synthesis は Atom の組み合わせから立ち上がる洞察。組み合わせ数が C(n,2..4) で
+    // 爆発するため、原理的には収束しない。1 クリックあたりの上限を低く抑え、
+    // ユーザーが必要に応じて再押下する運用にする（UI コピーでも明示）。
+    const MAX_ITERATIONS = 3;
     const existingSynthesisTitles = [...fm.wikiMetas.entries()]
       .filter(([, m]) => m.kind === "synthesis")
       .map(([, m]) => m.title);
