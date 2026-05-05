@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.6.2](https://github.com/kumagallium/Graphium/compare/v0.6.1...v0.6.2) - 2026-05-05
+- fix(tauri): use string model name for Atomize/Synthesize body.model by @kumagallium in https://github.com/kumagallium/Graphium/pull/232
+- feat(list): ドラッグで範囲選択 (note / wiki list) by @kumagallium in https://github.com/kumagallium/Graphium/pull/233
+- fix(atomize): cap snapshot count and surface failures via toast by @kumagallium in https://github.com/kumagallium/Graphium/pull/235
+- docs: add product overview (CONCEPT/ARCHITECTURE/DATA_MODEL) + LP refresh by @kumagallium in https://github.com/kumagallium/Graphium/pull/237
+- fix(tauri): pass body.model on all LLM call sites to prevent silent fallback by @kumagallium in https://github.com/kumagallium/Graphium/pull/236
+
 ## [v0.6.1](https://github.com/kumagallium/Graphium/compare/v0.6.0...v0.6.1) - 2026-05-05
 - feat(wiki-citation): clickable [Source: "title"] links + re-embed maintenance by @kumagallium in https://github.com/kumagallium/Graphium/pull/230
 
