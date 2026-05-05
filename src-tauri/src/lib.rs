@@ -18,6 +18,24 @@ fn shutdown_ack(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// 任意 PID に SIGTERM を送る（macOS / Unix 系専用）。
+/// port 3001 に居座る "他人 sidecar"（消えた worktree の幽霊など）を回収するために使う。
+#[tauri::command]
+fn kill_pid(pid: u32) -> Result<(), String> {
+    let output = std::process::Command::new("/bin/kill")
+        .args(["-TERM", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("kill spawn failed: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "kill exited with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 // --- アプリ設定（Graphium ルート配下のパス解決用） ---
 
 /// アプリ識別子（Tauri の bundle identifier と一致させる）
@@ -963,6 +981,7 @@ pub fn run() {
             shared_blob_write,
             shared_blob_exists,
             shutdown_ack,
+            kill_pid,
         ])
         .setup(|app| {
             // メニューバー構築
