@@ -19,5 +19,11 @@ export {
   type UnshareEntryResult,
   type UnshareEntryOptions,
 } from "./unshare-entry";
+export {
+  materializeSharedBlobs,
+  collectSharedBlobHashes,
+  type MaterializeOptions,
+  type MaterializeResult,
+} from "./materialize-blobs";
 export { loadAllSharedEntries, type SharedLibraryLoadResult } from "./shared-library-loader";
 export { SharedLibraryView } from "./SharedLibraryView";
