@@ -3,7 +3,9 @@
 // ノートデータとは別の IndexedDB データベースを使用
 
 const DB_NAME = "graphium-embeddings";
-const DB_VERSION = 1;
+// v2: 旧バージョンで store が作られていない壊れた DB を救済するためにバンプ。
+// onupgradeneeded で "embeddings" store を冪等に作成する。
+const DB_VERSION = 2;
 const STORE_NAME = "embeddings";
 
 export type EmbeddingRecord = {

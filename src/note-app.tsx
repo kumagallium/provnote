@@ -1383,16 +1383,54 @@ function NoteEditorInner({
         // Wiki コンテキストが使われ���場合、引用情報を処理
         let assistantMessage = response.message;
         if (wikiContext) {
-          // [Source: "タイトル"] を抽出して引用リストを構築
-          const sourcePattern = /\[Source:\s*"([^"]+)"\]/g;
-          const sources = new Set<string>();
-          let match;
-          while ((match = sourcePattern.exec(assistantMessage)) !== null) {
-            sources.add(match[1]);
+          // wikiContext に含まれていた候補タイトル（Retriever が LLM に渡した正式タイトル）
+          const candidateTitles: string[] = [];
+          const titlePattern = /\[id:\s*[^,]+,\s*title:\s*"([^"]+)"\]/g;
+          let tm;
+          while ((tm = titlePattern.exec(wikiContext)) !== null) {
+            candidateTitles.push(tm[1]);
           }
+
+          // 候補タイトルへの正規化: LLM が `[Source: "..."]` でなく `【Source: @prefix...】`
+          // のような派生形式で出すことがあるので、候補に対して prefix match で正式タイトルに復元する。
+          const resolveTitle = (raw: string): string | null => {
+            const cleaned = raw.replace(/^@/, "").trim();
+            // 完全一致
+            const exact = candidateTitles.find((t) => t === cleaned);
+            if (exact) return exact;
+            // prefix 一致（LLM が長いタイトルを途中で切ることがある）
+            const prefix = candidateTitles.find((t) => t.startsWith(cleaned) || cleaned.startsWith(t));
+            return prefix ?? null;
+          };
+
+          const sources = new Set<string>();
+          // 半角形式 [Source: "..."] と 全角形式【Source: ...】の両方を拾う
+          const halfWidth = /\[Source:\s*"?([^"\]]+?)"?\]/g;
+          const fullWidth = /【Source:\s*([^】]+?)】/g;
+          let m: RegExpExecArray | null;
+          // 元メッセージから半角を抽出
+          while ((m = halfWidth.exec(assistantMessage)) !== null) {
+            const resolved = resolveTitle(m[1]);
+            if (resolved) sources.add(resolved);
+          }
+          // 全角を抽出 + 元テキストでも半角形式に置換（panel 側のレンダラがクリック可能にできるよう）
+          assistantMessage = assistantMessage.replace(fullWidth, (_full, raw: string) => {
+            const resolved = resolveTitle(raw);
+            if (resolved) {
+              sources.add(resolved);
+              return `[Source: "${resolved}"]`;
+            }
+            return _full;
+          });
+
+          // LLM が一度も引用しなかった場合は wikiContext の全候補を trailing list に並べる
+          if (sources.size === 0) {
+            for (const t of candidateTitles) sources.add(t);
+          }
+
           if (sources.size > 0) {
-            const sourceList = [...sources].map((s) => `  - *${s}*`).join("\n");
-            assistantMessage += `\n\n---\n📎 **Knowledge referenced:**\n${sourceList}`;
+            const sourceList = [...sources].map((s) => `  - [Source: "${s}"]`).join("\n");
+            assistantMessage += `\n\n---\n**Knowledge referenced:**\n${sourceList}`;
           } else {
             assistantMessage += "\n\n---\n📎 *Knowledge referenced*";
           }
@@ -2369,6 +2407,7 @@ function NoteEditorInner({
                   onDeriveNote={handleAiDeriveFromChat}
                   onIngestChat={onIngestChat}
                   noteIndex={noteIndex}
+                  onOpenWiki={(wikiId) => onNavigateNote(`wiki:${wikiId}`)}
                 />
               )}
               {rightTab === "history" && (
@@ -4433,6 +4472,35 @@ export function NoteApp() {
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
         onRunAtomizeDiscovery={runAtomizeDiscovery}
         onRunSynthesisDiscovery={runSynthesisDiscovery}
+        onReembedAllWikis={async (onProgress) => {
+          // 全 Wiki を順次 embed し直す。キャッシュにない wiki は storage から読み出す。
+          const { getActiveProvider } = await import("./lib/storage/registry");
+          const provider = getActiveProvider();
+          const total = fm.wikiFiles.length;
+          let successCount = 0;
+          let failCount = 0;
+          for (let i = 0; i < total; i++) {
+            const wf = fm.wikiFiles[i];
+            try {
+              let doc = fm.getCachedDoc(`wiki:${wf.id}`);
+              if (!doc && provider.loadWikiFile) {
+                doc = await provider.loadWikiFile(wf.id);
+              }
+              if (doc) {
+                await embedWikiSections(wf.id, doc);
+                successCount++;
+              } else {
+                failCount++;
+                console.warn(`re-embed: doc not found for ${wf.id}`);
+              }
+            } catch (e) {
+              failCount++;
+              console.warn(`re-embed failed for ${wf.id}`, e);
+            }
+            onProgress(i + 1, total);
+          }
+          console.log(`Re-embed complete: ${successCount} success / ${failCount} failed / ${total} total`);
+        }}
       />
       <Composer
         open={composer.open}

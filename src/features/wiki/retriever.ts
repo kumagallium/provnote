@@ -73,7 +73,12 @@ export async function retrieveWikiContextFallback(
   try {
     // IndexedDB から全 embedding のテキストを取得して文字列マッチ
     const allRecords = await getAllEmbeddingTexts();
-    if (allRecords.length === 0) return null;
+    if (allRecords.length === 0) {
+      // embedding 未登録でも wiki インデックス（タイトル一覧）だけは LLM に渡す。
+      // 既存ユーザーの wiki が再 embed 前でも、LLM がタイトルから推測引用できるようにするため。
+      if (_wikiIndexText) return formatWikiContext([], _wikiIndexText);
+      return null;
+    }
 
     const query = userMessage.toLowerCase();
     const matched = allRecords
@@ -136,6 +141,15 @@ export function setWikiTitleMap(map: Map<string, string>): void {
   _wikiTitleMap = map;
 }
 
+/** タイトル → wikiId の逆引きマップ（[Source: "title"] クリック対応用） */
+export function getWikiTitleToIdMap(): Map<string, string> {
+  const reverse = new Map<string, string>();
+  for (const [id, title] of _wikiTitleMap.entries()) {
+    if (title) reverse.set(title, id);
+  }
+  return reverse;
+}
+
 /** 検索結果をシステムプロンプト注入用フォーマットに変換 */
 function formatWikiContext(results: SearchResult[], wikiIndexText?: string): string {
   let context = "";
@@ -150,7 +164,14 @@ function formatWikiContext(results: SearchResult[], wikiIndexText?: string): str
   if (!context && !wikiIndexText) return null as any;
 
   let output = `The following is the user's accumulated knowledge from their Wiki. Use it when relevant to provide informed responses.
-When you use information from the knowledge sections below, cite the source using [Source: "page title"] format.`;
+
+CITATION FORMAT (STRICT):
+- When you use information from a knowledge section, immediately follow that statement with: [Source: "exact page title"]
+- Use ASCII brackets only: [ and ]
+- Wrap the title in straight ASCII double quotes: "
+- Use the EXACT title shown in the [title: "..."] metadata above each section. Do not truncate, paraphrase, or add prefixes like @.
+- Do NOT use full-width brackets 【】, do NOT prefix with @, do NOT translate the title.
+- Example: [Source: "Cu焼結 温度依存性"]`;
 
   if (wikiIndexText) {
     output += `\n\n<wiki-index>\n${wikiIndexText}\n</wiki-index>`;
