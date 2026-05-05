@@ -1108,9 +1108,16 @@ function NoteEditorInner({
     if (!sharedRoot || !sharedAuthor) return;
     setShareBusy(true);
     try {
-      // 最新の編集を含めて build
-      const doc = await buildDocument();
-      const result = await shareNote(doc, { root: sharedRoot, author: sharedAuthor });
+      // 最新の編集を含めて build。
+      // buildDocument はローカル state から完全にスクラッチで組み立てるため、
+      // sharedRef が落ちる。Update Share では既存 id を維持する必要があるので、
+      // ここで sharedRefState を再注入する（initialDoc 経由ではなく、Share 直後に
+      // setSharedRefState で更新したばかりの値も拾える）。
+      const baseDoc = await buildDocument();
+      const docWithRef: GraphiumDocument = sharedRefState
+        ? { ...baseDoc, sharedRef: sharedRefState }
+        : baseDoc;
+      const result = await shareNote(docWithRef, { root: sharedRoot, author: sharedAuthor });
       if (!result.ok) {
         window.alert(t("share.failed") + ": " + result.error);
         return;
@@ -1127,7 +1134,7 @@ function NoteEditorInner({
     } finally {
       setShareBusy(false);
     }
-  }, [sharedRoot, sharedAuthor, buildDocument, onSave, t]);
+  }, [sharedRoot, sharedAuthor, buildDocument, onSave, t, sharedRefState]);
 
   // ── メモ挿入（メモギャラリーから） ──
   useEffect(() => {
