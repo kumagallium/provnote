@@ -446,7 +446,11 @@ app.post("/atomize", async (c) => {
       messages: [{ role: "user" as const, content: userMessage }],
       maxSteps: 1,
     });
-    const atom = parseAtomizerOutput(result.message, body.concepts.map((c) => c.id));
+    const atom = parseAtomizerOutput(
+      result.message,
+      body.concepts.map((c) => c.id),
+      body.concepts.map((c) => c.title),
+    );
     return c.json({ atom, model: result.model, tokenUsage: result.tokenUsage });
   } catch (err) {
     const message = err instanceof Error ? err.message : "不明なエラー";

@@ -18,6 +18,9 @@ export type AtomCandidate = {
   body: string;
   /** 根拠とした上流 Concept の ID リスト */
   derivedFromConcepts: string[];
+  /** 上流 Concept のタイトル（id と同じ並びで対応）。Atom ノートに `@title` 形式の
+   *  ナレッジリンクを描画するために必要。LLM 出力ではなく呼び出し側のスナップショットから埋める。 */
+  derivedFromConceptTitles: string[];
   /** 自己評価の確度（0.0〜1.0） */
   confidence: number;
 };
@@ -70,7 +73,11 @@ export function buildAtomizerUserMessage(concepts: ConceptSnapshot[]): string {
   return `Atomize the following Concept page${concepts.length > 1 ? "s" : ""}. Extract the single most transferable idea, stripped of one-off context.\n\n${blocks.join("\n\n")}`;
 }
 
-export function parseAtomizerOutput(text: string, sourceConceptIds: string[]): AtomCandidate | null {
+export function parseAtomizerOutput(
+  text: string,
+  sourceConceptIds: string[],
+  sourceConceptTitles: string[],
+): AtomCandidate | null {
   try {
     let jsonText = text.trim();
     const jsonMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
@@ -87,6 +94,7 @@ export function parseAtomizerOutput(text: string, sourceConceptIds: string[]): A
       title: String(atom.title).trim(),
       body: String(atom.body).trim(),
       derivedFromConcepts: sourceConceptIds,
+      derivedFromConceptTitles: sourceConceptTitles,
       confidence,
     };
   } catch (err) {

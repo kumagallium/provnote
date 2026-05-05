@@ -1550,6 +1550,8 @@ export type AtomCandidate = {
   title: string;
   body: string;
   derivedFromConcepts: string[];
+  /** 上流 Concept のタイトル（id と同じ並びで対応）。@リンク描画用。 */
+  derivedFromConceptTitles: string[];
   confidence: number;
 };
 
@@ -1613,14 +1615,18 @@ export function buildAtomDocument(
       content: [{ type: "text", text: "Source Concepts", styles: {} }],
       children: [],
     });
-    for (const conceptId of candidate.derivedFromConcepts) {
+    for (let i = 0; i < candidate.derivedFromConcepts.length; i++) {
+      const conceptId = candidate.derivedFromConcepts[i];
+      // タイトルが取れない場合は ID にフォールバックするが、これは index 不整合のサインなので
+      // 実運用ではほぼ起きない想定
+      const conceptTitle = candidate.derivedFromConceptTitles?.[i] ?? conceptId;
       const blockId = crypto.randomUUID();
       blocks.push({
         id: blockId,
         type: "bulletListItem",
         props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
         content: [
-          { type: "text", text: `@🤖 ${conceptId}`, styles: { textColor: "blue" } },
+          { type: "text", text: `@🤖 ${conceptTitle}`, styles: { textColor: "blue" } },
         ],
         children: [],
       });
