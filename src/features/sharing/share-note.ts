@@ -45,7 +45,9 @@ export async function shareNote(
   options: ShareNoteOptions,
 ): Promise<ShareNoteResult> {
   try {
-    const provider = new LocalFolderSharedProvider(options.root);
+    const provider = new LocalFolderSharedProvider(options.root, {
+      email: options.author.email,
+    });
     const isUpdate = !!doc.sharedRef;
     const id = doc.sharedRef?.id ?? newSharedId();
     const now = new Date().toISOString();
