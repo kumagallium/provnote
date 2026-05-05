@@ -6,6 +6,18 @@ import { getRegistryUrl } from "../services/env.js";
 
 const app = new Hono();
 
+// sidecar 自身を識別するための情報。index.ts から起動時に注入される。
+// バンドル版アプリが port 3001 で他人 sidecar（消えた worktree の幽霊など）を
+// 検知できるよう、/api/health に pid と dataDir を返す。
+let sidecarIdentity: { pid: number; dataDir: string } = {
+  pid: typeof process !== "undefined" ? process.pid : 0,
+  dataDir: "",
+};
+
+export function setSidecarIdentity(info: { pid: number; dataDir: string }): void {
+  sidecarIdentity = info;
+}
+
 app.get("/", async (c) => {
   const registryUrl = getRegistryUrl(c);
   let registryStatus: "ok" | "unavailable" = "unavailable";
@@ -28,6 +40,8 @@ app.get("/", async (c) => {
       registry: registryStatus,
     },
     version: "1.0.0",
+    pid: sidecarIdentity.pid,
+    dataDir: sidecarIdentity.dataDir,
   });
 });
 

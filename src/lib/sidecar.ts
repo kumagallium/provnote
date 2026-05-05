@@ -81,13 +81,51 @@ export async function startSidecar(): Promise<boolean> {
   setState({ status: "starting", lastError: null, lastErrorAt: null });
   recentLogLines = [];
 
-  // 既にサーバーが動いている場合はスキップ（dev モードで別途起動済みなど）
+  const { documentDir, join: pathJoin } = await import("@tauri-apps/api/path");
+  // データディレクトリを明示的に指定（process.cwd() の不安定さを回避）
+  const docsDir = await documentDir();
+  const dataDir = await pathJoin(docsDir, "Graphium", "server-data");
+
+  // 既にサーバーが動いている場合はスキップ（dev モードで別途起動済みなど）。
+  // ただし `/api/health` の dataDir が期待値と一致しなければ "他人 sidecar"
+  // （消えた worktree の幽霊など）として SIGTERM し、自前を spawn し直す。
   try {
     const res = await fetch(HEALTH_URL);
     if (res.ok) {
-      console.log("[sidecar] Backend already running");
-      setState({ status: "ready" });
-      return true;
+      const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+      const remoteDataDir = typeof body?.dataDir === "string" ? body.dataDir : "";
+      const remotePid = typeof body?.pid === "number" ? body.pid : 0;
+      if (remoteDataDir === dataDir) {
+        console.log("[sidecar] Backend already running (matching dataDir)");
+        setState({ status: "ready" });
+        return true;
+      }
+      console.warn(
+        `[sidecar] Foreign sidecar on 3001 (pid=${remotePid}, dataDir=${remoteDataDir || "?"}). Killing.`,
+      );
+      recordLog(
+        `Foreign sidecar detected (pid=${remotePid}, dataDir=${remoteDataDir || "?"}). Expected ${dataDir}. Sending SIGTERM.`,
+      );
+      if (remotePid > 0) {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("kill_pid", { pid: remotePid });
+          // SIGTERM が反映されるまで最大 2 秒待つ
+          for (let i = 0; i < 10; i++) {
+            await new Promise((r) => setTimeout(r, 200));
+            try {
+              const probe = await fetch(HEALTH_URL);
+              if (!probe.ok) break;
+            } catch {
+              break; // port 3001 が応答しなくなった = kill 成功
+            }
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[sidecar] kill_pid failed:", e);
+          recordLog(`kill_pid failed: ${msg}`);
+        }
+      }
     }
   } catch {
     // 起動されていない → sidecar を起動する
@@ -95,10 +133,6 @@ export async function startSidecar(): Promise<boolean> {
 
   try {
     const { Command } = await import("@tauri-apps/plugin-shell");
-    const { documentDir, join: pathJoin } = await import("@tauri-apps/api/path");
-    // データディレクトリを明示的に指定（process.cwd() の不安定さを回避）
-    const docsDir = await documentDir();
-    const dataDir = await pathJoin(docsDir, "Graphium", "server-data");
 
     const command = Command.sidecar("binaries/graphium-server", [], {
       env: {

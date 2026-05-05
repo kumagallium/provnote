@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { setDataDir as setModelsDataDir } from "./config/models.js";
 import { setDataDir as setProfilesDataDir } from "./config/profiles.js";
+import { setSidecarIdentity } from "./routes/health.js";
 import { createApp } from "./app.js";
 
 // データディレクトリ設定（環境変数 or デフォルト）
@@ -31,6 +32,7 @@ const dataDir = resolveDataDir();
 console.log(`[server] Data directory: ${dataDir}`);
 setModelsDataDir(dataDir);
 setProfilesDataDir(dataDir);
+setSidecarIdentity({ pid: process.pid, dataDir });
 
 const app = createApp({ mode: "node" });
 
