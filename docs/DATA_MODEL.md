@@ -1,0 +1,579 @@
+# Graphium — Data Model
+
+This document describes the on-disk shapes Graphium uses: notes, AI Wiki
+documents, the navigation index, shared storage entries, and the
+IndexedDB layout of the browser provider. It is the reference for anyone
+who wants to read, write, migrate, or interoperate with Graphium files.
+
+The corresponding source of truth in code:
+
+- `src/lib/document-types.ts` — `GraphiumDocument`, `WikiMeta`, labels
+- `src/features/navigation/index-file.ts` — `GraphiumIndex`,
+  `NoteIndexEntry`, `INDEX_SCHEMA_VERSION`
+- `src/lib/storage/types.ts` — `StorageProvider`
+- `src/lib/storage/shared/types.ts` — `SharedEntry`, `BlobRef`
+- `src/lib/storage/providers/local.ts` — IndexedDB layout
+
+For *why* the shapes are this way, see [CONCEPT.md](./CONCEPT.md). For
+how the layers fit together, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+---
+
+## 1. Design principles
+
+A few invariants underpin every schema in this document.
+
+- **Plain JSON.** Notes and Wiki documents are JSON. You can read, diff,
+  and grep them without Graphium. Binary attachments are referenced, not
+  embedded.
+- **Versioned shapes.** Every persisted document carries a numeric
+  `version` (notes) or a schema version (index). Mismatches trigger
+  migrations or rebuilds.
+- **Additive by default.** New fields are optional. Renames and removals
+  require a migration path. See §8.
+- **Provenance is not optional metadata.** PROV-DM information lives
+  next to the content it describes (block labels, inline highlights),
+  not in a parallel sidecar that might drift.
+
+## 2. The note: `GraphiumDocument`
+
+Each note is a single JSON file (or one row in IndexedDB for the `local`
+provider). The top-level shape:
+
+```ts
+type GraphiumDocument = {
+  version: 1 | 2 | 3 | 4 | 5;
+  title: string;
+  pages: GraphiumPage[];
+
+  // ── identity / lineage ──────────────────────────────
+  noteLinks?: NoteLink[];           // outgoing @-links to other notes
+  derivedFromNoteId?: string;       // upstream note (for derived notes)
+  derivedFromBlockId?: string;      // upstream block within that note
+
+  // ── authorship / agent ──────────────────────────────
+  generatedBy?: {
+    agent: string;
+    sessionId: string;
+    model?: string;
+    tokenUsage?: { input_tokens; output_tokens; total_tokens };
+    user?: { username: string; email?: string };
+  };
+  source?: "human" | "ai" | "skill";   // default: "human"
+
+  // ── conversational layer ────────────────────────────
+  chats?: ScopeChat[];              // per-scope AI chat history
+
+  // ── document provenance (edit log) ──────────────────
+  documentProvenance?: DocumentProvenance;
+
+  // ── AI Wiki metadata (only when source === "ai") ────
+  wikiMeta?: WikiMeta;
+
+  // ── shared storage refs (Phase 2) ───────────────────
+  sharedRef?: { id; type: "note"; sharedAt; hash };
+  forkedFrom?: { sharedId; hash; authorName; authorEmail; forkedAt };
+
+  // ── skill metadata (only when source === "skill") ───
+  skillMeta?: SkillMeta;
+
+  // ── external source ─────────────────────────────────
+  sourceUrl?: string;
+  sourceFetchedAt?: string;
+  sourceTitle?: string;
+
+  createdAt: string;   // ISO 8601
+  modifiedAt: string;  // ISO 8601
+};
+```
+
+### 2.1 `version` history
+
+The `version` field tracks the *content shape* of the note (not the app
+version). Migrations live in `src/lib/document-migration.ts` and run at
+load time.
+
+| `version` | Change |
+|---|---|
+| **1** | Initial format. `links` field mixed PROV and knowledge layers. |
+| **2** | `links` split into `provLinks` and `knowledgeLinks`. |
+| **3** | Label values normalized from Japanese brackets (`[材料]`) to internal keys (`material`). |
+| **4** | Internal key `result` (Output Entity) renamed to `output`. Phase labels `plan` / `result` introduced. |
+| **5** | Inline-type labels (`material`, `tool`, `attribute`, `output`) moved from block-level labels to inline highlights. `LabelStore` is now heading-only (`procedure` / `plan` / `result` / `free.*`). |
+
+Loaders accept any prior version and migrate forward. Saving always
+writes the latest version.
+
+### 2.2 `GraphiumPage`
+
+Pages are the units inside a note (most notes have one). Each page
+carries blocks plus the provenance overlays.
+
+```ts
+type GraphiumPage = {
+  id: string;
+  title: string;
+  blocks: BlockNoteBlock[];          // BlockNote.js block tree
+
+  // ── block-level labels (#) ───────────────────────────
+  labels: Record<string, string>;    // blockId → label key
+                                     // v5+: heading-only (procedure / plan / result / free.*)
+
+  // ── provenance graph edges ──────────────────────────
+  provLinks: ProvLink[];             // DAG-constrained
+  knowledgeLinks: KnowledgeLink[];   // cycles allowed
+
+  // ── inline highlights (v5+) ─────────────────────────
+  highlights?: InlineHighlight[];    // material / tool / attribute / output
+  mediaInlineLabels?: Record<string, MediaInlineLabel>;  // for image/video/audio/pdf/file blocks
+
+  // ── reference table feature ─────────────────────────
+  indexTables?: Record<string, Record<string, string>>;  // tableBlockId → (sampleName → noteId)
+
+  // ── lineage ─────────────────────────────────────────
+  derivedFromPageId?: string;
+  derivedFromBlockId?: string;
+
+  // ── deprecated ──────────────────────────────────────
+  links?: any[];                     // v1 only; loaders convert to provLinks/knowledgeLinks
+};
+```
+
+### 2.3 PROV-DM label model
+
+PROV-DM information attaches to blocks in three places:
+
+| Carrier | What it labels | Field |
+|---|---|---|
+| **Block label (`#`)** | The role of the block in a process. PROV *Activity* (step) or *Phase* grouping. | `page.labels[blockId]` |
+| **Inline highlight** | Spans of text inside a block as PROV *Entity* (with `material` / `tool` / `output` subtypes) or as a *Property* (`attribute`) on the parent. | `page.highlights[]` |
+| **Media inline label** | Same as above but for non-text blocks (image / video / audio / pdf / file) where BlockNote inline styles do not apply. | `page.mediaInlineLabels[blockId]` |
+
+```ts
+type InlineHighlight = {
+  id: string;
+  blockId: string;     // host block (no cross-block highlights)
+  from: number;        // char offset within the block
+  to: number;
+  label: "material" | "tool" | "attribute" | "output";
+  entityId: string;    // identity key — same entityId = same PROV Entity
+  text: string;        // snapshot of highlighted text (for recovery)
+};
+
+type MediaInlineLabel = {
+  label: "material" | "tool" | "attribute" | "output";
+  entityId: string;    // shares namespace with InlineHighlight.entityId
+};
+```
+
+`entityId` is the deduplication key. Multiple highlights pointing to the
+same referent share an `entityId` so the PROV generator emits one
+*Entity* node.
+
+The generator (`src/features/prov-generator/`) consumes both label
+sources and the heading structure to produce the PROV-DM graph. Heading
+levels feed a `scopeStack` that infers Activity containment without
+requiring the user to nest blocks.
+
+### 2.4 Document provenance (edit log)
+
+`documentProvenance` is a separate concern from the PROV-DM graph above.
+It records the *edit history of the note itself* — who edited what,
+when, with which agent (`human` / `ai`). Defined in
+`src/features/document-provenance/types.ts`.
+
+This is intentionally not unified with the PROV-DM graph. The graph
+describes *the world the note talks about*; the edit log describes *the
+note as an artifact*. See [ARCHITECTURE.md §3.2](./ARCHITECTURE.md#32-provenance-layer-prov-dm).
+
+### 2.5 Conversational layer
+
+```ts
+type ScopeChat = {
+  id: string;
+  scopeBlockId: string;
+  scopeType: "heading" | "block" | "page";
+  messages: { role: "user" | "assistant"; content: string; timestamp: string }[];
+  generatedBy?: { agent; sessionId; model?; tokenUsage? };
+  createdAt: string;
+  modifiedAt: string;
+};
+```
+
+Chats are anchored to a scope (a heading, block, or page) so they can be
+re-attached to the same context after edits.
+
+## 3. AI Wiki documents
+
+A Wiki document is a regular `GraphiumDocument` with `source: "ai"` and
+a populated `wikiMeta`. It opens in the same editor as a human note.
+
+```ts
+type WikiKind = "summary" | "concept" | "atom" | "synthesis";
+
+type WikiMeta = {
+  kind: WikiKind;
+  derivedFromNotes: string[];
+  derivedFromChats: string[];
+  generatedAt: string;            // ISO 8601
+  generatedBy: { model: string; version: string };
+
+  lastIngestedAt?: string;
+  skillsUsed?: string[];
+  editedSections?: string[];      // blockIds protected from re-ingest
+  sectionEmbeddings?: { sectionId: string; modelVersion: string }[];
+  language?: string;
+
+  // Concept-only
+  level?: "principle" | "finding" | "bridge";
+  status?: "candidate" | "verified";
+  evidenceSpan?: string;
+
+  // Atom-only
+  derivedFromConcepts?: string[];
+
+  // Self-evaluated confidence (Synthesis especially)
+  confidence?: number;            // 0.0 – 1.0
+};
+```
+
+### 3.1 `kind` semantics
+
+| Kind | Role | Carries context? |
+|---|---|---|
+| `summary` | Internal-facing summary of one note. | yes |
+| `concept` | Cross-note synthesis with key elements extracted. | yes |
+| `atom` | Experimental layer. One context-free claim with citations. | **no** (the hourglass waist) |
+| `synthesis` | Experimental layer. New insight built from atoms. | yes (re-applied) |
+
+`atom` and `synthesis` are gated by `experimental.atomLayer` and
+`experimental.synthesis` settings. Existing files of these kinds are
+preserved even when generation is disabled.
+
+### 3.2 `level` and `status` for Concepts
+
+Concepts can be qualified along two axes:
+
+- **`level`** (abstraction):
+  - `principle` — a general principle the note actually relied on in its
+    reasoning, even if textbook-known.
+  - `finding` — a transferable proposition that emerged from the user's
+    experience.
+  - `bridge` — an abstraction across multiple findings (produced by the
+    cross-updater).
+- **`status`** (mostly for `principle`):
+  - `candidate` — supported by one note. Included in retrieval but
+    rendered dimly in UI.
+  - `verified` — supported by two or more notes. Treated as a principle
+    the user repeatedly relies on.
+
+### 3.3 Section embeddings
+
+`sectionEmbeddings` records which sections have embeddings and with
+which model version. The actual vectors live in
+`src/lib/embedding-store.ts` (per-section, addressed by `sectionId`).
+
+### 3.4 Edit protection on re-ingest
+
+Any block whose ID appears in `wikiMeta.editedSections` is treated as
+human-edited and skipped during re-ingest. This is how a user can
+correct an AI Wiki entry without losing the correction the next time
+ingest runs.
+
+## 4. Skill documents
+
+A "Skill" is a prompt template, also stored as a `GraphiumDocument` with
+`source: "skill"`.
+
+```ts
+type SkillMeta = {
+  description: string;            // one-line summary
+  availableForIngest: boolean;    // auto-apply during ingest
+  createdAt: string;
+  systemSkillId?: string;         // identifier for built-in skills (cannot be deleted)
+  language?: "ja" | "en";         // restrict to a generation language
+};
+```
+
+Skills inherit storage / index treatment from notes; the `source` field
+discriminates them downstream.
+
+## 5. The navigation index: `GraphiumIndex`
+
+A single JSON file aggregates the metadata of every note, Wiki document,
+and Skill. It powers the left-nav list, search, back-link computation,
+and label filters.
+
+```ts
+type GraphiumIndex = {
+  version: number;     // INDEX_SCHEMA_VERSION
+  updatedAt: string;
+  notes: NoteIndexEntry[];
+};
+
+type NoteIndexEntry = {
+  noteId: string;
+  title: string;
+  modifiedAt: string;
+  createdAt: string;
+
+  headings: { blockId: string; text: string; level: 2 | 3 }[];
+  labels:   { blockId: string; label: string; preview: string }[];
+  outgoingLinks: {
+    targetNoteId: string;
+    targetBlockId?: string;
+    layer: "prov" | "knowledge";
+  }[];
+
+  source?: "human" | "ai" | "skill";
+  wikiKind?: WikiKind;
+  author?: string;
+  model?: string;
+  derivedFromNotes?: string[];      // for source === "ai" only
+
+  inlineLabels?: {
+    blockId: string;
+    label: "material" | "tool" | "attribute" | "output";
+    text: string;
+    entityId: string;
+  }[];
+
+  deletedAt?: string;               // trashed timestamp
+};
+```
+
+### 5.1 `INDEX_SCHEMA_VERSION`
+
+Defined in `src/features/navigation/index-file.ts`. Currently **11**.
+Bumping rules:
+
+| Version | Change |
+|---|---|
+| **4** | Added `source`, `wikiKind`. |
+| **5** | Added `author`, `model`. |
+| **6** | Labels normalized to internal keys (`procedure` / `material` / …). |
+| **8** | Added `inlineLabelTypes` for label-filter UI (Phase D-3-α). |
+| **9** | Replaced `inlineLabelTypes` with `inlineLabels` (richer, includes `text` and `entityId`). |
+| **10** | Added `deletedAt` for trash. |
+| **11** | Added `atom` to `WikiKind`. |
+
+When a stored index has a version below the current one, `ensureIndex`
+**rebuilds the entire index** by re-reading every note. This is the
+escape hatch: any indexer logic change can ship behind a version bump
+without writing a per-version migration.
+
+### 5.2 Trash semantics
+
+A non-empty `deletedAt` excludes the note from the main list, search,
+picker, and graph. The note file itself is *not* deleted; the trash view
+can restore (clear `deletedAt`) or hard-delete (remove the index entry
+and the underlying file).
+
+## 6. Storage providers
+
+### 6.1 The `StorageProvider` interface
+
+A single TypeScript interface defines what every backend must do.
+Defined in `src/lib/storage/types.ts`. The methods cluster into:
+
+- **Auth** — `init`, `signIn`, `signOut`, `getAuthState`,
+  `onAuthChange`.
+- **File CRUD** — `listFiles`, `loadFile`, `createFile`, `saveFile`,
+  `deleteFile`. Files are `GraphiumDocument` blobs.
+- **Media** — `uploadMedia`, `getMediaBlobUrl`, `extractFileId`.
+- **Metadata** — `getUserEmail`, `getRevisionId?`.
+- **App data** (optional) — `readAppData`, `writeAppData`. Used by the
+  index file and other internal metadata.
+- **Wiki / Skill CRUD** (optional) — separate listings for AI Wiki and
+  Skill documents so backends can store them in dedicated namespaces.
+
+Three backends ship today:
+
+| Provider | File location |
+|---|---|
+| `local` | IndexedDB (browser) |
+| `filesystem` | OPFS in browser; native filesystem via Tauri |
+| `server-fs` | Filesystem on the Node companion server |
+
+### 6.2 IndexedDB layout (`local` provider)
+
+```
+DB:    graphium-local
+Vers:  1
+
+Stores:
+  files   (keyPath: "id")   — { id, name, content: GraphiumDocument, modifiedTime, createdTime }
+  media   (keyPath: "id")   — { id, name, mimeType, blob, createdTime }
+```
+
+The DB version has stayed at 1 since launch. Adding a store or changing
+keys requires bumping the version and writing an `onupgradeneeded`
+migration; do not silently change the layout.
+
+### 6.3 Filesystem layout (`filesystem` / `server-fs`)
+
+Roughly:
+
+```
+Graphium/
+├── notes/
+│   └── <noteId>.graphium.json
+├── wiki/
+│   └── <wikiId>.graphium.json
+├── skills/
+│   └── <skillId>.graphium.json
+├── media/
+│   └── <fileId>.<ext>
+└── appdata/
+    └── note-index.json        # the GraphiumIndex
+```
+
+Concrete paths and naming may vary between provider implementations;
+treat the layout above as a guide, and `local.ts` /
+`filesystem.ts` / `server-fs.ts` as authoritative.
+
+## 7. Shared storage and Library
+
+The Library / Fork features run on a separate, content-addressed
+abstraction that lives alongside (not under) `StorageProvider`. Defined
+in `src/lib/storage/shared/types.ts`.
+
+### 7.1 `SharedEntry`
+
+```ts
+type SharedEntryType =
+  | "note" | "reference" | "data-manifest"
+  | "template" | "concept" | "atom" | "report";
+
+type SharedEntry = {
+  id: string;                  // uuidv7
+  type: SharedEntryType;
+  author: AuthorIdentity;
+  created_at: string;
+  updated_at: string;
+  hash: string;                // SHA-256 of body + meta (excluding hash itself)
+
+  prov: {
+    derived_from: string[];    // lineage within the shared pack
+    local_origin?: string;     // informational only — origin in personal storage
+  };
+
+  history?: HistoryEntry[];    // hash log for minor revisions on same id
+  version?: number;
+  supersedes?: string;         // major-revision predecessor
+  superseded_by?: string;
+  attestations?: Attestation[];
+
+  status?: "active" | "unshared";
+  unshared_at?: string;
+  unshared_by?: AuthorIdentity;
+
+  extra?: Record<string, unknown>;  // type-specific narrowing
+};
+```
+
+Key model choices:
+
+- **`id` is uuidv7** (sortable, monotonic, content-independent).
+  Persists across edits.
+- **`hash` is content-addressed** over body + metadata (excluding hash,
+  history, and `superseded_by` to avoid self-reference).
+- **Minor vs major revision** — same-`id` writes append to `history`;
+  major changes mint a new id and link back via `supersedes`.
+- **Tombstones, not deletes** — `status: "unshared"` is the recovery
+  path for accidental sharing. Hard delete is provider-optional.
+
+### 7.2 `BlobRef`
+
+Large binary content (images, datasets) is referenced, not embedded.
+
+```ts
+type BlobRef = {
+  provider: string;            // "local-folder" | "s3" | "zenodo" | …
+  uri: string;                 // file:///… , s3://… , zenodo://record/file
+  hash: string;                // SHA-256
+  size: number;
+  filename?: string;
+};
+```
+
+A single shared note can reference blobs from multiple providers (e.g.,
+embedded media on a NAS, dataset on Zenodo).
+
+### 7.3 Provider interfaces
+
+Two interfaces, two axes of swap:
+
+- **`SharedStorageProvider`** for shared text/metadata. v1 ships with
+  `local-folder` only.
+- **`BlobStorageProvider`** for binary blobs. Same providers may
+  implement both (`local-folder`).
+
+Both expose `verifyHash(id)` so a reader can independently check
+content integrity.
+
+### 7.4 Note-side references
+
+A personal note that has been shared carries `sharedRef`:
+
+```ts
+sharedRef?: {
+  id: string;       // SharedEntry.id
+  type: "note";
+  sharedAt: string; // ISO 8601
+  hash: string;     // SharedEntry.hash at share time
+};
+```
+
+A note created by forking a shared entry carries `forkedFrom`:
+
+```ts
+forkedFrom?: {
+  sharedId: string;
+  hash: string;
+  authorName: string;
+  authorEmail: string;
+  forkedAt: string;
+};
+```
+
+The fork is treated as a separate identity from the original; PROV
+records the lineage between them.
+
+## 8. Compatibility rules
+
+Hard rules for changing any schema in this document.
+
+| If you change | You must |
+|---|---|
+| `GraphiumDocument` (add field) | Make the field `optional`. No other action. |
+| `GraphiumDocument` (rename / remove / retype) | Bump `version`, write a migration in `src/lib/document-migration.ts`. |
+| `GraphiumPage` shape | Same as `GraphiumDocument`. |
+| `WikiMeta` shape | Same as `GraphiumDocument`. New optional fields are free. |
+| `NoteIndexEntry` / `GraphiumIndex` shape | Bump `INDEX_SCHEMA_VERSION` in `src/features/navigation/index-file.ts`. The index will be auto-rebuilt on mismatch — no per-field migration needed. |
+| `StorageProvider` interface | Update all three providers (`local`, `filesystem`, `server-fs`). Prefer optional methods for additive changes. |
+| IndexedDB stores or keys | Bump `DB_VERSION` in `local.ts` and write an `onupgradeneeded` migration. Do not silently change the layout. |
+| `SharedEntry` / `BlobRef` shape | Bump the provider's stored format if needed; `verifyHash` must keep working against existing data. |
+| Tauri command signatures | Update the matching TypeScript wrappers in lockstep. |
+
+These rules are also captured in the project's `CLAUDE.md` "破壊的変更
+チェック" section.
+
+After any compatibility-affecting change, the verification ritual is:
+
+```bash
+pnpm exec tsc -p tsconfig.json --noEmit   # type check
+pnpm vitest run                            # tests
+pnpm build                                 # bundle
+```
+
+If `INDEX_SCHEMA_VERSION` was bumped, also run the app once and confirm
+that an existing `appdata/note-index.json` rebuilds without errors.
+
+---
+
+## See also
+
+- [CONCEPT.md](./CONCEPT.md): the design philosophy
+- [ARCHITECTURE.md](./ARCHITECTURE.md): layers and components
+- [README](../README.md): install and run

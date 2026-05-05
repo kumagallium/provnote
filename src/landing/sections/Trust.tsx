@@ -7,6 +7,7 @@ export function Trust() {
     { icon: "🔓", title: t("trust.openSource.title"), body: t("trust.openSource.body") },
     { icon: "💾", title: t("trust.storage.title"), body: t("trust.storage.body") },
     { icon: "🤝", title: t("trust.ai.title"), body: t("trust.ai.body") },
+    { icon: "🔗", title: t("trust.share.title"), body: t("trust.share.body") },
     { icon: "📖", title: t("trust.reading.title"), body: t("trust.reading.body") },
   ];
 
