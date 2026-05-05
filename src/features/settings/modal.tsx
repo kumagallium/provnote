@@ -98,11 +98,10 @@ export type RegenerateWikiHandler = (
   options?: { model?: string },
 ) => Promise<{ ok: boolean; error?: string }>;
 
-export type AtomizeDiscoveryHandler = () => Promise<{
-  ok: boolean;
-  created: number;
-  error?: string;
-}>;
+export type DiscoveryProgressInfo = { iteration: number; createdSoFar: number };
+export type DiscoveryHandler = (
+  onProgress?: (info: DiscoveryProgressInfo) => void,
+) => Promise<{ ok: boolean; created: number; iterations: number; error?: string }>;
 
 type BulkFailedItem = { id: string; title: string; error?: string };
 type BulkProgress = {
@@ -132,13 +131,15 @@ type SettingsModalProps = {
   wikiSummaries?: WikiSummaryForSettings[];
   /** Maintenance タブから 1 件ずつ呼ばれる再生成ハンドラ */
   onRegenerateWiki?: RegenerateWikiHandler;
-  /** Maintenance タブの「Atom 候補を発見」ハンドラ（atomLayer 有効時のみ表示）。
-   *  全 Concept を見渡して Concept をまたぐ共通抽象を 1 回の LLM 呼び出しで発見する。
-   *  既存 Atom との重複は呼び出し側でタイトル一覧を LLM に渡して抑制する。 */
-  onRunAtomizeDiscovery?: AtomizeDiscoveryHandler;
+  /** Maintenance タブの「Atom を発見」ハンドラ（atomLayer 有効時のみ表示）。
+   *  全 Concept を見渡し、複数 Concept にまたがる共通抽象を auto-loop で発見する。 */
+  onRunAtomizeDiscovery?: DiscoveryHandler;
+  /** Maintenance タブの「Synthesis を発見」ハンドラ（synthesis 有効時のみ表示）。
+   *  全 Atom を見渡し、Atom 同士の結合から立ち上がる新しい洞察を auto-loop で発見する。 */
+  onRunSynthesisDiscovery?: DiscoveryHandler;
 };
 
-export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery, onRunSynthesisDiscovery }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
   const [tab, setTab] = useState<Tab>("display");
 
@@ -200,13 +201,19 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const cancelBulkRef = useRef(false);
 
   // Maintenance タブ — 既存 Concept をまたぐ Atom 候補を発見（atomLayer 有効時のみ）
-  const [atomizeRunning, setAtomizeRunning] = useState(false);
-  const [atomizeProgress, setAtomizeProgress] = useState<{
+  type DiscoveryUiState = {
     status: "running" | "done" | "error";
-    conceptCount: number;
+    inputCount: number;
+    iteration?: number;
     created?: number;
+    iterations?: number;
     error?: string;
-  } | null>(null);
+  };
+  const [atomizeRunning, setAtomizeRunning] = useState(false);
+  const [atomizeProgress, setAtomizeProgress] = useState<DiscoveryUiState | null>(null);
+  // Maintenance タブ — Atom をまたぐ Synthesis 候補を発見（synthesis 有効時のみ）
+  const [synthesisRunning, setSynthesisRunning] = useState(false);
+  const [synthesisProgress, setSynthesisProgress] = useState<DiscoveryUiState | null>(null);
 
   // モデル追加フォーム
   const [showAddForm, setShowAddForm] = useState(false);
@@ -1719,7 +1726,9 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               wikiSummaries={wikiSummaries ?? []}
               onRegenerateWiki={onRegenerateWiki}
               onRunAtomizeDiscovery={onRunAtomizeDiscovery}
+              onRunSynthesisDiscovery={onRunSynthesisDiscovery}
               atomLayerEnabled={experimental.atomLayer}
+              synthesisLayerEnabled={experimental.atomLayer && experimental.synthesis}
               availableModels={models}
               defaultModel={model || defaultModel}
               chatSynthesisModel={chatSynthesisModel}
@@ -1738,6 +1747,10 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               setAtomizeRunning={setAtomizeRunning}
               atomizeProgress={atomizeProgress}
               setAtomizeProgress={setAtomizeProgress}
+              synthesisRunning={synthesisRunning}
+              setSynthesisRunning={setSynthesisRunning}
+              synthesisProgress={synthesisProgress}
+              setSynthesisProgress={setSynthesisProgress}
             />
           </div>
         )}
@@ -1757,10 +1770,13 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
 // ── Maintenance タブ ──
 // Knowledge レイヤのメンテナンス操作。今は Wiki 一括 Regenerate のみ
-type AtomizeDiscoveryState = {
+type DiscoveryRunState = {
   status: "running" | "done" | "error";
-  conceptCount: number;
+  /** 入力アイテム数（Concept 数 / Atom 数） */
+  inputCount: number;
+  iteration?: number;
   created?: number;
+  iterations?: number;
   error?: string;
 };
 
@@ -1768,8 +1784,10 @@ type MaintenanceTabProps = {
   t: (key: string) => string;
   wikiSummaries: WikiSummaryForSettings[];
   onRegenerateWiki?: RegenerateWikiHandler;
-  onRunAtomizeDiscovery?: AtomizeDiscoveryHandler;
+  onRunAtomizeDiscovery?: DiscoveryHandler;
+  onRunSynthesisDiscovery?: DiscoveryHandler;
   atomLayerEnabled: boolean;
+  synthesisLayerEnabled: boolean;
   availableModels: ModelInfo[];
   defaultModel: string;
   chatSynthesisModel: string;
@@ -1786,8 +1804,12 @@ type MaintenanceTabProps = {
   cancelBulkRef: { current: boolean };
   atomizeRunning: boolean;
   setAtomizeRunning: (b: boolean) => void;
-  atomizeProgress: AtomizeDiscoveryState | null;
-  setAtomizeProgress: (p: AtomizeDiscoveryState | null) => void;
+  atomizeProgress: DiscoveryRunState | null;
+  setAtomizeProgress: (p: DiscoveryRunState | null) => void;
+  synthesisRunning: boolean;
+  setSynthesisRunning: (b: boolean) => void;
+  synthesisProgress: DiscoveryRunState | null;
+  setSynthesisProgress: (p: DiscoveryRunState | null) => void;
 };
 
 function MaintenanceTab({
@@ -1795,7 +1817,9 @@ function MaintenanceTab({
   wikiSummaries,
   onRegenerateWiki,
   onRunAtomizeDiscovery,
+  onRunSynthesisDiscovery,
   atomLayerEnabled,
+  synthesisLayerEnabled,
   availableModels,
   defaultModel,
   chatSynthesisModel,
@@ -1814,6 +1838,10 @@ function MaintenanceTab({
   setAtomizeRunning,
   atomizeProgress,
   setAtomizeProgress,
+  synthesisRunning,
+  setSynthesisRunning,
+  synthesisProgress,
+  setSynthesisProgress,
 }: MaintenanceTabProps) {
   const KINDS: WikiKind[] = ["concept", "summary", "atom", "synthesis"];
   const [cancelling, setCancelling] = useState(false);
@@ -1883,71 +1911,86 @@ function MaintenanceTab({
     : k === "atom" ? t("settings.maintenance.kind.atom")
     : t("settings.maintenance.kind.synthesis");
 
-  // ── Atom 候補の発見（複数 Concept にまたがる共通抽象を 1 回の LLM 呼び出しで発見）──
+  // ── Atom 候補の発見（auto-loop: 0 件返却 or 上限まで自動継続）──
   const conceptCount = wikiSummaries.filter((w) => w.kind === "concept").length;
-  const handleRunDiscovery = async () => {
+  const atomCount = wikiSummaries.filter((w) => w.kind === "atom").length;
+  const handleRunAtomizeDiscovery = async () => {
     if (!onRunAtomizeDiscovery || atomizeRunning) return;
     if (conceptCount < 2) return;
     if (!window.confirm(t("settings.maintenance.atomize.confirm").replace("{count}", String(conceptCount)))) return;
 
     setAtomizeRunning(true);
-    setAtomizeProgress({ status: "running", conceptCount });
+    setAtomizeProgress({ status: "running", inputCount: conceptCount, iteration: 1, created: 0 });
 
-    const result = await onRunAtomizeDiscovery();
+    const result = await onRunAtomizeDiscovery((info) => {
+      setAtomizeProgress({ status: "running", inputCount: conceptCount, iteration: info.iteration, created: info.createdSoFar });
+    });
     if (result.ok) {
-      setAtomizeProgress({ status: "done", conceptCount, created: result.created });
+      setAtomizeProgress({ status: "done", inputCount: conceptCount, created: result.created, iterations: result.iterations });
     } else {
-      setAtomizeProgress({ status: "error", conceptCount, error: result.error });
+      setAtomizeProgress({ status: "error", inputCount: conceptCount, error: result.error });
     }
     setAtomizeRunning(false);
+  };
+
+  // ── Synthesis 候補の発見（同じ auto-loop パターン。Atom が 3 件以上必要）──
+  const handleRunSynthesisDiscovery = async () => {
+    if (!onRunSynthesisDiscovery || synthesisRunning) return;
+    if (atomCount < 3) return;
+    if (!window.confirm(t("settings.maintenance.synthesize.confirm").replace("{count}", String(atomCount)))) return;
+
+    setSynthesisRunning(true);
+    setSynthesisProgress({ status: "running", inputCount: atomCount, iteration: 1, created: 0 });
+
+    const result = await onRunSynthesisDiscovery((info) => {
+      setSynthesisProgress({ status: "running", inputCount: atomCount, iteration: info.iteration, created: info.createdSoFar });
+    });
+    if (result.ok) {
+      setSynthesisProgress({ status: "done", inputCount: atomCount, created: result.created, iterations: result.iterations });
+    } else {
+      setSynthesisProgress({ status: "error", inputCount: atomCount, error: result.error });
+    }
+    setSynthesisRunning(false);
   };
 
   return (
     <div className="space-y-5">
       {/* Atom 候補の発見（atomLayer 有効時のみ表示）。
-          全 Concept をまたぐ共通抽象を 1 回の LLM 呼び出しで discover する。 */}
+          全 Concept をまたぐ共通抽象を auto-loop で discover する。 */}
       {atomLayerEnabled && onRunAtomizeDiscovery && (
-        <div className="rounded-lg border border-border p-3 space-y-3">
-          <div>
-            <div className="text-xs font-semibold text-foreground mb-1">
-              {t("settings.maintenance.atomize.title")}
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {t("settings.maintenance.atomize.help").replace("{count}", String(conceptCount))}
-            </p>
-          </div>
+        <DiscoveryCard
+          t={t}
+          titleKey="settings.maintenance.atomize.title"
+          helpKey="settings.maintenance.atomize.help"
+          inputCount={conceptCount}
+          minInput={2}
+          progress={atomizeProgress}
+          running={atomizeRunning}
+          onRun={handleRunAtomizeDiscovery}
+          discoveringKey="settings.maintenance.atomize.discovering"
+          doneKey="settings.maintenance.atomize.doneCount"
+          runKey="settings.maintenance.atomize.run"
+          runningKey="settings.maintenance.atomize.running"
+        />
+      )}
 
-          {atomizeProgress && (
-            <div className="rounded-md border border-border bg-background px-3 py-2 text-xs space-y-1">
-              {atomizeProgress.status === "running" && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
-                  {t("settings.maintenance.atomize.discovering").replace("{count}", String(atomizeProgress.conceptCount))}
-                </div>
-              )}
-              {atomizeProgress.status === "done" && (
-                <div className="text-foreground">
-                  {t("settings.maintenance.atomize.doneCount").replace("{count}", String(atomizeProgress.created ?? 0))}
-                </div>
-              )}
-              {atomizeProgress.status === "error" && (
-                <div className="text-red-500">
-                  {t("settings.maintenance.failed")}: {atomizeProgress.error ?? "unknown"}
-                </div>
-              )}
-            </div>
-          )}
-
-          <Button
-            size="sm"
-            onClick={handleRunDiscovery}
-            disabled={atomizeRunning || conceptCount < 2}
-          >
-            {atomizeRunning
-              ? t("settings.maintenance.atomize.running")
-              : t("settings.maintenance.atomize.run")}
-          </Button>
-        </div>
+      {/* Synthesis 候補の発見（synthesis 有効時のみ表示）。
+          全 Atom をまたぐ新しい洞察を auto-loop で discover する。 */}
+      {synthesisLayerEnabled && onRunSynthesisDiscovery && (
+        <DiscoveryCard
+          t={t}
+          titleKey="settings.maintenance.synthesize.title"
+          helpKey="settings.maintenance.synthesize.help"
+          inputCount={atomCount}
+          minInput={3}
+          progress={synthesisProgress}
+          running={synthesisRunning}
+          onRun={handleRunSynthesisDiscovery}
+          discoveringKey="settings.maintenance.synthesize.discovering"
+          doneKey="settings.maintenance.synthesize.doneCount"
+          runKey="settings.maintenance.synthesize.run"
+          runningKey="settings.maintenance.synthesize.running"
+        />
       )}
 
       {/* Wiki 一括 Regenerate（Atomize と視覚的に揃えるためカード化） */}
@@ -2154,6 +2197,89 @@ function MaintenanceTab({
         )}
       </div>
       </div>
+    </div>
+  );
+}
+
+// ── 共通: Discovery カード（Atom / Synthesis で共有）──
+// auto-loop の進捗表示（イテレーション数 / 累積件数）を担う。
+// 入力アイテム数（Concept 数 or Atom 数）と最低必要数だけ差し替えれば再利用できる。
+type DiscoveryCardProps = {
+  t: (key: string) => string;
+  titleKey: string;
+  helpKey: string;
+  inputCount: number;
+  minInput: number;
+  progress: DiscoveryRunState | null;
+  running: boolean;
+  onRun: () => void;
+  discoveringKey: string;
+  doneKey: string;
+  runKey: string;
+  runningKey: string;
+};
+
+function DiscoveryCard({
+  t,
+  titleKey,
+  helpKey,
+  inputCount,
+  minInput,
+  progress,
+  running,
+  onRun,
+  discoveringKey,
+  doneKey,
+  runKey,
+  runningKey,
+}: DiscoveryCardProps) {
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-3">
+      <div>
+        <div className="text-xs font-semibold text-foreground mb-1">
+          {t(titleKey)}
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          {t(helpKey).replace("{count}", String(inputCount))}
+        </p>
+      </div>
+
+      {progress && (
+        <div className="rounded-md border border-border bg-background px-3 py-2 text-xs space-y-1">
+          {progress.status === "running" && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span>
+                {t(discoveringKey).replace("{count}", String(progress.inputCount))}
+                {progress.iteration !== undefined && (
+                  <span className="ml-2 opacity-70">
+                    (iter {progress.iteration}{progress.created ? ` / created ${progress.created}` : ""})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {progress.status === "done" && (
+            <div className="text-foreground">
+              {t(doneKey).replace("{count}", String(progress.created ?? 0))}
+              {progress.iterations !== undefined && (
+                <span className="ml-2 text-muted-foreground opacity-70">
+                  ({progress.iterations} iter)
+                </span>
+              )}
+            </div>
+          )}
+          {progress.status === "error" && (
+            <div className="text-red-500">
+              {t("settings.maintenance.failed")}: {progress.error ?? "unknown"}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Button size="sm" onClick={onRun} disabled={running || inputCount < minInput}>
+        {running ? t(runningKey) : t(runKey)}
+      </Button>
     </div>
   );
 }

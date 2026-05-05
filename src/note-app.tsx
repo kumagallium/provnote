@@ -3326,17 +3326,18 @@ export function NoteApp() {
     }
   }, [fm]);
 
-  // 全 Concept を見渡して共通抽象（Atom）を発見する discovery 呼び出し。
-  // - Maintenance タブの「Atom 候補を発見」ボタンから呼ばれる
-  // - 自動 Atomize（ingest 後）も同じ実体を使う想定だが、
-  //   そちらは fire-and-forget で直接 `atomizeConcepts` を呼ぶ
-  // 既存 Atom のタイトルを LLM に渡して重複提案を抑制する。
+  // 全 Concept を見渡して共通抽象（Atom）を発見する discovery 呼び出し（auto-loop 付き）。
+  // - Maintenance タブの「Atom を発見」ボタンから呼ばれる。
+  // - 1 回の LLM 呼び出しで上限 5 件しか出ないため、収束（0 件返却）まで内部でループする。
+  // - 無限ループ防止に MAX_ITERATIONS の hard cap を置く（必ず終了する保証）。
+  // - 各イテレーション後に既存 Atom タイトルを更新して LLM に渡し、重複提案を抑制する。
+  // - 自動 Atomize（ingest 後）はループせず 1 回だけ走る — 意図的に分離している。
   // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
-  const runAtomizeDiscovery = useCallback(async (): Promise<
-    { ok: boolean; created: number; error?: string }
-  > => {
+  const runAtomizeDiscovery = useCallback(async (
+    onProgress?: (info: { iteration: number; createdSoFar: number }) => void,
+  ): Promise<{ ok: boolean; created: number; iterations: number; error?: string }> => {
     if (!isAtomLayerEnabled()) {
-      return { ok: false, created: 0, error: "Atom layer is disabled" };
+      return { ok: false, created: 0, iterations: 0, error: "Atom layer is disabled" };
     }
     const conceptSnapshots = buildConceptSnapshots(
       fm.wikiFiles,
@@ -3345,8 +3346,10 @@ export function NoteApp() {
       "concept",
     );
     if (conceptSnapshots.length < 2) {
-      return { ok: false, created: 0, error: "Need at least 2 Concepts" };
+      return { ok: false, created: 0, iterations: 0, error: "Need at least 2 Concepts" };
     }
+
+    const MAX_ITERATIONS = 5;
     const existingAtomTitles = [...fm.wikiMetas.entries()]
       .filter(([, m]) => m.kind === "atom")
       .map(([, m]) => m.title);
@@ -3359,32 +3362,40 @@ export function NoteApp() {
       ],
     }));
 
+    let totalCreated = 0;
+    let lastIteration = 0;
     try {
-      const result = await atomizeConcepts(
-        conceptSnapshots,
-        "ja",
-        { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
-      );
-      let created = 0;
-      for (const candidate of result.atoms) {
-        const atomDoc = buildAtomDocument(candidate, result.model ?? null, "ja");
-        const newId = await fm.handleCreateWikiFile(atomDoc);
-        embedWikiSections(newId, atomDoc).catch(() => {});
-        wikiLog.append(
-          "ingest",
-          [newId],
-          `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
-        ).catch(() => {});
-        created += 1;
+      for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+        lastIteration = iter;
+        onProgress?.({ iteration: iter, createdSoFar: totalCreated });
+        const result = await atomizeConcepts(
+          conceptSnapshots,
+          "ja",
+          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+        );
+        if (result.atoms.length === 0) break; // 収束
+        for (const candidate of result.atoms) {
+          const atomDoc = buildAtomDocument(candidate, result.model ?? null, "ja");
+          const newId = await fm.handleCreateWikiFile(atomDoc);
+          embedWikiSections(newId, atomDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          totalCreated += 1;
+          // 次イテレーションの dedup に渡す
+          existingAtomTitles.push(candidate.title);
+        }
       }
       setIngestToast((prev) => ({
         items: (prev?.items ?? []).map((i) =>
           i.id === toastId
-            ? { ...i, status: "success" as const, detail: undefined, result: `${created} atom(s)` }
+            ? { ...i, status: "success" as const, detail: undefined, result: `${totalCreated} atom(s) in ${lastIteration} iter(s)` }
             : i
         ),
       }));
-      return { ok: true, created };
+      return { ok: true, created: totalCreated, iterations: lastIteration };
     } catch (err) {
       console.error("Atomize discovery failed:", err);
       setIngestToast((prev) => ({
@@ -3392,7 +3403,90 @@ export function NoteApp() {
           i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
         ),
       }));
-      return { ok: false, created: 0, error: err instanceof Error ? err.message : "Failed" };
+      return { ok: false, created: totalCreated, iterations: lastIteration, error: err instanceof Error ? err.message : "Failed" };
+    }
+  }, [fm]);
+
+  // 全 Atom を見渡して新しい洞察（Synthesis）を発見する discovery 呼び出し（auto-loop 付き）。
+  // 構造は runAtomizeDiscovery と同じ。Synthesis は Atom 層の上に乗るため、
+  // experimental.synthesis（atomLayer 前提）が ON のときのみ動く。
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const runSynthesisDiscovery = useCallback(async (
+    onProgress?: (info: { iteration: number; createdSoFar: number }) => void,
+  ): Promise<{ ok: boolean; created: number; iterations: number; error?: string }> => {
+    if (!isSynthesisEnabled()) {
+      return { ok: false, created: 0, iterations: 0, error: "Synthesis layer is disabled" };
+    }
+    const atomSnapshots = buildConceptSnapshots(
+      fm.wikiFiles,
+      fm.wikiMetas,
+      fm.getCachedDoc,
+      "atom",
+    );
+    if (atomSnapshots.length < 3) {
+      return { ok: false, created: 0, iterations: 0, error: "Need at least 3 Atoms" };
+    }
+
+    const MAX_ITERATIONS = 5;
+    const existingSynthesisTitles = [...fm.wikiMetas.entries()]
+      .filter(([, m]) => m.kind === "synthesis")
+      .map(([, m]) => m.title);
+
+    const toastId = `synthesis-discovery:${Date.now()}`;
+    setIngestToast((prev) => ({
+      items: [
+        ...(prev?.items ?? []),
+        { id: toastId, status: "generating" as const, noteTitle: `Discovering Syntheses across ${atomSnapshots.length} Atoms` },
+      ],
+    }));
+
+    let totalCreated = 0;
+    let lastIteration = 0;
+    try {
+      for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+        lastIteration = iter;
+        onProgress?.({ iteration: iter, createdSoFar: totalCreated });
+        const result = await fetchSynthesisCandidates(
+          atomSnapshots,
+          existingSynthesisTitles,
+          "ja",
+          getChatSynthesisLLMModel()?.name,
+        );
+        if (result.candidates.length === 0) break; // 収束
+        for (const candidate of result.candidates) {
+          const synthDoc = buildSynthesisDocument(
+            candidate,
+            result.model ?? null,
+            "ja",
+            buildNoteIndex(fm.noteIndex),
+          );
+          const newId = await fm.handleCreateWikiFile(synthDoc);
+          embedWikiSections(newId, synthDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Synthesis: "${candidate.title}" (from ${candidate.sourceConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          totalCreated += 1;
+          existingSynthesisTitles.push(candidate.title);
+        }
+      }
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId
+            ? { ...i, status: "success" as const, detail: undefined, result: `${totalCreated} synthesis(es) in ${lastIteration} iter(s)` }
+            : i
+        ),
+      }));
+      return { ok: true, created: totalCreated, iterations: lastIteration };
+    } catch (err) {
+      console.error("Synthesis discovery failed:", err);
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+        ),
+      }));
+      return { ok: false, created: totalCreated, iterations: lastIteration, error: err instanceof Error ? err.message : "Failed" };
     }
   }, [fm]);
 
@@ -4118,6 +4212,7 @@ export function NoteApp() {
         wikiSummaries={wikiSummariesForSettings}
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
         onRunAtomizeDiscovery={runAtomizeDiscovery}
+        onRunSynthesisDiscovery={runSynthesisDiscovery}
       />
       <Composer
         open={composer.open}
