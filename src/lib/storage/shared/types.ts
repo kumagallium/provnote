@@ -19,6 +19,7 @@ export type SharedEntryType =
   | "data-manifest"
   | "template"
   | "concept"
+  | "atom"
   | "report";
 
 /** 同一 ID 上書き時の hash 履歴（軽量、本文は持たない）。 */

@@ -1,7 +1,7 @@
 // ファイル一覧サイドバー
 
 import { useMemo, type ReactNode } from "react";
-import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles, Trash2, Settings as SettingsIcon } from "lucide-react";
+import { Image, FileText, Video, Volume2, Link, StickyNote, Bot, History, ShieldCheck, Wrench, PanelLeftClose, Sparkles, Trash2, Settings as SettingsIcon, Library } from "lucide-react";
 import { AiUpgradeNotice } from "./AiUpgradeNotice";
 import type { WikiKind } from "../lib/document-types";
 import { RecentNotes, type RecentNote } from "../features/navigation";
@@ -70,6 +70,13 @@ export type FileSidebarProps = {
   trashActive?: boolean;
   /** ゴミ箱内のノート数 */
   trashCount?: number;
+  /**
+   * Library > Shared を開く（Phase 2c）。
+   * shared root が未設定なら呼び出し側で undefined を渡し、項目自体を非表示にする。
+   */
+  onShowSharedLibrary?: () => void;
+  /** Shared Library がアクティブか */
+  sharedLibraryActive?: boolean;
 };
 
 // ラベル色マッピング（NoteListView と同じ）
@@ -126,6 +133,8 @@ export function FileSidebar({
   onShowTrash,
   trashActive = false,
   trashCount = 0,
+  onShowSharedLibrary,
+  sharedLibraryActive = false,
 }: FileSidebarProps) {
   const t = useT();
   const mediaCounts = mediaIndex ? countByType(mediaIndex) : null;
@@ -388,6 +397,28 @@ export function FileSidebar({
                   <span className="flex-1 text-left">Health Check</span>
                 </button>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Library セクション（Phase 2c — Shared root が設定されていれば表示） */}
+        {onShowSharedLibrary && (
+          <div className="px-4 pt-1 pb-2">
+            <h3 className="text-xs font-semibold text-sidebar-foreground/40 mb-1.5">
+              Library
+            </h3>
+            <div className="space-y-0.5">
+              <button
+                onClick={onShowSharedLibrary}
+                className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+                  sharedLibraryActive
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                }`}
+              >
+                <span className="text-muted-foreground shrink-0"><Library size={14} /></span>
+                <span className="flex-1 text-left">Shared</span>
+              </button>
             </div>
           </div>
         )}
