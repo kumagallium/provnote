@@ -102,6 +102,8 @@ import {
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
   // Atom（実験的）
   atomizeConcepts, buildAtomDocument,
+  // Discovery 共通: embedding ベース重複検出
+  dedupCandidatesByEmbedding,
   // インライン引用リンク
   buildNoteIndex,
   // 操作ログ
@@ -3376,7 +3378,13 @@ export function NoteApp() {
           { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
         );
         if (result.atoms.length === 0) break; // 収束
-        for (const candidate of result.atoms) {
+        // 既存 Atom との embedding 類似度で post-filter（embedding 未設定なら素通し）
+        const existingAtomDocIds = new Set(
+          [...fm.wikiMetas.entries()].filter(([, m]) => m.kind === "atom").map(([id]) => id),
+        );
+        const filtered = await dedupCandidatesByEmbedding(result.atoms, existingAtomDocIds);
+        if (filtered.length === 0) break; // 全部既存と被っていたら収束扱い
+        for (const candidate of filtered) {
           const atomDoc = buildAtomDocument(candidate, result.model ?? null, "ja");
           const newId = await fm.handleCreateWikiFile(atomDoc);
           embedWikiSections(newId, atomDoc).catch(() => {});
@@ -3458,7 +3466,20 @@ export function NoteApp() {
           getChatSynthesisLLMModel()?.name,
         );
         if (result.candidates.length === 0) break; // 収束
-        for (const candidate of result.candidates) {
+        // 既存 Synthesis との embedding 類似度で post-filter（embedding 未設定なら素通し）
+        const existingSynthDocIds = new Set(
+          [...fm.wikiMetas.entries()].filter(([, m]) => m.kind === "synthesis").map(([id]) => id),
+        );
+        // dedup ヘルパは { title, body } を期待するので sections を結合した body を作る
+        const candidatesForDedup = result.candidates.map((c) => ({
+          title: c.title,
+          body: c.sections.map((s) => `${s.heading}\n${s.content}`).join("\n\n"),
+          original: c,
+        }));
+        const filtered = await dedupCandidatesByEmbedding(candidatesForDedup, existingSynthDocIds);
+        if (filtered.length === 0) break;
+        for (const f of filtered) {
+          const candidate = f.original;
           const synthDoc = buildSynthesisDocument(
             candidate,
             result.model ?? null,

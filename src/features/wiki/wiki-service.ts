@@ -1544,6 +1544,74 @@ export function buildSynthesisDocument(
   };
 }
 
+// ── Discovery 共通: embedding ベースの post-filter（重複検出の safety net） ──
+
+/**
+ * Atom / Synthesis の discovery 候補を、既存同 kind ドキュメントとの embedding 類似度で
+ * filter する。LLM プロンプトベースの "Existing titles" 重複防止に対する安全網。
+ *
+ * 設計の意図:
+ *   - embedding モデル必須にはしない。設定が無い / API が失敗したら **そのまま素通し**（fail-open）。
+ *   - 既存が空 / 候補が空のときは即返す（embedding API を叩かない）。
+ *   - 類似度はセクション単位で計算され、同 kind の任意のセクションと閾値超えしたら drop。
+ *
+ * @returns 重複と判定されなかった候補のみ
+ */
+export async function dedupCandidatesByEmbedding<T extends { title: string; body: string }>(
+  candidates: T[],
+  existingSameKindDocIds: Set<string>,
+  threshold = 0.9,
+): Promise<T[]> {
+  if (candidates.length === 0 || existingSameKindDocIds.size === 0) return candidates;
+
+  // embedding モデルが未設定なら fail-open（プロンプトベース dedup に任せる）
+  const embModel = getEmbeddingLLMModel();
+  if (!embModel) return candidates;
+
+  try {
+    // 各候補の title + body を embed
+    const texts = candidates.map((c, i) => ({
+      documentId: `__candidate_${i}__`,
+      sectionId: "main",
+      text: `${c.title}\n\n${c.body}`,
+    }));
+    const res = await fetch(`${API_BASE}/embed`, {
+      method: "POST",
+      headers: wikiHeaders("embedding"),
+      body: JSON.stringify({
+        texts,
+        embedding_model: getEmbeddingModel() || undefined,
+      }),
+    });
+    if (!res.ok) return candidates; // fail-open
+
+    const data = await res.json() as {
+      embeddings: { documentId: string; sectionId: string; vector: number[] }[];
+    };
+
+    // 既存同 kind ドキュメントの中で類似度 > threshold のものがあれば drop
+    const TOP_K = 3;
+    const kept: T[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const emb = data.embeddings.find((e) => e.documentId === `__candidate_${i}__`);
+      if (!emb || emb.vector.length === 0) {
+        kept.push(candidate); // ベクトル取れず → 素通し
+        continue;
+      }
+      const results = await embeddingStore.searchByVector(emb.vector, TOP_K);
+      const dup = results.some(
+        (r) => existingSameKindDocIds.has(r.documentId) && r.score > threshold,
+      );
+      if (!dup) kept.push(candidate);
+    }
+    return kept;
+  } catch (err) {
+    console.warn("dedupCandidatesByEmbedding failed, falling through:", err);
+    return candidates; // fail-open
+  }
+}
+
 // ── Atom（実験的レイヤ）──
 
 export type AtomCandidate = {

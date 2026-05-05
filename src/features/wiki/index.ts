@@ -19,6 +19,8 @@ export {
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
   // Atom（実験的）
   atomizeConcepts, buildAtomDocument,
+  // Discovery 共通: embedding ベース重複検出
+  dedupCandidatesByEmbedding,
   // インライン引用リンク
   buildNoteIndex,
 } from "./wiki-service";
