@@ -1085,8 +1085,14 @@ function NoteEditorInner({
 
   // ── team-shared storage（Phase 2a） ──
   const [shareBusy, setShareBusy] = useState(false);
-  // 現在の sharedRef は initialDoc 由来。Share 完了後に再保存して更新される。
-  const isShared = !!initialDoc?.sharedRef;
+  // sharedRef は initialDoc から初期化し、Share 成功時に即時更新する。
+  // initialDoc は親が新しい doc に差し替えない限り変わらないため、ローカル state で持つ。
+  const [sharedRefState, setSharedRefState] = useState(initialDoc?.sharedRef);
+  // 別のノートを開いた（initialDoc が変わった）ときは新しい sharedRef に追従する
+  useEffect(() => {
+    setSharedRefState(initialDoc?.sharedRef);
+  }, [initialDoc]);
+  const isShared = !!sharedRefState;
   const sharedRoot = getSharedRoot();
   const sharedAuthor = loadAuthorIdentity();
   const shareDisabledReason = !isTauri()
@@ -1111,6 +1117,8 @@ function NoteEditorInner({
       }
       // sharedRef 付きの doc を保存（personal 側に sharedRef を持たせる）
       onSave(result.doc);
+      // バッジを即時更新（initialDoc は親側で書き替えるまで変わらないので、ローカル state で先に反映）
+      setSharedRefState(result.doc.sharedRef);
       window.alert(
         result.isUpdate
           ? t("share.successReshare")
