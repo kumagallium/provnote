@@ -417,25 +417,27 @@ app.post("/synthesize", async (c) => {
   }
 });
 
-// Atomize（Concept から文脈削減した Atom を生成）
+// Atomize（複数 Concept にまたがる共通抽象を発見する discovery）
 //   experimental.atomLayer 有効時にクライアントから呼ばれる。
-//   Concept を 1〜N 件入力し、1 件の Atom 候補を返す（信頼度低なら null）。
+//   Concept[] を入力し、2 件以上の Concept にまたがる Atom 候補 0〜N 件を返す。
+//   既存 Atom のタイトル一覧を渡すと重複提案を抑える。
 app.post("/atomize", async (c) => {
   const body = await c.req.json<{
     concepts: ConceptSnapshot[];
+    existingAtomTitles?: string[];
     language: string;
     model?: string;
   }>();
 
-  if (!body.concepts || body.concepts.length === 0) {
-    return c.json({ atom: null });
+  if (!body.concepts || body.concepts.length < 2) {
+    return c.json({ atoms: [] });
   }
 
   const modelConfig = resolveModelConfig(c, { modelName: body.model });
-  if (!modelConfig) return c.json({ atom: null });
+  if (!modelConfig) return c.json({ atoms: [] });
 
   const systemPrompt = buildAtomizerSystemPrompt(body.language || "en");
-  const userMessage = buildAtomizerUserMessage(body.concepts);
+  const userMessage = buildAtomizerUserMessage(body.concepts, body.existingAtomTitles ?? []);
 
   try {
     const model = createModel(modelConfig);
@@ -446,16 +448,13 @@ app.post("/atomize", async (c) => {
       messages: [{ role: "user" as const, content: userMessage }],
       maxSteps: 1,
     });
-    const atom = parseAtomizerOutput(
-      result.message,
-      body.concepts.map((c) => c.id),
-      body.concepts.map((c) => c.title),
-    );
-    return c.json({ atom, model: result.model, tokenUsage: result.tokenUsage });
+    const idToTitle = new Map<string, string>(body.concepts.map((c) => [c.id, c.title]));
+    const atoms = parseAtomizerOutput(result.message, idToTitle);
+    return c.json({ atoms, model: result.model, tokenUsage: result.tokenUsage });
   } catch (err) {
     const message = err instanceof Error ? err.message : "不明なエラー";
     console.error("Wiki atomize error:", err);
-    return c.json({ atom: null, error: message });
+    return c.json({ atoms: [], error: message });
   }
 });
 

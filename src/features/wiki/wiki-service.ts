@@ -1555,30 +1555,32 @@ export type AtomCandidate = {
   confidence: number;
 };
 
-export type AtomizeResult = { atom: AtomCandidate | null; model?: string };
+export type AtomizeResult = { atoms: AtomCandidate[]; model?: string };
 
 /**
- * Concept(s) を Atom（文脈削減した単一アイデア）に再構成する。
+ * 複数の Concept を入力し、Concept をまたいで現れる共通抽象（Atom）の候補を 0〜N 件返す。
+ * 既存 Atom のタイトル一覧を渡すと重複提案を抑える。
  * experimental.atomLayer 有効時にクライアントから呼ぶ。
  */
 export async function atomizeConcepts(
   concepts: ConceptSnapshot[],
   language: string,
-  model?: string,
+  options?: { existingAtomTitles?: string[]; model?: string },
 ): Promise<AtomizeResult> {
-  if (concepts.length === 0) return { atom: null };
+  if (concepts.length < 2) return { atoms: [] };
   const res = await fetch(`${API_BASE}/atomize`, {
     method: "POST",
     headers: wikiHeaders("chatSynthesis"),
     body: JSON.stringify({
       concepts,
+      ...(options?.existingAtomTitles ? { existingAtomTitles: options.existingAtomTitles } : {}),
       language,
-      ...(model ? { model } : {}),
+      ...(options?.model ? { model: options.model } : {}),
     }),
   });
   if (!res.ok) {
     console.error("Atomize API failed:", res.status);
-    return { atom: null };
+    return { atoms: [] };
   }
   return res.json();
 }

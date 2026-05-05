@@ -2,7 +2,7 @@
 // エディタ上部に表示: AI 生成バッジ、アクションボタン
 
 import { useState, useRef, useEffect } from "react";
-import { RefreshCw, Trash2, ChevronDown, Sparkles } from "lucide-react";
+import { RefreshCw, Trash2, ChevronDown } from "lucide-react";
 import type { WikiMeta } from "../../lib/document-types";
 
 export type RegenerateOptions = {
@@ -20,13 +20,6 @@ type Props = {
   onRegenerate: (options?: RegenerateOptions) => void;
   onDelete: () => void;
   loading?: boolean;
-  /** Concept から Atom を生成する（実験的レイヤ ON のときのみ呼び出される）。
-   *  未指定なら Atom 化ボタンは出さない。 */
-  onAtomize?: () => void;
-  /** Atom 化ボタンを表示するか（atomLayer フラグ ON かつ kind === "concept" のとき true） */
-  canAtomize?: boolean;
-  /** Atom 化中ローディング */
-  atomizing?: boolean;
 };
 
 function formatDate(isoDate: string): string {
@@ -44,9 +37,6 @@ export function WikiBanner({
   onRegenerate,
   onDelete,
   loading = false,
-  onAtomize,
-  canAtomize = false,
-  atomizing = false,
 }: Props) {
   const kindLabel =
     wikiMeta.kind === "summary" ? "Summary"
@@ -194,30 +184,6 @@ export function WikiBanner({
 
         {/* アクションボタン */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {/* Atomize（Concept のみ、Atom レイヤ ON のときに表示） */}
-          {canAtomize && onAtomize && (
-            <button
-              onClick={onAtomize}
-              disabled={atomizing || loading}
-              title="Generate an Atom from this Concept"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "4px 8px",
-                borderRadius: "var(--r-1)",
-                border: "1px solid var(--rule)",
-                background: "var(--paper)",
-                color: "var(--ink-2)",
-                fontSize: 11,
-                cursor: "pointer",
-                opacity: atomizing || loading ? 0.5 : 1,
-              }}
-            >
-              <Sparkles size={12} />
-              <span>Atomize</span>
-            </button>
-          )}
           {/* Regenerate ▾ */}
           <div style={{ position: "relative" }} ref={pickerRef}>
             <button

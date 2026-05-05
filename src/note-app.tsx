@@ -2600,47 +2600,6 @@ export function NoteApp() {
           wikiLog.append("ingest", [newId], `Created "${wiki.title}" from "${job.noteTitle}"`).catch(() => {});
         }
 
-        // 自動 Atomize: experimental.atomLayer 有効時、新規作成した Concept を Atom 化する。
-        // 1 Concept = 1 Atom の最小単位で抽象化し、Atom 層を厚くしていく方針。
-        // fire-and-forget — 失敗しても ingest 自体は成功扱いとする。
-        if (isAtomLayerEnabled()) {
-          (async () => {
-            try {
-              for (let idx = 0; idx < result.wikis.length; idx++) {
-                const wiki = result.wikis[idx];
-                if (wiki.kind !== "concept") continue;
-                const conceptId = createdWikiIds[idx];
-                if (!conceptId) continue;
-                const conceptDoc = fm.getCachedDoc(`wiki:${conceptId}`);
-                if (!conceptDoc) continue;
-                const detail = extractWikiDetail(conceptId, conceptDoc);
-                if (!detail) continue;
-                const snapshot = {
-                  id: conceptId,
-                  title: wiki.title,
-                  sections: detail.sectionHeadings.map((h, i) => ({
-                    heading: h,
-                    preview: detail.sectionPreviews[i] ?? "",
-                  })),
-                  relatedConcepts: [],
-                };
-                const atomResult = await atomizeConcepts(
-                  [snapshot],
-                  "ja",
-                  getChatSynthesisLLMModel()?.name,
-                );
-                if (!atomResult.atom) continue;
-                const atomDoc = buildAtomDocument(atomResult.atom, atomResult.model ?? null, "ja");
-                const atomId = await fm.handleCreateWikiFile(atomDoc);
-                embedWikiSections(atomId, atomDoc).catch(() => {});
-                wikiLog.append("ingest", [atomId], `Atom: "${atomResult.atom.title}" (from "${wiki.title}")`).catch(() => {});
-              }
-            } catch (err) {
-              console.error("Atomize failed:", err);
-            }
-          })();
-        }
-
         // 横断更新: 既存 Concept ページの自動更新
         if (existingWikis.length > 0 && job.doc) {
           (async () => {
@@ -2711,6 +2670,42 @@ export function NoteApp() {
       }
 
       ingestQueueRef.current.shift();
+    }
+
+    // 自動 Atomize: experimental.atomLayer 有効時、全 Concept を見渡して
+    // 共通抽象を発見する discovery を 1 回回す（Synthesis と同じ pattern）。
+    // 既存 Atom のタイトルは "重複しないでね" として LLM に渡す。
+    // fire-and-forget — 失敗は ingest 全体には影響させない。
+    if (isAtomLayerEnabled()) try {
+      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc, "concept");
+      if (conceptSnapshots.length >= 2) {
+        const existingAtomTitles = [...fm.wikiMetas.entries()]
+          .filter(([, m]) => m.kind === "atom")
+          .map(([, m]) => m.title);
+        const atomResult = await atomizeConcepts(
+          conceptSnapshots,
+          "ja",
+          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+        );
+        for (const candidate of atomResult.atoms) {
+          const atomDoc = buildAtomDocument(candidate, atomResult.model ?? null, "ja");
+          const newId = await fm.handleCreateWikiFile(atomDoc);
+          embedWikiSections(newId, atomDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          setIngestToast((prev) => ({
+            items: [
+              ...(prev?.items ?? []),
+              { id: `atom:${newId}`, status: "success" as const, noteTitle: `🔬 Atom: ${candidate.title}` },
+            ],
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Atomize failed:", err);
     }
 
     // 自動 Synthesis: 実験フラグで Synthesis レイヤが有効なときのみ動作する。
@@ -3331,91 +3326,73 @@ export function NoteApp() {
     }
   }, [fm]);
 
-  // 既存の Concept から Atom を作る（WikiBanner ボタン / Maintenance 一括の両方から呼ばれる）。
-  // force=false（既定）のときは、その Concept を `derivedFromConcepts` に含む Atom が
-  // すでに 1 件以上あればスキップする（重複防止）。
+  // 全 Concept を見渡して共通抽象（Atom）を発見する discovery 呼び出し。
+  // - Maintenance タブの「Atom 候補を発見」ボタンから呼ばれる
+  // - 自動 Atomize（ingest 後）も同じ実体を使う想定だが、
+  //   そちらは fire-and-forget で直接 `atomizeConcepts` を呼ぶ
+  // 既存 Atom のタイトルを LLM に渡して重複提案を抑制する。
   // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
-  const atomizeConceptById = useCallback(async (
-    conceptId: string,
-    options?: { force?: boolean },
-  ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
+  const runAtomizeDiscovery = useCallback(async (): Promise<
+    { ok: boolean; created: number; error?: string }
+  > => {
     if (!isAtomLayerEnabled()) {
-      return { ok: false, error: "Atom layer is disabled" };
+      return { ok: false, created: 0, error: "Atom layer is disabled" };
     }
-    const force = options?.force ?? false;
-    const conceptDoc = fm.getCachedDoc(`wiki:${conceptId}`) ?? (await fm.loadDoc(`wiki:${conceptId}`)) ?? null;
-    if (!conceptDoc || conceptDoc.wikiMeta?.kind !== "concept") {
-      return { ok: false, error: "Concept not found" };
+    const conceptSnapshots = buildConceptSnapshots(
+      fm.wikiFiles,
+      fm.wikiMetas,
+      fm.getCachedDoc,
+      "concept",
+    );
+    if (conceptSnapshots.length < 2) {
+      return { ok: false, created: 0, error: "Need at least 2 Concepts" };
     }
+    const existingAtomTitles = [...fm.wikiMetas.entries()]
+      .filter(([, m]) => m.kind === "atom")
+      .map(([, m]) => m.title);
 
-    if (!force) {
-      // すでに Atom が紐づいている Concept はスキップ
-      for (const meta of fm.wikiMetas.values()) {
-        if (meta.kind !== "atom") continue;
-      }
-      // wikiMetas には derivedFromConcepts が無いので、cached doc を覗く
-      for (const wf of fm.wikiFiles) {
-        const m = fm.wikiMetas.get(wf.id);
-        if (m?.kind !== "atom") continue;
-        const aDoc = fm.getCachedDoc(`wiki:${wf.id}`);
-        if (aDoc?.wikiMeta?.derivedFromConcepts?.includes(conceptId)) {
-          return { ok: true, skipped: true };
-        }
-      }
-    }
-
-    const detail = extractWikiDetail(conceptId, conceptDoc);
-    if (!detail) return { ok: false, error: "Concept has no extractable detail" };
-
-    const toastId = `atomize:${conceptId}`;
+    const toastId = `atomize-discovery:${Date.now()}`;
     setIngestToast((prev) => ({
       items: [
         ...(prev?.items ?? []),
-        { id: toastId, status: "generating" as const, noteTitle: `Atomizing "${conceptDoc.title}"` },
+        { id: toastId, status: "generating" as const, noteTitle: `Discovering Atoms across ${conceptSnapshots.length} Concepts` },
       ],
     }));
 
     try {
-      const snapshot = {
-        id: conceptId,
-        title: conceptDoc.title,
-        sections: detail.sectionHeadings.map((h, i) => ({
-          heading: h,
-          preview: detail.sectionPreviews[i] ?? "",
-        })),
-        relatedConcepts: [],
-      };
-      const atomResult = await atomizeConcepts(
-        [snapshot],
+      const result = await atomizeConcepts(
+        conceptSnapshots,
         "ja",
-        getChatSynthesisLLMModel()?.name,
+        { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
       );
-      if (!atomResult.atom) {
-        setIngestToast((prev) => ({
-          items: (prev?.items ?? []).map((i) =>
-            i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: "No atom generated" } : i
-          ),
-        }));
-        return { ok: false, error: "No atom generated" };
+      let created = 0;
+      for (const candidate of result.atoms) {
+        const atomDoc = buildAtomDocument(candidate, result.model ?? null, "ja");
+        const newId = await fm.handleCreateWikiFile(atomDoc);
+        embedWikiSections(newId, atomDoc).catch(() => {});
+        wikiLog.append(
+          "ingest",
+          [newId],
+          `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
+        ).catch(() => {});
+        created += 1;
       }
-      const atomDoc = buildAtomDocument(atomResult.atom, atomResult.model ?? null, "ja");
-      const atomId = await fm.handleCreateWikiFile(atomDoc);
-      embedWikiSections(atomId, atomDoc).catch(() => {});
-      wikiLog.append("ingest", [atomId], `Atom: "${atomResult.atom.title}" (from "${conceptDoc.title}")`).catch(() => {});
       setIngestToast((prev) => ({
         items: (prev?.items ?? []).map((i) =>
-          i.id === toastId ? { ...i, status: "success" as const, detail: undefined, result: atomResult.atom!.title } : i
+          i.id === toastId
+            ? { ...i, status: "success" as const, detail: undefined, result: `${created} atom(s)` }
+            : i
         ),
       }));
-      return { ok: true };
+      return { ok: true, created };
     } catch (err) {
-      console.error("Atomize failed:", err);
+      console.error("Atomize discovery failed:", err);
       setIngestToast((prev) => ({
         items: (prev?.items ?? []).map((i) =>
           i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
         ),
       }));
-      return { ok: false, error: err instanceof Error ? err.message : "Failed" };
+      return { ok: false, created: 0, error: err instanceof Error ? err.message : "Failed" };
     }
   }, [fm]);
 
@@ -3886,14 +3863,6 @@ export function NoteApp() {
                 fm.handleDeleteWikiFile(wikiId);
                 wikiLog.append("delete", [wikiId], `Deleted "${title}"`).catch(() => {});
               }}
-              canAtomize={experimentalFlags.atomLayer && fm.activeDoc.wikiMeta.kind === "concept"}
-              atomizing={ingestToast?.items?.some((i) => i.id === `atomize:${fm.activeFileId?.replace("wiki:", "")}` && i.status === "generating")}
-              onAtomize={async () => {
-                if (!fm.activeFileId) return;
-                const conceptId = fm.activeFileId.replace("wiki:", "");
-                // 手動トリガはユーザーの意図的な操作なので force=true（重複チェックをスキップ）
-                await atomizeConceptById(conceptId, { force: true });
-              }}
             />
           )}
           <NoteEditor
@@ -4148,7 +4117,7 @@ export function NoteApp() {
         }}
         wikiSummaries={wikiSummariesForSettings}
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
-        onAtomizeConcept={(conceptId, options) => atomizeConceptById(conceptId, options)}
+        onRunAtomizeDiscovery={runAtomizeDiscovery}
       />
       <Composer
         open={composer.open}

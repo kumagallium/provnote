@@ -98,10 +98,11 @@ export type RegenerateWikiHandler = (
   options?: { model?: string },
 ) => Promise<{ ok: boolean; error?: string }>;
 
-export type AtomizeConceptHandler = (
-  conceptId: string,
-  options?: { force?: boolean },
-) => Promise<{ ok: boolean; skipped?: boolean; error?: string }>;
+export type AtomizeDiscoveryHandler = () => Promise<{
+  ok: boolean;
+  created: number;
+  error?: string;
+}>;
 
 type BulkFailedItem = { id: string; title: string; error?: string };
 type BulkProgress = {
@@ -131,12 +132,13 @@ type SettingsModalProps = {
   wikiSummaries?: WikiSummaryForSettings[];
   /** Maintenance タブから 1 件ずつ呼ばれる再生成ハンドラ */
   onRegenerateWiki?: RegenerateWikiHandler;
-  /** Maintenance タブの一括 Atomize ハンドラ（atomLayer 有効時のみ表示）。
-   *  既存の Concept から Atom を作る。重複判定は呼び出し側 (force=false) で行う。 */
-  onAtomizeConcept?: AtomizeConceptHandler;
+  /** Maintenance タブの「Atom 候補を発見」ハンドラ（atomLayer 有効時のみ表示）。
+   *  全 Concept を見渡して Concept をまたぐ共通抽象を 1 回の LLM 呼び出しで発見する。
+   *  既存 Atom との重複は呼び出し側でタイトル一覧を LLM に渡して抑制する。 */
+  onRunAtomizeDiscovery?: AtomizeDiscoveryHandler;
 };
 
-export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onAtomizeConcept }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
   const [tab, setTab] = useState<Tab>("display");
 
@@ -197,10 +199,14 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
   const cancelBulkRef = useRef(false);
 
-  // Maintenance タブ — 既存 Concept → Atom 一括生成（atomLayer 有効時のみ）
+  // Maintenance タブ — 既存 Concept をまたぐ Atom 候補を発見（atomLayer 有効時のみ）
   const [atomizeRunning, setAtomizeRunning] = useState(false);
-  const [atomizeProgress, setAtomizeProgress] = useState<{ done: number; total: number; created: number; skipped: number; failed: number; current?: string } | null>(null);
-  const cancelAtomizeRef = useRef(false);
+  const [atomizeProgress, setAtomizeProgress] = useState<{
+    status: "running" | "done" | "error";
+    conceptCount: number;
+    created?: number;
+    error?: string;
+  } | null>(null);
 
   // モデル追加フォーム
   const [showAddForm, setShowAddForm] = useState(false);
@@ -1712,7 +1718,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               t={t}
               wikiSummaries={wikiSummaries ?? []}
               onRegenerateWiki={onRegenerateWiki}
-              onAtomizeConcept={onAtomizeConcept}
+              onRunAtomizeDiscovery={onRunAtomizeDiscovery}
               atomLayerEnabled={experimental.atomLayer}
               availableModels={models}
               defaultModel={model || defaultModel}
@@ -1732,7 +1738,6 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               setAtomizeRunning={setAtomizeRunning}
               atomizeProgress={atomizeProgress}
               setAtomizeProgress={setAtomizeProgress}
-              cancelAtomizeRef={cancelAtomizeRef}
             />
           </div>
         )}
@@ -1752,13 +1757,18 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
 // ── Maintenance タブ ──
 // Knowledge レイヤのメンテナンス操作。今は Wiki 一括 Regenerate のみ
-type AtomizeProgress = { done: number; total: number; created: number; skipped: number; failed: number; current?: string };
+type AtomizeDiscoveryState = {
+  status: "running" | "done" | "error";
+  conceptCount: number;
+  created?: number;
+  error?: string;
+};
 
 type MaintenanceTabProps = {
   t: (key: string) => string;
   wikiSummaries: WikiSummaryForSettings[];
   onRegenerateWiki?: RegenerateWikiHandler;
-  onAtomizeConcept?: AtomizeConceptHandler;
+  onRunAtomizeDiscovery?: AtomizeDiscoveryHandler;
   atomLayerEnabled: boolean;
   availableModels: ModelInfo[];
   defaultModel: string;
@@ -1776,16 +1786,15 @@ type MaintenanceTabProps = {
   cancelBulkRef: { current: boolean };
   atomizeRunning: boolean;
   setAtomizeRunning: (b: boolean) => void;
-  atomizeProgress: AtomizeProgress | null;
-  setAtomizeProgress: (p: AtomizeProgress | null) => void;
-  cancelAtomizeRef: { current: boolean };
+  atomizeProgress: AtomizeDiscoveryState | null;
+  setAtomizeProgress: (p: AtomizeDiscoveryState | null) => void;
 };
 
 function MaintenanceTab({
   t,
   wikiSummaries,
   onRegenerateWiki,
-  onAtomizeConcept,
+  onRunAtomizeDiscovery,
   atomLayerEnabled,
   availableModels,
   defaultModel,
@@ -1805,7 +1814,6 @@ function MaintenanceTab({
   setAtomizeRunning,
   atomizeProgress,
   setAtomizeProgress,
-  cancelAtomizeRef,
 }: MaintenanceTabProps) {
   const KINDS: WikiKind[] = ["concept", "summary", "atom", "synthesis"];
   const [cancelling, setCancelling] = useState(false);
@@ -1875,38 +1883,30 @@ function MaintenanceTab({
     : k === "atom" ? t("settings.maintenance.kind.atom")
     : t("settings.maintenance.kind.synthesis");
 
-  // ── 一括 Atomize（既存 Concept → Atom）──
+  // ── Atom 候補の発見（複数 Concept にまたがる共通抽象を 1 回の LLM 呼び出しで発見）──
   const conceptCount = wikiSummaries.filter((w) => w.kind === "concept").length;
-  const handleAtomizeAll = async () => {
-    if (!onAtomizeConcept || atomizeRunning) return;
-    const concepts = wikiSummaries.filter((w) => w.kind === "concept");
-    if (concepts.length === 0) return;
-    if (!window.confirm(t("settings.maintenance.atomize.confirm").replace("{count}", String(concepts.length)))) return;
+  const handleRunDiscovery = async () => {
+    if (!onRunAtomizeDiscovery || atomizeRunning) return;
+    if (conceptCount < 2) return;
+    if (!window.confirm(t("settings.maintenance.atomize.confirm").replace("{count}", String(conceptCount)))) return;
 
     setAtomizeRunning(true);
-    cancelAtomizeRef.current = false;
-    setAtomizeProgress({ done: 0, total: concepts.length, created: 0, skipped: 0, failed: 0 });
+    setAtomizeProgress({ status: "running", conceptCount });
 
-    let done = 0, created = 0, skipped = 0, failed = 0;
-    for (const c of concepts) {
-      if (cancelAtomizeRef.current) break;
-      setAtomizeProgress({ done, total: concepts.length, created, skipped, failed, current: c.title });
-      // 重複防止（force=false）— 既に Atom 化済みの Concept は呼び出し側でスキップされる
-      const result = await onAtomizeConcept(c.id, { force: false });
-      if (result.skipped) skipped += 1;
-      else if (result.ok) created += 1;
-      else failed += 1;
-      done += 1;
-      setAtomizeProgress({ done, total: concepts.length, created, skipped, failed });
+    const result = await onRunAtomizeDiscovery();
+    if (result.ok) {
+      setAtomizeProgress({ status: "done", conceptCount, created: result.created });
+    } else {
+      setAtomizeProgress({ status: "error", conceptCount, error: result.error });
     }
     setAtomizeRunning(false);
   };
-  const handleAtomizeCancel = () => { cancelAtomizeRef.current = true; };
 
   return (
     <div className="space-y-5">
-      {/* 既存 Concept → Atom 一括生成（atomLayer 有効時のみ表示）*/}
-      {atomLayerEnabled && onAtomizeConcept && (
+      {/* Atom 候補の発見（atomLayer 有効時のみ表示）。
+          全 Concept をまたぐ共通抽象を 1 回の LLM 呼び出しで discover する。 */}
+      {atomLayerEnabled && onRunAtomizeDiscovery && (
         <div className="rounded-lg border border-border p-3 space-y-3">
           <div>
             <div className="text-xs font-semibold text-foreground mb-1">
@@ -1918,34 +1918,21 @@ function MaintenanceTab({
           </div>
 
           {atomizeProgress && (
-            <div className="rounded-md border border-border bg-background px-3 py-2 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium">
-                  {atomizeProgress.done} / {atomizeProgress.total}
-                  <span className="text-muted-foreground ml-2">
-                    ({t("settings.maintenance.atomize.created")}: {atomizeProgress.created},
-                    {" "}{t("settings.maintenance.atomize.skipped")}: {atomizeProgress.skipped}
-                    {atomizeProgress.failed > 0 && (
-                      <span className="text-red-500">, {t("settings.maintenance.failed")}: {atomizeProgress.failed}</span>
-                    )}
-                    )
-                  </span>
-                </span>
-                {atomizeRunning && (
-                  <Button variant="ghost" size="sm" onClick={handleAtomizeCancel}>
-                    {t("common.cancel")}
-                  </Button>
-                )}
-              </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${(atomizeProgress.done / Math.max(1, atomizeProgress.total)) * 100}%` }}
-                />
-              </div>
-              {atomizeProgress.current && atomizeRunning && (
-                <div className="text-[11px] text-muted-foreground truncate">
-                  {t("settings.maintenance.current")}: {atomizeProgress.current}
+            <div className="rounded-md border border-border bg-background px-3 py-2 text-xs space-y-1">
+              {atomizeProgress.status === "running" && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  {t("settings.maintenance.atomize.discovering").replace("{count}", String(atomizeProgress.conceptCount))}
+                </div>
+              )}
+              {atomizeProgress.status === "done" && (
+                <div className="text-foreground">
+                  {t("settings.maintenance.atomize.doneCount").replace("{count}", String(atomizeProgress.created ?? 0))}
+                </div>
+              )}
+              {atomizeProgress.status === "error" && (
+                <div className="text-red-500">
+                  {t("settings.maintenance.failed")}: {atomizeProgress.error ?? "unknown"}
                 </div>
               )}
             </div>
@@ -1953,8 +1940,8 @@ function MaintenanceTab({
 
           <Button
             size="sm"
-            onClick={handleAtomizeAll}
-            disabled={atomizeRunning || conceptCount === 0}
+            onClick={handleRunDiscovery}
+            disabled={atomizeRunning || conceptCount < 2}
           >
             {atomizeRunning
               ? t("settings.maintenance.atomize.running")
