@@ -136,12 +136,12 @@ Set it to true ONLY if your response contains generalizable knowledge, insights,
 
 // セッションタイトル生成
 app.post("/sessions/title", async (c) => {
-  const body = await c.req.json<{ first_message: string }>();
+  const body = await c.req.json<{ first_message: string; model?: string }>();
   if (!body.first_message) {
     return c.json({ error: "first_message は必須です" }, 400);
   }
 
-  const modelConfig = resolveModelConfig(c);
+  const modelConfig = resolveModelConfig(c, { modelName: body.model });
   if (!modelConfig) {
     // フォールバック: 先頭25文字
     const title = body.first_message.slice(0, 25) +

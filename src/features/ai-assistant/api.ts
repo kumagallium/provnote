@@ -2,7 +2,7 @@
 // /api/* エンドポイントを呼び出して AI 機能を提供する
 
 import { apiBase, isTauri } from "../../lib/platform";
-import { getRegistryUrl, getDefaultLLMModel, getChatSynthesisLLMModel } from "../settings/store";
+import { getRegistryUrl, getDefaultLLMModel, getChatSynthesisLLMModel, getChatSynthesisModelName } from "../settings/store";
 
 /**
  * Registry URL・LLM API キーが設定されている場合はヘッダーに含める。
@@ -114,7 +114,10 @@ export async function generateTitle(
   const res = await fetch(`${apiBase()}/agent/sessions/title`, {
     method: "POST",
     headers: apiHeaders("chat"),
-    body: JSON.stringify({ first_message: firstMessage }),
+    body: JSON.stringify({
+      first_message: firstMessage,
+      ...(getChatSynthesisModelName() ? { model: getChatSynthesisModelName() } : {}),
+    }),
   });
 
   if (!res.ok) {
