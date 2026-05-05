@@ -39,7 +39,10 @@ export type WikiSnapshot = {
   kind: "summary" | "concept" | "atom" | "synthesis";
   derivedFromNotes: string[];
   relatedConcepts: string[];
-  sections: string[];
+  /** 本文先頭のプレビュー（1ノート1知見前提で sections は廃止） */
+  bodyPreview: string;
+  /** Concept のときのみ意味を持つ（principle / finding / bridge） */
+  level?: "principle" | "finding" | "bridge";
   lastIngestedAt?: string;
   modifiedAt: string;
 };
@@ -122,16 +125,16 @@ export function buildLinterUserMessage(wikis: WikiSnapshot[]): string {
   }
 
   const wikiDescriptions = wikis.map((w) => {
+    const kindLabel = w.kind === "concept" && w.level ? `concept/${w.level}` : w.kind;
     const lines = [
-      `## [${w.kind}] ${w.title} (id: ${w.id})`,
+      `## [${kindLabel}] ${w.title} (id: ${w.id})`,
       `Last updated: ${w.modifiedAt}`,
       w.lastIngestedAt ? `Last ingested: ${w.lastIngestedAt}` : null,
       `Sources: ${w.derivedFromNotes.length} note(s)`,
       w.relatedConcepts.length > 0
         ? `Related concepts: ${w.relatedConcepts.join(", ")}`
         : null,
-      `Sections:`,
-      ...w.sections.map((s) => `  - ${s}`),
+      w.bodyPreview ? `Preview: ${w.bodyPreview}` : null,
     ].filter(Boolean);
     return lines.join("\n");
   }).join("\n\n---\n\n");

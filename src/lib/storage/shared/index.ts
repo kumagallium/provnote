@@ -18,3 +18,21 @@ export {
 
 export { newSharedId, isValidSharedId } from "./id";
 export { computeSharedEntryHash, computeBlobHash } from "./hash";
+export {
+  LocalFolderSharedProvider,
+  LocalFolderBlobProvider,
+  AuthorMismatchError,
+  type ProviderIdentity,
+} from "./local-folder";
+export {
+  getSharedRoot,
+  setSharedRoot,
+  getBlobRoot,
+  setBlobRoot,
+} from "./config";
+export { pickSharedRoot, pickBlobRoot } from "./picker";
+export {
+  testSharedConnection,
+  testBlobConnection,
+  type ConnectionTestResult,
+} from "./test-connection";

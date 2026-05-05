@@ -657,6 +657,271 @@ fn get_media_path(file_id: String) -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+// --- Team-shared storage（Phase 1b: Local folder Provider のバックエンド） ---
+//
+// 設計: docs/internal/team-shared-storage-design.md §4 Storage Provider 拡張
+// レイアウト:
+//   <shared-root>/
+//     <type>/<id>.json                  — SharedEntry + body_base64 を 1 ファイルに格納
+//     _meta/tombstones/<id>.json        — 削除マーカー（status="unshared" の entry のみ、body なし）
+//   <blob-root>/
+//     <hh>/<full-hash>                  — content-addressed blob（hh = hash の先頭 2 hex chars）
+//
+// パストラバーサル防御:
+//   - entry_type は固定の許可リストにのみマッチ
+//   - id は uuidv7 形式の正規表現でバリデート
+//   - hash は "sha256:<64 hex>" 形式のみ許可
+//   - すべてのコマンドで root は呼び出し側から渡され、上記の構造のみ触る
+
+const SHARED_ENTRY_TYPES: &[&str] = &[
+    "notes",
+    "references",
+    "data-manifests",
+    "templates",
+    "concepts",
+    "reports",
+];
+
+fn validate_entry_type(t: &str) -> Result<(), String> {
+    if SHARED_ENTRY_TYPES.contains(&t) {
+        Ok(())
+    } else {
+        Err(format!("無効な entry type: {t}"))
+    }
+}
+
+/// uuidv7 形式（version=7、variant=10xx）のチェック。
+fn validate_id(id: &str) -> Result<(), String> {
+    if id.len() != 36 {
+        return Err(format!("無効な id 長さ: {id}"))
+    }
+    let bytes = id.as_bytes();
+    // ハイフン位置: 8, 13, 18, 23
+    for (i, b) in bytes.iter().enumerate() {
+        match i {
+            8 | 13 | 18 | 23 => {
+                if *b != b'-' {
+                    return Err(format!("無効な id 形式: {id}"));
+                }
+            }
+            _ => {
+                let c = *b as char;
+                if !c.is_ascii_hexdigit() {
+                    return Err(format!("無効な id 形式: {id}"));
+                }
+            }
+        }
+    }
+    // version nibble (位置 14) = '7'
+    if bytes[14] != b'7' {
+        return Err(format!("uuidv7 ではない id: {id}"));
+    }
+    // variant nibble (位置 19) ∈ {8,9,a,b}
+    let v = bytes[19] as char;
+    if !matches!(v, '8' | '9' | 'a' | 'b' | 'A' | 'B') {
+        return Err(format!("無効な variant: {id}"));
+    }
+    Ok(())
+}
+
+/// "sha256:<64 hex>" のチェック。
+fn validate_hash(hash: &str) -> Result<(), String> {
+    let prefix = "sha256:";
+    if !hash.starts_with(prefix) {
+        return Err(format!("hash は sha256: で始まる必要があります: {hash}"));
+    }
+    let hex_part = &hash[prefix.len()..];
+    if hex_part.len() != 64 {
+        return Err(format!("hash の hex 長さが不正: {hash}"));
+    }
+    if !hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("hash に hex 以外の文字: {hash}"));
+    }
+    Ok(())
+}
+
+/// shared root が空文字でないことだけチェック（実体のディレクトリ作成は各コマンド側で行う）。
+fn validate_root(root: &str) -> Result<PathBuf, String> {
+    let trimmed = root.trim();
+    if trimmed.is_empty() {
+        return Err("shared root が未指定".to_string());
+    }
+    Ok(PathBuf::from(trimmed))
+}
+
+/// `<root>/<entry_type>/` のパスを返し、必要なら作成する。
+fn shared_type_dir(root: &str, entry_type: &str) -> Result<PathBuf, String> {
+    validate_entry_type(entry_type)?;
+    let root_path = validate_root(root)?;
+    let dir = root_path.join(entry_type);
+    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
+/// `<root>/_meta/tombstones/` のパスを返し、必要なら作成する。
+fn shared_tombstone_dir(root: &str) -> Result<PathBuf, String> {
+    let root_path = validate_root(root)?;
+    let dir = root_path.join("_meta").join("tombstones");
+    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
+/// `<blob-root>/<hh>/` のパスを返し、必要なら作成する。
+fn shared_blob_dir(root: &str, hash: &str) -> Result<PathBuf, String> {
+    validate_hash(hash)?;
+    let root_path = validate_root(root)?;
+    let hex_part = &hash["sha256:".len()..];
+    let prefix = &hex_part[..2];
+    let dir = root_path.join(prefix);
+    fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {e}"))?;
+    Ok(dir)
+}
+
+/// 指定 entry_type の全エントリ JSON 文字列を返す（list 用）。
+/// メタデータ単体ではなく `{entry, body_base64}` をそのまま返し、TS 側で必要な部分だけ使う。
+#[tauri::command]
+fn shared_list(root: String, entry_type: String) -> Result<Vec<String>, String> {
+    let dir = shared_type_dir(&root, &entry_type)?;
+    let mut out = Vec::new();
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(out), // ディレクトリが空 / 未作成は空リスト
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("エントリ読み取り失敗: {e}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        // ファイル名（拡張子除く）が uuidv7 形式でなければスキップ（誤って混入したファイル対策）
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        if validate_id(stem).is_err() {
+            continue;
+        }
+        let content = fs::read_to_string(&path).map_err(|e| format!("ファイル読み取り失敗: {e}"))?;
+        out.push(content);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn shared_read(root: String, entry_type: String, id: String) -> Result<String, String> {
+    validate_id(&id)?;
+    let dir = shared_type_dir(&root, &entry_type)?;
+    let path = dir.join(format!("{id}.json"));
+    fs::read_to_string(&path).map_err(|e| format!("ファイル読み取り失敗: {e}"))
+}
+
+/// 既存ファイルの author email を読み取って caller_email と比較する。
+/// 既存ファイルがなければ何もしない（最初の Share）。
+/// 一致しなければエラー — author-owned 強制の Rust 側 defense in depth。
+fn assert_existing_author(
+    path: &PathBuf,
+    caller_email: &Option<String>,
+) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(path).map_err(|e| format!("既存ファイル読み取り失敗: {e}"))?;
+    // JSON を完全パースせず、author.email だけ抜き出す（serde_json::Value で十分）
+    let v: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("既存ファイル JSON パース失敗: {e}"))?;
+    let existing_email = v
+        .get("entry")
+        .and_then(|e| e.get("author"))
+        .and_then(|a| a.get("email"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    let caller = caller_email.as_deref().unwrap_or("");
+    if existing_email != caller {
+        return Err(format!(
+            "Read-only: shared entry author is {existing_email}, not {caller}. Fork it instead."
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn shared_write(
+    root: String,
+    entry_type: String,
+    id: String,
+    content: String,
+    author_email: Option<String>,
+) -> Result<(), String> {
+    validate_id(&id)?;
+    let dir = shared_type_dir(&root, &entry_type)?;
+    let path = dir.join(format!("{id}.json"));
+    assert_existing_author(&path, &author_email)?;
+    fs::write(&path, content).map_err(|e| format!("ファイル書き込み失敗: {e}"))
+}
+
+/// 本体ファイルを削除し、tombstone JSON を `_meta/tombstones/<id>.json` に書き込む。
+/// 完全削除はせず、tombstone を残すことで誤共有のリカバリ履歴を保つ（v1 設計）。
+#[tauri::command]
+fn shared_delete(
+    root: String,
+    entry_type: String,
+    id: String,
+    tombstone_content: String,
+    author_email: Option<String>,
+) -> Result<(), String> {
+    validate_id(&id)?;
+    let body_dir = shared_type_dir(&root, &entry_type)?;
+    let body_path = body_dir.join(format!("{id}.json"));
+    assert_existing_author(&body_path, &author_email)?;
+    if body_path.exists() {
+        fs::remove_file(&body_path).map_err(|e| format!("本体ファイル削除失敗: {e}"))?;
+    }
+    let tomb_dir = shared_tombstone_dir(&root)?;
+    let tomb_path = tomb_dir.join(format!("{id}.json"));
+    fs::write(&tomb_path, tombstone_content)
+        .map_err(|e| format!("tombstone 書き込み失敗: {e}"))?;
+    Ok(())
+}
+
+/// Blob を hash で読み出す（base64 で返す）。
+#[tauri::command]
+fn shared_blob_read(root: String, hash: String) -> Result<String, String> {
+    use base64::Engine;
+    let dir = shared_blob_dir(&root, &hash)?;
+    let hex_part = &hash["sha256:".len()..];
+    let path = dir.join(hex_part);
+    let bytes = fs::read(&path).map_err(|e| format!("blob 読み取り失敗: {e}"))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
+/// Blob を hash 名で書き込む。content_base64 は呼び出し側で base64 化したバイト列。
+/// 既に同じ hash のファイルがあれば書き込みをスキップする（content-addressed の特性）。
+#[tauri::command]
+fn shared_blob_write(
+    root: String,
+    hash: String,
+    content_base64: String,
+) -> Result<(), String> {
+    use base64::Engine;
+    let dir = shared_blob_dir(&root, &hash)?;
+    let hex_part = &hash["sha256:".len()..];
+    let path = dir.join(hex_part);
+    if path.exists() {
+        return Ok(()); // dedup
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&content_base64)
+        .map_err(|e| format!("base64 デコード失敗: {e}"))?;
+    fs::write(&path, bytes).map_err(|e| format!("blob 書き込み失敗: {e}"))
+}
+
+#[tauri::command]
+fn shared_blob_exists(root: String, hash: String) -> Result<bool, String> {
+    let dir = shared_blob_dir(&root, &hash)?;
+    let hex_part = &hash["sha256:".len()..];
+    Ok(dir.join(hex_part).exists())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -690,6 +955,13 @@ pub fn run() {
             set_graphium_root,
             detect_legacy_drive_layout,
             migrate_legacy_drive_layout,
+            shared_list,
+            shared_read,
+            shared_write,
+            shared_delete,
+            shared_blob_read,
+            shared_blob_write,
+            shared_blob_exists,
             shutdown_ack,
         ])
         .setup(|app| {

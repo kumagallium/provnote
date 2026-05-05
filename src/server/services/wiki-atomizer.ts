@@ -125,10 +125,9 @@ export function buildAtomizerUserMessage(
   }
 
   const blocks = concepts.map((c) => {
-    const sections = c.sections
-      .map((s) => `  - ${s.heading}: ${s.preview}`)
-      .join("\n");
-    return `### ${c.title} (id: ${c.id})\n${sections}`;
+    const levelTag = c.level ? ` [${c.level}]` : "";
+    const preview = c.bodyPreview ? `  ${c.bodyPreview}` : "";
+    return `### ${c.title}${levelTag} (id: ${c.id})${preview ? "\n" + preview : ""}`;
   });
 
   const existingNote = existingAtomTitles.length > 0

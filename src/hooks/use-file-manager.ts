@@ -2,7 +2,7 @@
 // NoteApp のファイル一覧/キャッシュ/開く/新規/保存/削除/派生/グラフ/インデックスを集約
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GraphiumFile, GraphiumDocument, WikiKind } from "../lib/document-types";
+import type { GraphiumFile, GraphiumDocument, WikiKind, WikiMetaSummary } from "../lib/document-types";
 import { getActiveProvider } from "../lib/storage/registry";
 import { PROV_TEMPLATE } from "../lib/prov-template";
 import { recordRevision } from "../features/document-provenance/tracker";
@@ -164,7 +164,7 @@ export function useFileManager(authenticated: boolean) {
   const [wikiFiles, setWikiFiles] = useState<GraphiumFile[]>([]);
   const [activeWikiKind, setActiveWikiKind] = useState<WikiKind | null>(null);
   // Wiki メタデータ（サイドバーカウント・リスト表示用、noteIndex とは独立）
-  const [wikiMetas, setWikiMetas] = useState<Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>>(new Map());
+  const [wikiMetas, setWikiMetas] = useState<Map<string, WikiMetaSummary>>(new Map());
   // Skill 関連の状態
   const [skillFiles, setSkillFiles] = useState<GraphiumFile[]>([]);
   const [skillMetas, setSkillMetas] = useState<Map<string, { title: string; description: string; availableForIngest: boolean; systemSkillId?: string; language?: "ja" | "en" }>>(new Map());
@@ -282,22 +282,16 @@ export function useFileManager(authenticated: boolean) {
             return { id: f.id, doc };
           })
         ).then((results) => {
-          const metas = new Map<string, { title: string; kind: WikiKind; headings: string[]; model?: string }>();
+          const metas = new Map<string, WikiMetaSummary>();
           for (const r of results) {
             if (r.status === "fulfilled") {
               const { id, doc } = r.value;
-              const headings = (doc.pages[0]?.blocks ?? [])
-                .filter((b: any) => b.type === "heading" && b.props?.level === 2)
-                .map((b: any) => {
-                  if (Array.isArray(b.content)) return b.content.map((c: any) => c.text ?? "").join("");
-                  return "";
-                })
-                .filter(Boolean);
               metas.set(id, {
                 title: doc.title,
                 kind: doc.wikiMeta?.kind ?? "concept",
-                headings,
                 model: doc.wikiMeta?.generatedBy?.model,
+                level: doc.wikiMeta?.level,
+                status: doc.wikiMeta?.status,
               });
               docCacheRef.current.set(`wiki:${id}`, doc);
             }
@@ -1177,16 +1171,13 @@ export function useFileManager(authenticated: boolean) {
         // wikiMetas を即座に更新（サイドバー・リストの title 表示は wikiMetas を参照しているため）
         setWikiMetas((prev) => {
           const next = new Map(prev);
-          const headings = (doc.pages[0]?.blocks ?? [])
-            .filter((b: any) => b.type === "heading" && b.props?.level === 2)
-            .map((b: any) => Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? "").join("") : "")
-            .filter(Boolean);
           const existing = next.get(wikiId);
           next.set(wikiId, {
             title: doc.title,
             kind: doc.wikiMeta?.kind ?? existing?.kind ?? "concept",
-            headings,
             model: doc.wikiMeta?.generatedBy?.model ?? existing?.model,
+            level: doc.wikiMeta?.level ?? existing?.level,
+            status: doc.wikiMeta?.status ?? existing?.status,
           });
           return next;
         });
@@ -1306,15 +1297,12 @@ export function useFileManager(authenticated: boolean) {
       // wikiMetas を即座に更新（サイドバーに反映）
       setWikiMetas((prev) => {
         const next = new Map(prev);
-        const headings = (doc.pages[0]?.blocks ?? [])
-          .filter((b: any) => b.type === "heading" && b.props?.level === 2)
-          .map((b: any) => Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? "").join("") : "")
-          .filter(Boolean);
         next.set(newId, {
           title: doc.title,
           kind: doc.wikiMeta?.kind ?? "concept",
-          headings,
           model: doc.wikiMeta?.generatedBy?.model,
+          level: doc.wikiMeta?.level,
+          status: doc.wikiMeta?.status,
         });
         return next;
       });

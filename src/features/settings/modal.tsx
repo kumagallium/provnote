@@ -42,6 +42,17 @@ import {
   saveAuthorIdentity,
   validateAuthorIdentity,
 } from "../identity";
+import {
+  getSharedRoot,
+  setSharedRoot,
+  getBlobRoot,
+  setBlobRoot,
+  pickSharedRoot,
+  pickBlobRoot,
+  testSharedConnection,
+  testBlobConnection,
+  type ConnectionTestResult,
+} from "../../lib/storage/shared";
 
 // ── プロバイダー定義 ──
 const PROVIDERS = [
@@ -180,6 +191,14 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [authorEmail, setAuthorEmail] = useState("");
   const [identitySaved, setIdentitySaved] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
+
+  // Shared / Blob storage（team-shared-storage Phase 1c、Tauri 専用）
+  const [sharedRoot, setSharedRootState] = useState<string>("");
+  const [blobRoot, setBlobRootState] = useState<string>("");
+  const [sharedTestResult, setSharedTestResult] = useState<ConnectionTestResult | null>(null);
+  const [blobTestResult, setBlobTestResult] = useState<ConnectionTestResult | null>(null);
+  const [sharedTestRunning, setSharedTestRunning] = useState(false);
+  const [blobTestRunning, setBlobTestRunning] = useState(false);
 
   // サーバーストレージ機能（Docker / セルフホスト Web）
   const [serverCaps, setServerCaps] = useState<{ serverStorage: boolean; requiresAuth: boolean } | null>(null);
@@ -377,6 +396,12 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
     setIdentitySaved(false);
     setIdentityError(null);
 
+    // Shared / Blob root を読み込む
+    setSharedRootState(getSharedRoot() ?? "");
+    setBlobRootState(getBlobRoot() ?? "");
+    setSharedTestResult(null);
+    setBlobTestResult(null);
+
     // Web/Docker: サーバーストレージ機能を検出
     if (!isTauri()) {
       fetchCapabilities()
@@ -400,6 +425,76 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
       setIdentityError(e instanceof Error ? e.message : String(e));
     }
   }, [authorName, authorEmail, t]);
+
+  const handlePickSharedRoot = useCallback(async () => {
+    try {
+      const picked = await pickSharedRoot(sharedRoot || undefined);
+      if (picked) {
+        setSharedRoot(picked);
+        setSharedRootState(picked);
+        setSharedTestResult(null);
+      }
+    } catch (e) {
+      setSharedTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }, [sharedRoot]);
+
+  const handleClearSharedRoot = useCallback(() => {
+    setSharedRoot(null);
+    setSharedRootState("");
+    setSharedTestResult(null);
+  }, []);
+
+  const handleTestSharedConnection = useCallback(async () => {
+    if (!sharedRoot) return;
+    setSharedTestRunning(true);
+    setSharedTestResult(null);
+    try {
+      const identity = loadAuthorIdentity();
+      if (!identity) {
+        setSharedTestResult({
+          ok: false,
+          error: t("settings.shared.identityRequired"),
+        });
+        return;
+      }
+      const result = await testSharedConnection(sharedRoot, identity);
+      setSharedTestResult(result);
+    } finally {
+      setSharedTestRunning(false);
+    }
+  }, [sharedRoot, t]);
+
+  const handlePickBlobRoot = useCallback(async () => {
+    try {
+      const picked = await pickBlobRoot(blobRoot || undefined);
+      if (picked) {
+        setBlobRoot(picked);
+        setBlobRootState(picked);
+        setBlobTestResult(null);
+      }
+    } catch (e) {
+      setBlobTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }, [blobRoot]);
+
+  const handleClearBlobRoot = useCallback(() => {
+    setBlobRoot(null);
+    setBlobRootState("");
+    setBlobTestResult(null);
+  }, []);
+
+  const handleTestBlobConnection = useCallback(async () => {
+    if (!blobRoot) return;
+    setBlobTestRunning(true);
+    setBlobTestResult(null);
+    try {
+      const result = await testBlobConnection(blobRoot);
+      setBlobTestResult(result);
+    } finally {
+      setBlobTestRunning(false);
+    }
+  }, [blobRoot]);
 
   const handleSaveServerToken = useCallback(() => {
     setServerStorageToken(serverToken.trim() || null);
@@ -1109,6 +1204,149 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
                     <AlertCircle size={12} /> {rootError}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Shared storage（team-shared-storage Phase 1c、Tauri 専用） */}
+            {isTauri() ? (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FolderOpen size={14} className="text-muted-foreground" />
+                  <label className="text-xs font-semibold text-foreground">
+                    {t("settings.shared.title")}
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {t("settings.shared.help")}
+                </p>
+
+                {/* Shared root */}
+                <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t("settings.shared.rootLabel")}
+                  </div>
+                  {sharedRoot ? (
+                    <div className="text-xs font-mono text-foreground break-all">{sharedRoot}</div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground italic">
+                      {t("settings.shared.notSet")}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button size="sm" variant="ghost" onClick={handlePickSharedRoot}>
+                      {sharedRoot ? t("settings.shared.change") : t("settings.shared.pick")}
+                    </Button>
+                    {sharedRoot && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={handleTestSharedConnection}
+                          disabled={sharedTestRunning}
+                        >
+                          {sharedTestRunning ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            t("settings.shared.test")
+                          )}
+                        </Button>
+                        <button
+                          onClick={handleClearSharedRoot}
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          <RotateCcw size={12} />
+                          {t("settings.shared.clear")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {sharedTestResult && (
+                    <div className="text-xs">
+                      {sharedTestResult.ok ? (
+                        <p className="flex items-center gap-1 text-green-600">
+                          <CheckCircle size={12} />
+                          {t("settings.shared.testOk")}
+                        </p>
+                      ) : (
+                        <p className="flex items-start gap-1 text-red-500">
+                          <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                          <span className="break-all">{sharedTestResult.error}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Blob root */}
+                <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2 mt-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t("settings.shared.blobRootLabel")}
+                  </div>
+                  {blobRoot ? (
+                    <div className="text-xs font-mono text-foreground break-all">{blobRoot}</div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground italic">
+                      {t("settings.shared.notSet")}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button size="sm" variant="ghost" onClick={handlePickBlobRoot}>
+                      {blobRoot ? t("settings.shared.change") : t("settings.shared.pick")}
+                    </Button>
+                    {blobRoot && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={handleTestBlobConnection}
+                          disabled={blobTestRunning}
+                        >
+                          {blobTestRunning ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            t("settings.shared.test")
+                          )}
+                        </Button>
+                        <button
+                          onClick={handleClearBlobRoot}
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                          <RotateCcw size={12} />
+                          {t("settings.shared.clear")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {blobTestResult && (
+                    <div className="text-xs">
+                      {blobTestResult.ok ? (
+                        <p className="flex items-center gap-1 text-green-600">
+                          <CheckCircle size={12} />
+                          {t("settings.shared.testOk")}
+                        </p>
+                      ) : (
+                        <p className="flex items-start gap-1 text-red-500">
+                          <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                          <span className="break-all">{blobTestResult.error}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-2">
+                  {t("settings.shared.note")}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FolderOpen size={14} className="text-muted-foreground" />
+                  <label className="text-xs font-semibold text-foreground">
+                    {t("settings.shared.title")}
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.shared.desktopOnly")}
+                </p>
               </div>
             )}
           </div>

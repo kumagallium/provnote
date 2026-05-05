@@ -20,8 +20,13 @@ export type SynthesisCandidate = {
 export type ConceptSnapshot = {
   id: string;
   title: string;
-  /** セクション見出しとプレビュー */
-  sections: { heading: string; preview: string }[];
+  /**
+   * 本文先頭のプレビュー（1ノート1知見前提）。
+   * 旧来の sections（見出し + プレビュー配列）から本文プレビュー一本に変更。
+   */
+  bodyPreview: string;
+  /** Concept の抽象度レベル（principle / finding / bridge） */
+  level?: "principle" | "finding" | "bridge";
   /** 関連 Concept タイトル */
   relatedConcepts: string[];
   /**
@@ -151,13 +156,13 @@ export function buildSynthesizerUserMessage(
   }
 
   const conceptDescriptions = concepts.map((c) => {
-    const sections = c.sections
-      .map((s) => `  - ${s.heading}: ${s.preview}`)
-      .join("\n");
+    const levelTag = c.level ? ` [${c.level}]` : "";
+    const preview = c.bodyPreview ? `  ${c.bodyPreview}` : "";
     const related = c.relatedConcepts.length > 0
       ? `  Related to: ${c.relatedConcepts.join(", ")}`
       : "";
-    return `### ${c.title} (id: ${c.id})\n${sections}${related ? "\n" + related : ""}`;
+    const tail = [preview, related].filter(Boolean).join("\n");
+    return `### ${c.title}${levelTag} (id: ${c.id})${tail ? "\n" + tail : ""}`;
   }).join("\n\n");
 
   // 上流 Summary のプレビュー（誤差伝搬対策: Synthesizer に原料に近い層も見せる）

@@ -9,7 +9,7 @@ export {
   buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge,
   embedWikiSections, markEditedSections,
   // 横断更新
-  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
+  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail, extractBodyPreview,
   // Lint（自動実行用）
   lintWikis, buildWikiSnapshots,
   // 構造化インデックス

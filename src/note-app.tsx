@@ -83,6 +83,8 @@ import type { GraphiumDocument, NoteLink } from "./lib/document-types";
 import { LATEST_DOCUMENT_VERSION } from "./lib/document-migration";
 import { recordRevision, detectActivityType } from "./features/document-provenance/tracker";
 import { loadAuthorIdentity } from "./features/identity";
+import { getSharedRoot } from "./lib/storage/shared";
+import { shareNote } from "./features/sharing";
 import { DocumentProvenancePanel } from "./features/document-provenance";
 import { cn } from "./lib/utils";
 import { NoteListView, TrashView, buildKnowledgeMap, findIncomingReferences, type GraphiumIndex, type NoteIndexEntry } from "./features/navigation";
@@ -93,7 +95,7 @@ import {
   ingestNote, ingestFromUrl, ingestFromChat, ingestFromPdf,
   buildWikiDocument, mergeIntoWikiDocument, rewriteAndMerge, embedWikiSections,
   // 横断更新
-  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail,
+  fetchCrossUpdateProposals, applyCrossUpdate, extractWikiDetail, extractBodyPreview,
   // Lint（自動実行用）
   lintWikis, buildWikiSnapshots,
   // 構造化インデックス
@@ -179,6 +181,11 @@ function NoteHeaderMenu({
   onOpenKnowledge,
   onDelete,
   deleteDisabled,
+  onShare,
+  shareDisabled,
+  isShared,
+  shareBusy,
+  shareDisabledReason,
   t,
 }: {
   onSave: () => void;
@@ -200,6 +207,15 @@ function NoteHeaderMenu({
   /** ノート削除（ゴミ箱送り）コールバック */
   onDelete?: () => void;
   deleteDisabled?: boolean;
+  /** team-shared storage への共有（Phase 2a）。未設定時は undefined */
+  onShare?: () => void;
+  shareDisabled?: boolean;
+  /** 既に共有済みか（メニュー表記が「共有」「再共有」に変わる） */
+  isShared?: boolean;
+  /** Share 処理中（spinner 表示用） */
+  shareBusy?: boolean;
+  /** Shared が無効な理由（disabled 時のヒント表示用） */
+  shareDisabledReason?: string;
   t: (key: string) => string;
 }) {
   const [open, setOpen] = useState(false);
@@ -255,6 +271,24 @@ function NoteHeaderMenu({
             <Share2 size={14} />
             {t("prov.export")}
           </button>
+          {onShare && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className={itemClass}
+                disabled={shareDisabled || shareBusy}
+                onClick={() => { onShare(); setOpen(false); }}
+                title={shareDisabled ? shareDisabledReason : undefined}
+              >
+                <Share2 size={14} />
+                {shareBusy
+                  ? t("share.sharing")
+                  : isShared
+                    ? t("share.reshareToTeam")
+                    : t("share.shareToTeam")}
+              </button>
+            </>
+          )}
           {onDeriveWholeNote && (
             <>
               <div className="my-1 border-t border-border" />
@@ -1031,8 +1065,25 @@ function NoteEditorInner({
     return doc;
   }, [title, labelStore, linkStore, indexTableStore, mediaInlineLabelStore, aiAssistant, initialDoc, currentProvenance]);
 
+  // sharedRef は initialDoc から初期化し、Share 成功時に即時更新する。
+  // initialDoc は親が新しい doc に差し替えない限り変わらないため、ローカル state で持つ。
+  // 注意: handleSave より上で宣言しないと、handleSave が buildDocument() の結果に
+  //       sharedRef を再注入する経路で参照できない（buildDocument は state から
+  //       完全にスクラッチで組むため、毎回保存時に sharedRef が落ちるバグになる）。
+  const [sharedRefState, setSharedRefState] = useState(initialDoc?.sharedRef);
+  // 別のノートを開いた（initialDoc が変わった）ときは新しい sharedRef に追従する
+  useEffect(() => {
+    setSharedRefState(initialDoc?.sharedRef);
+  }, [initialDoc]);
+
   const handleSave = useCallback(async () => {
-    const doc = await buildDocument();
+    const baseDoc = await buildDocument();
+    // 通常保存時にも sharedRef を持たせる（buildDocument が落とすため）。
+    // これがないと auto-save ごとに sharedRef がディスクから消え、再共有時に
+    // 既存 entry を見つけられず author check が発動しない、という連鎖バグになる。
+    const doc: GraphiumDocument = sharedRefState
+      ? { ...baseDoc, sharedRef: sharedRefState }
+      : baseDoc;
     onSave(doc);
     // 保存後に documentProvenance を state に反映（History パネル更新用）
     if (doc.documentProvenance) {
@@ -1048,10 +1099,57 @@ function NoteEditorInner({
         });
       }
     }
-  }, [onSave, buildDocument, fileId]);
+  }, [onSave, buildDocument, fileId, sharedRefState]);
 
   // ── オートセーブ ──
   const { dirty, setDirty, markDirty, saveNow } = useAutoSave(handleSave);
+
+  // ── team-shared storage（Phase 2a / 2b-1） ──
+  // sharedRefState は handleSave の上で宣言済み（buildDocument 結果への再注入用）
+  const [shareBusy, setShareBusy] = useState(false);
+  const isShared = !!sharedRefState;
+  const sharedRoot = getSharedRoot();
+  const sharedAuthor = loadAuthorIdentity();
+  const shareDisabledReason = !isTauri()
+    ? t("share.disabled.desktopOnly")
+    : !sharedRoot
+      ? t("share.disabled.noRoot")
+      : !sharedAuthor
+        ? t("share.disabled.noIdentity")
+        : !fileId
+          ? t("share.disabled.unsavedNote")
+          : undefined;
+  const handleShare = useCallback(async () => {
+    if (!sharedRoot || !sharedAuthor) return;
+    setShareBusy(true);
+    try {
+      // 最新の編集を含めて build。
+      // buildDocument はローカル state から完全にスクラッチで組み立てるため、
+      // sharedRef が落ちる。Update Share では既存 id を維持する必要があるので、
+      // ここで sharedRefState を再注入する（initialDoc 経由ではなく、Share 直後に
+      // setSharedRefState で更新したばかりの値も拾える）。
+      const baseDoc = await buildDocument();
+      const docWithRef: GraphiumDocument = sharedRefState
+        ? { ...baseDoc, sharedRef: sharedRefState }
+        : baseDoc;
+      const result = await shareNote(docWithRef, { root: sharedRoot, author: sharedAuthor });
+      if (!result.ok) {
+        window.alert(t("share.failed") + ": " + result.error);
+        return;
+      }
+      // sharedRef 付きの doc を保存（personal 側に sharedRef を持たせる）
+      onSave(result.doc);
+      // バッジを即時更新（initialDoc は親側で書き替えるまで変わらないので、ローカル state で先に反映）
+      setSharedRefState(result.doc.sharedRef);
+      window.alert(
+        result.isUpdate
+          ? t("share.successReshare")
+          : t("share.successFirst"),
+      );
+    } finally {
+      setShareBusy(false);
+    }
+  }, [sharedRoot, sharedAuthor, buildDocument, onSave, t, sharedRefState]);
 
   // ── メモ挿入（メモギャラリーから） ──
   useEffect(() => {
@@ -2008,6 +2106,15 @@ function NoteEditorInner({
         <span className="text-[10px] text-muted-foreground shrink-0">
           {saving ? t("common.saving") : dirty ? t("common.unsaved") : t("common.saved")}
         </span>
+        {isShared && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary shrink-0 inline-flex items-center gap-1"
+            title={t("share.badgeTooltip")}
+          >
+            <Share2 size={10} />
+            {t("share.badge")}
+          </span>
+        )}
         <NoteHeaderMenu
           onSave={saveNow}
           saveDisabled={saving}
@@ -2029,6 +2136,11 @@ function NoteEditorInner({
           }
           onDelete={onDeleteNote}
           deleteDisabled={!fileId || saving}
+          onShare={!isWikiDoc ? handleShare : undefined}
+          shareDisabled={!!shareDisabledReason || saving}
+          shareDisabledReason={shareDisabledReason}
+          isShared={isShared}
+          shareBusy={shareBusy}
           t={t}
         />
       </div>
@@ -3148,19 +3260,16 @@ export function NoteApp() {
     try {
       if (isSynthesis) {
         const sourceConceptIds = doc.wikiMeta.derivedFromNotes;
-        const concepts: { id: string; title: string; sections: { heading: string; preview: string }[]; relatedConcepts: string[] }[] = [];
+        const concepts: { id: string; title: string; bodyPreview: string; level?: "principle" | "finding" | "bridge"; relatedConcepts: string[] }[] = [];
         for (const cId of sourceConceptIds) {
           const cDoc = await fm.loadDoc(`wiki:${cId}`);
           if (!cDoc) continue;
-          const detail = extractWikiDetail(cId, cDoc);
-          if (!detail) continue;
+          if (cDoc.wikiMeta?.kind !== "concept") continue;
           concepts.push({
             id: cId,
             title: cDoc.title,
-            sections: detail.sectionHeadings.map((h, i) => ({
-              heading: h,
-              preview: detail.sectionPreviews[i] ?? "",
-            })),
+            bodyPreview: extractBodyPreview(cDoc, 240),
+            level: cDoc.wikiMeta?.level,
             relatedConcepts: [],
           });
         }
