@@ -1137,7 +1137,11 @@ function NoteEditorInner({
       const docWithRef: GraphiumDocument = sharedRefState
         ? { ...baseDoc, sharedRef: sharedRefState }
         : baseDoc;
-      const result = await shareNote(docWithRef, { root: sharedRoot, author: sharedAuthor });
+      const result = await shareNote(docWithRef, {
+        root: sharedRoot,
+        author: sharedAuthor,
+        blobRoot: getBlobRoot() ?? undefined,
+      });
       if (!result.ok) {
         window.alert(t("share.failed") + ": " + result.error);
         return;
