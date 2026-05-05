@@ -25,6 +25,20 @@ export const LATIN_FONTS: readonly LatinFont[] = ["", "atkinson-next-mixed", "at
 export type JpFont = "" | "zen-kaku" | "biz-udp";
 export const JP_FONTS: readonly JpFont[] = ["", "zen-kaku", "biz-udp"] as const;
 
+/**
+ * 実験的機能のオン/オフ。
+ * - atomLayer: Concept をさらに抽象化した Atom 層を有効にする。
+ *              Concept が新規に作成・更新された後、追加で Atom を自動生成する。
+ * - synthesis: Atom を組み合わせた "結晶化" 知識（Synthesis）を有効にする。
+ *              Atom 層に依存するため atomLayer が ON の時のみ意味を持つ。
+ * 既定はどちらも OFF（デフォルトのフローは Note → Summary → Concept のみ）。
+ * 既存ユーザーの Synthesis ファイルは保持され、フラグ ON で UI に再表示される。
+ */
+export type ExperimentalSettings = {
+  atomLayer: boolean;
+  synthesis: boolean;
+};
+
 export type Settings = {
   /** AI で使用するモデル名（空文字 = サーバーデフォルト） */
   model: string;
@@ -48,6 +62,8 @@ export type Settings = {
   latinFont: LatinFont;
   /** 日本語用フォント。空文字 = デフォルト（OS システムフォント） */
   jpFont: JpFont;
+  /** 実験的機能のオン/オフ */
+  experimental: ExperimentalSettings;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +76,10 @@ const DEFAULT_SETTINGS: Settings = {
   customLabels: {},
   latinFont: "",
   jpFont: "",
+  experimental: {
+    atomLayer: false,
+    synthesis: false,
+  },
 };
 
 /**
@@ -118,6 +138,7 @@ export function loadSettings(): Settings {
     const migratedJp: JpFont = parsed.jpFont !== undefined
       ? (JP_FONTS.includes(parsed.jpFont) ? parsed.jpFont : "")
       : (legacyFont === "biz-udp" ? "biz-udp" : "");
+    const exp = (parsed as { experimental?: Partial<ExperimentalSettings> }).experimental;
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
@@ -125,6 +146,11 @@ export function loadSettings(): Settings {
       latinFont: migratedLatin,
       jpFont: migratedJp,
       chatSynthesisModel: migratedChatSynth,
+      experimental: {
+        atomLayer: typeof exp?.atomLayer === "boolean" ? exp.atomLayer : false,
+        // Synthesis は Atom 依存のため、atomLayer OFF なら強制的に OFF とする
+        synthesis: typeof exp?.synthesis === "boolean" && exp?.atomLayer === true ? exp.synthesis : false,
+      },
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -194,6 +220,17 @@ export function getEmbeddingLLMModel(): LLMModelConfig | undefined {
 /** AI バックエンドが利用可能かどうか（ビルトインバックエンドは常に available） */
 export function isAgentConfigured(): boolean {
   return true;
+}
+
+/** Atom レイヤ（実験的）が有効かどうか */
+export function isAtomLayerEnabled(): boolean {
+  return loadSettings().experimental.atomLayer === true;
+}
+
+/** Synthesis レイヤ（実験的）が有効かどうか。atomLayer が前提のため両方 ON でないと true にならない */
+export function isSynthesisEnabled(): boolean {
+  const e = loadSettings().experimental;
+  return e.atomLayer === true && e.synthesis === true;
 }
 
 /** 選択中のラテン用フォントを取得する（空文字 = デフォルト） */

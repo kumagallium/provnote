@@ -39,11 +39,10 @@ export function WikiBanner({
   loading = false,
 }: Props) {
   const kindLabel =
-    wikiMeta.kind === "summary"
-      ? "Summary"
-      : wikiMeta.kind === "synthesis"
-        ? "Synthesis"
-        : "Concept";
+    wikiMeta.kind === "summary" ? "Summary"
+    : wikiMeta.kind === "synthesis" ? "Synthesis"
+    : wikiMeta.kind === "atom" ? "Atom"
+    : "Concept";
 
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);

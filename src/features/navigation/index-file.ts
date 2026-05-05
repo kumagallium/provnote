@@ -24,7 +24,11 @@ import { normalizeLabel } from "../context-label/labels";
 //      ノートを「ゴミ箱に送る」と deletedAt が ISO 文字列で入る。
 //      ファイル本体は削除せず、メイン一覧・検索・picker・グラフからは除外し、
 //      ゴミ箱ビューでのみ表示・復元・完全削除できる。
-const INDEX_SCHEMA_VERSION = 10;
+// v11: WikiKind に "atom" を追加（実験的レイヤ）
+//      Concept をさらに抽象化した "1 アイデア" 単位の Wiki。
+//      experimental.atomLayer 設定で生成可否を制御する。
+//      既存インデックスは自動再構築される。
+const INDEX_SCHEMA_VERSION = 11;
 
 export type GraphiumIndex = {
   version: number;

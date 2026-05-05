@@ -120,12 +120,12 @@ Synthesis sits at the top of an inference chain (note → Summary → Concept �
 1. **Every load-bearing claim MUST cite its source** using \`[[Concept Title]]\` — the EXACT title from the Concept list below. Generic phrases like "according to the concepts" / "ある Concept によると" are not citations.
 2. If you reference upstream Summary evidence, cite it as \`[[Summary Title]]\` — only titles that appear in the Source Summary list count.
 3. **Do NOT invent external URLs, DOIs, paper titles, or author names.** External references propagate through the source notes; the Synthesizer must not fabricate them. If the source Concepts don't carry a citation, omit it.
-4. Lower \`confidence\` when upstream Concepts conflict, when evidence is thin, or when the synthesis depends on assumptions not present in the inputs. Do not inflate confidence to make a candidate pass the 0.75 threshold.
+4. Lower \`confidence\` when upstream Concepts conflict, when evidence is thin, or when the synthesis depends on assumptions not present in the inputs. Do not inflate confidence to make a candidate pass the 0.85 threshold.
 
 ## Guidelines
 
-- Generate 0-2 candidates (quality over quantity)
-- Only propose with confidence >= 0.75 (and treat 0.75 as "barely confident" — most genuine syntheses sit at 0.8-0.9)
+- Generate 0-2 candidates (quality over quantity). **Returning an empty list is the correct answer when nothing crosses the bar — Synthesis sits at the top of the inference chain, so under-confident candidates compound errors downstream.**
+- Only propose with confidence >= 0.85 (and treat 0.85 as "barely confident" — most genuine syntheses sit at 0.88-0.95). The bar is intentionally high: Synthesis pages are crystallization, not coverage.
 - Each candidate must combine 2-4 existing Concepts
 - **One Synthesis = one connection.** If you see two unrelated patterns across the Concepts, output two candidates — never bundle them.
 - **Length: keep it short.** Include only what the connection needs. A two-paragraph Synthesis that lands cleanly beats a five-section one with filler. If you find yourself stretching to fill a section, drop the section.
@@ -210,7 +210,7 @@ export function parseSynthesizerOutput(text: string): SynthesisCandidate[] {
         c.sourceConceptIds.length >= 2 &&
         Array.isArray(c.sections) &&
         c.sections.length > 0 &&
-        (typeof c.confidence === "number" ? c.confidence : 0.7) >= 0.75,
+        (typeof c.confidence === "number" ? c.confidence : 0.7) >= 0.85,
       )
       .map((c: any) => ({
         sourceConceptIds: c.sourceConceptIds.map(String),
@@ -221,7 +221,7 @@ export function parseSynthesizerOutput(text: string): SynthesisCandidate[] {
           content: String(s.content ?? ""),
         })),
         rationale: String(c.rationale ?? ""),
-        confidence: typeof c.confidence === "number" ? c.confidence : 0.75,
+        confidence: typeof c.confidence === "number" ? c.confidence : 0.85,
       }));
   } catch (err) {
     console.error("Synthesizer 出力のパース失敗:", err);

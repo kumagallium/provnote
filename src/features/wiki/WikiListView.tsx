@@ -297,11 +297,10 @@ export function WikiListView({
   }, [deleteTarget, onDeleteWiki]);
 
   const kindLabel =
-    wikiKind === "summary"
-      ? t("wikiList.kindSummary")
-      : wikiKind === "synthesis"
-        ? t("wikiList.kindSynthesis")
-        : t("wikiList.kindConcept");
+    wikiKind === "summary" ? t("wikiList.kindSummary")
+    : wikiKind === "synthesis" ? t("wikiList.kindSynthesis")
+    : wikiKind === "atom" ? t("wikiList.kindAtom")
+    : t("wikiList.kindConcept");
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">

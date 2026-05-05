@@ -33,6 +33,11 @@ import {
   type ConceptSnapshot,
 } from "../services/wiki-synthesizer.js";
 import {
+  buildAtomizerSystemPrompt,
+  buildAtomizerUserMessage,
+  parseAtomizerOutput,
+} from "../services/wiki-atomizer.js";
+import {
   buildRewriterSystemPrompt,
   buildRewriterUserMessage,
   parseRewriterOutput,
@@ -409,6 +414,47 @@ app.post("/synthesize", async (c) => {
     const message = err instanceof Error ? err.message : "不明なエラー";
     console.error("Wiki synthesize error:", err);
     return c.json({ candidates: [], error: message });
+  }
+});
+
+// Atomize（複数 Concept にまたがる共通抽象を発見する discovery）
+//   experimental.atomLayer 有効時にクライアントから呼ばれる。
+//   Concept[] を入力し、2 件以上の Concept にまたがる Atom 候補 0〜N 件を返す。
+//   既存 Atom のタイトル一覧を渡すと重複提案を抑える。
+app.post("/atomize", async (c) => {
+  const body = await c.req.json<{
+    concepts: ConceptSnapshot[];
+    existingAtomTitles?: string[];
+    language: string;
+    model?: string;
+  }>();
+
+  if (!body.concepts || body.concepts.length < 2) {
+    return c.json({ atoms: [] });
+  }
+
+  const modelConfig = resolveModelConfig(c, { modelName: body.model });
+  if (!modelConfig) return c.json({ atoms: [] });
+
+  const systemPrompt = buildAtomizerSystemPrompt(body.language || "en");
+  const userMessage = buildAtomizerUserMessage(body.concepts, body.existingAtomTitles ?? []);
+
+  try {
+    const model = createModel(modelConfig);
+    const result = await runAgentLoop({
+      model,
+      modelId: modelConfig.modelId,
+      systemPrompt,
+      messages: [{ role: "user" as const, content: userMessage }],
+      maxSteps: 1,
+    });
+    const idToTitle = new Map<string, string>(body.concepts.map((c) => [c.id, c.title]));
+    const atoms = parseAtomizerOutput(result.message, idToTitle);
+    return c.json({ atoms, model: result.model, tokenUsage: result.tokenUsage });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "不明なエラー";
+    console.error("Wiki atomize error:", err);
+    return c.json({ atoms: [], error: message });
   }
 });
 

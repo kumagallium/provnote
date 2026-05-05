@@ -19,7 +19,7 @@ import {
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@ui/modal";
 import { Button } from "@ui/button";
 import { Input } from "@ui/form-field";
-import { loadSettings, saveSettings, type Settings, type CustomLabels, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type LatinFont, type JpFont, LATIN_FONTS, JP_FONTS, applyFontMode } from "./store";
+import { loadSettings, saveSettings, type Settings, type CustomLabels, type ExperimentalSettings, getLLMModels, addLLMModel, removeLLMModel, type LLMModelConfig, type LatinFont, type JpFont, LATIN_FONTS, JP_FONTS, applyFontMode } from "./store";
 import {
   fetchModels,
   type ModelInfo,
@@ -94,7 +94,7 @@ type ToolsResponse = {
   };
 };
 
-type Tab = "display" | "storage" | "ai" | "labels" | "maintenance";
+type Tab = "display" | "storage" | "ai" | "labels" | "experimental" | "maintenance";
 
 // Settings → Maintenance タブで使う Wiki サマリー
 export type WikiSummaryForSettings = {
@@ -108,6 +108,11 @@ export type RegenerateWikiHandler = (
   wikiId: string,
   options?: { model?: string },
 ) => Promise<{ ok: boolean; error?: string }>;
+
+export type DiscoveryProgressInfo = { iteration: number; createdSoFar: number };
+export type DiscoveryHandler = (
+  onProgress?: (info: DiscoveryProgressInfo) => void,
+) => Promise<{ ok: boolean; created: number; iterations: number; error?: string }>;
 
 type BulkFailedItem = { id: string; title: string; error?: string };
 type BulkProgress = {
@@ -137,9 +142,15 @@ type SettingsModalProps = {
   wikiSummaries?: WikiSummaryForSettings[];
   /** Maintenance タブから 1 件ずつ呼ばれる再生成ハンドラ */
   onRegenerateWiki?: RegenerateWikiHandler;
+  /** Maintenance タブの「Atom を発見」ハンドラ（atomLayer 有効時のみ表示）。
+   *  全 Concept を見渡し、複数 Concept にまたがる共通抽象を auto-loop で発見する。 */
+  onRunAtomizeDiscovery?: DiscoveryHandler;
+  /** Maintenance タブの「Synthesis を発見」ハンドラ（synthesis 有効時のみ表示）。
+   *  全 Atom を見渡し、Atom 同士の結合から立ち上がる新しい洞察を auto-loop で発見する。 */
+  onRunSynthesisDiscovery?: DiscoveryHandler;
 };
 
-export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery, onRunSynthesisDiscovery }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
   const [tab, setTab] = useState<Tab>("display");
 
@@ -153,6 +164,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [customLabels, setCustomLabels] = useState<CustomLabels>({});
   const [latinFont, setLatinFont] = useState<LatinFont>("");
   const [jpFont, setJpFont] = useState<JpFont>("");
+  const [experimental, setExperimental] = useState<ExperimentalSettings>({ atomLayer: false, synthesis: false });
 
   // サーバーデータ
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -200,12 +212,27 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
   const [toolsData, setToolsData] = useState<ToolsResponse | null>(null);
 
   // Maintenance タブ — Wiki 一括 Regenerate
-  const [bulkKinds, setBulkKinds] = useState<Set<WikiKind>>(new Set(["concept", "summary", "synthesis"]));
+  const [bulkKinds, setBulkKinds] = useState<Set<WikiKind>>(new Set(["concept", "summary", "atom", "synthesis"]));
   const [bulkModelOverride, setBulkModelOverride] = useState("");
   const [bulkSynthesisModelOverride, setBulkSynthesisModelOverride] = useState("");
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
   const cancelBulkRef = useRef(false);
+
+  // Maintenance タブ — 既存 Concept をまたぐ Atom 候補を発見（atomLayer 有効時のみ）
+  type DiscoveryUiState = {
+    status: "running" | "done" | "error";
+    inputCount: number;
+    iteration?: number;
+    created?: number;
+    iterations?: number;
+    error?: string;
+  };
+  const [atomizeRunning, setAtomizeRunning] = useState(false);
+  const [atomizeProgress, setAtomizeProgress] = useState<DiscoveryUiState | null>(null);
+  // Maintenance タブ — Atom をまたぐ Synthesis 候補を発見（synthesis 有効時のみ）
+  const [synthesisRunning, setSynthesisRunning] = useState(false);
+  const [synthesisProgress, setSynthesisProgress] = useState<DiscoveryUiState | null>(null);
 
   // モデル追加フォーム
   const [showAddForm, setShowAddForm] = useState(false);
@@ -330,6 +357,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
     setCustomLabels(settings.customLabels ?? {});
     setLatinFont(settings.latinFont ?? "");
     setJpFont(settings.jpFont ?? "");
+    setExperimental(settings.experimental ?? { atomLayer: false, synthesis: false });
     setSaved(false);
     setShowAddForm(false);
     setDeleteConfirm(null);
@@ -709,11 +737,11 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
   // ── 保存 ──
   const handleSave = useCallback(() => {
-    saveSettings({ model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont });
+    saveSettings({ model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl: registryUrl.trim().replace(/\/+$/, ""), customLabels, latinFont, jpFont, experimental });
     applyFontMode(latinFont, jpFont);
     setSaved(true);
     setTimeout(() => onClose(), 600);
-  }, [model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl, customLabels, latinFont, jpFont, onClose]);
+  }, [model, embeddingModel, chatSynthesisModel, autoIngestChat, disabledTools, registryUrl, customLabels, latinFont, jpFont, experimental, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -743,12 +771,13 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
       {/* タブ */}
       <div className="flex border-b border-border px-6">
-        {(["display", "storage", "ai", "labels", "maintenance"] as Tab[]).map((tabId) => {
+        {(["display", "storage", "ai", "labels", "experimental", "maintenance"] as Tab[]).map((tabId) => {
           const labelKey =
             tabId === "display" ? "settings.section.display"
             : tabId === "storage" ? "settings.section.storage"
             : tabId === "ai" ? "settings.section.ai"
             : tabId === "labels" ? "settings.tab.labels"
+            : tabId === "experimental" ? "settings.tab.experimental"
             : "settings.tab.maintenance";
           return (
             <button
@@ -1800,6 +1829,68 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
           </div>
         )}
 
+        {/* ── Experimental タブ ── */}
+        {tab === "experimental" && (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border p-3">
+              <h3 className="text-xs font-semibold text-foreground mb-1">
+                {t("settings.experimental.title")}
+              </h3>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {t("settings.experimental.intro")}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={experimental.atomLayer}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setExperimental((prev) => ({
+                      atomLayer: next,
+                      // Atom OFF にするとき Synthesis も強制 OFF（依存関係）
+                      synthesis: next ? prev.synthesis : false,
+                    }));
+                    setSaved(false);
+                  }}
+                />
+                <span className="flex-1">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t("settings.experimental.atom.title")}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                    {t("settings.experimental.atom.help")}
+                  </span>
+                </span>
+              </label>
+
+              <label className={`flex items-start gap-3 ${experimental.atomLayer ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={experimental.synthesis}
+                  disabled={!experimental.atomLayer}
+                  onChange={(e) => {
+                    setExperimental((prev) => ({ ...prev, synthesis: e.target.checked }));
+                    setSaved(false);
+                  }}
+                />
+                <span className="flex-1">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t("settings.experimental.synthesis.title")}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                    {t("settings.experimental.synthesis.help")}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* ── Maintenance タブ ── */}
         {tab === "maintenance" && (
           <div className="space-y-5">
@@ -1872,6 +1963,10 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               t={t}
               wikiSummaries={wikiSummaries ?? []}
               onRegenerateWiki={onRegenerateWiki}
+              onRunAtomizeDiscovery={onRunAtomizeDiscovery}
+              onRunSynthesisDiscovery={onRunSynthesisDiscovery}
+              atomLayerEnabled={experimental.atomLayer}
+              synthesisLayerEnabled={experimental.atomLayer && experimental.synthesis}
               availableModels={models}
               defaultModel={model || defaultModel}
               chatSynthesisModel={chatSynthesisModel}
@@ -1886,6 +1981,14 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               bulkProgress={bulkProgress}
               setBulkProgress={setBulkProgress}
               cancelBulkRef={cancelBulkRef}
+              atomizeRunning={atomizeRunning}
+              setAtomizeRunning={setAtomizeRunning}
+              atomizeProgress={atomizeProgress}
+              setAtomizeProgress={setAtomizeProgress}
+              synthesisRunning={synthesisRunning}
+              setSynthesisRunning={setSynthesisRunning}
+              synthesisProgress={synthesisProgress}
+              setSynthesisProgress={setSynthesisProgress}
             />
           </div>
         )}
@@ -1905,10 +2008,24 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
 
 // ── Maintenance タブ ──
 // Knowledge レイヤのメンテナンス操作。今は Wiki 一括 Regenerate のみ
+type DiscoveryRunState = {
+  status: "running" | "done" | "error";
+  /** 入力アイテム数（Concept 数 / Atom 数） */
+  inputCount: number;
+  iteration?: number;
+  created?: number;
+  iterations?: number;
+  error?: string;
+};
+
 type MaintenanceTabProps = {
   t: (key: string) => string;
   wikiSummaries: WikiSummaryForSettings[];
   onRegenerateWiki?: RegenerateWikiHandler;
+  onRunAtomizeDiscovery?: DiscoveryHandler;
+  onRunSynthesisDiscovery?: DiscoveryHandler;
+  atomLayerEnabled: boolean;
+  synthesisLayerEnabled: boolean;
   availableModels: ModelInfo[];
   defaultModel: string;
   chatSynthesisModel: string;
@@ -1923,12 +2040,24 @@ type MaintenanceTabProps = {
   bulkProgress: BulkProgress | null;
   setBulkProgress: (p: BulkProgress | null) => void;
   cancelBulkRef: { current: boolean };
+  atomizeRunning: boolean;
+  setAtomizeRunning: (b: boolean) => void;
+  atomizeProgress: DiscoveryRunState | null;
+  setAtomizeProgress: (p: DiscoveryRunState | null) => void;
+  synthesisRunning: boolean;
+  setSynthesisRunning: (b: boolean) => void;
+  synthesisProgress: DiscoveryRunState | null;
+  setSynthesisProgress: (p: DiscoveryRunState | null) => void;
 };
 
 function MaintenanceTab({
   t,
   wikiSummaries,
   onRegenerateWiki,
+  onRunAtomizeDiscovery,
+  onRunSynthesisDiscovery,
+  atomLayerEnabled,
+  synthesisLayerEnabled,
   availableModels,
   defaultModel,
   chatSynthesisModel,
@@ -1943,8 +2072,16 @@ function MaintenanceTab({
   bulkProgress,
   setBulkProgress,
   cancelBulkRef,
+  atomizeRunning,
+  setAtomizeRunning,
+  atomizeProgress,
+  setAtomizeProgress,
+  synthesisRunning,
+  setSynthesisRunning,
+  synthesisProgress,
+  setSynthesisProgress,
 }: MaintenanceTabProps) {
-  const KINDS: WikiKind[] = ["concept", "summary", "synthesis"];
+  const KINDS: WikiKind[] = ["concept", "summary", "atom", "synthesis"];
   const [cancelling, setCancelling] = useState(false);
 
   // 表示値: 明示的に指定されていなければ設定の現在値をライブで反映する
@@ -2009,18 +2146,101 @@ function MaintenanceTab({
   const kindLabel = (k: WikiKind) =>
     k === "concept" ? t("settings.maintenance.kind.concept")
     : k === "summary" ? t("settings.maintenance.kind.summary")
+    : k === "atom" ? t("settings.maintenance.kind.atom")
     : t("settings.maintenance.kind.synthesis");
+
+  // ── Atom 候補の発見（auto-loop: 0 件返却 or 上限まで自動継続）──
+  const conceptCount = wikiSummaries.filter((w) => w.kind === "concept").length;
+  const atomCount = wikiSummaries.filter((w) => w.kind === "atom").length;
+  const handleRunAtomizeDiscovery = async () => {
+    if (!onRunAtomizeDiscovery || atomizeRunning) return;
+    if (conceptCount < 2) return;
+    if (!window.confirm(t("settings.maintenance.atomize.confirm").replace("{count}", String(conceptCount)))) return;
+
+    setAtomizeRunning(true);
+    setAtomizeProgress({ status: "running", inputCount: conceptCount, iteration: 1, created: 0 });
+
+    const result = await onRunAtomizeDiscovery((info) => {
+      setAtomizeProgress({ status: "running", inputCount: conceptCount, iteration: info.iteration, created: info.createdSoFar });
+    });
+    if (result.ok) {
+      setAtomizeProgress({ status: "done", inputCount: conceptCount, created: result.created, iterations: result.iterations });
+    } else {
+      setAtomizeProgress({ status: "error", inputCount: conceptCount, error: result.error });
+    }
+    setAtomizeRunning(false);
+  };
+
+  // ── Synthesis 候補の発見（同じ auto-loop パターン。Atom が 3 件以上必要）──
+  const handleRunSynthesisDiscovery = async () => {
+    if (!onRunSynthesisDiscovery || synthesisRunning) return;
+    if (atomCount < 3) return;
+    if (!window.confirm(t("settings.maintenance.synthesize.confirm").replace("{count}", String(atomCount)))) return;
+
+    setSynthesisRunning(true);
+    setSynthesisProgress({ status: "running", inputCount: atomCount, iteration: 1, created: 0 });
+
+    const result = await onRunSynthesisDiscovery((info) => {
+      setSynthesisProgress({ status: "running", inputCount: atomCount, iteration: info.iteration, created: info.createdSoFar });
+    });
+    if (result.ok) {
+      setSynthesisProgress({ status: "done", inputCount: atomCount, created: result.created, iterations: result.iterations });
+    } else {
+      setSynthesisProgress({ status: "error", inputCount: atomCount, error: result.error });
+    }
+    setSynthesisRunning(false);
+  };
 
   return (
     <div className="space-y-5">
-      <div>
-        <div className="text-xs font-semibold text-foreground mb-1">
-          {t("settings.maintenance.regenAll.title")}
+      {/* Atom 候補の発見（atomLayer 有効時のみ表示）。
+          全 Concept をまたぐ共通抽象を auto-loop で discover する。 */}
+      {atomLayerEnabled && onRunAtomizeDiscovery && (
+        <DiscoveryCard
+          t={t}
+          titleKey="settings.maintenance.atomize.title"
+          helpKey="settings.maintenance.atomize.help"
+          inputCount={conceptCount}
+          minInput={2}
+          progress={atomizeProgress}
+          running={atomizeRunning}
+          onRun={handleRunAtomizeDiscovery}
+          discoveringKey="settings.maintenance.atomize.discovering"
+          doneKey="settings.maintenance.atomize.doneCount"
+          runKey="settings.maintenance.atomize.run"
+          runningKey="settings.maintenance.atomize.running"
+        />
+      )}
+
+      {/* Synthesis 候補の発見（synthesis 有効時のみ表示）。
+          全 Atom をまたぐ新しい洞察を auto-loop で discover する。 */}
+      {synthesisLayerEnabled && onRunSynthesisDiscovery && (
+        <DiscoveryCard
+          t={t}
+          titleKey="settings.maintenance.synthesize.title"
+          helpKey="settings.maintenance.synthesize.help"
+          inputCount={atomCount}
+          minInput={3}
+          progress={synthesisProgress}
+          running={synthesisRunning}
+          onRun={handleRunSynthesisDiscovery}
+          discoveringKey="settings.maintenance.synthesize.discovering"
+          doneKey="settings.maintenance.synthesize.doneCount"
+          runKey="settings.maintenance.synthesize.run"
+          runningKey="settings.maintenance.synthesize.running"
+        />
+      )}
+
+      {/* Wiki 一括 Regenerate（Atomize と視覚的に揃えるためカード化） */}
+      <div className="rounded-lg border border-border p-3 space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-foreground mb-1">
+            {t("settings.maintenance.regenAll.title")}
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            {t("settings.maintenance.regenAll.help")}
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.maintenance.regenAll.help")}
-        </p>
-      </div>
 
       {/* kind フィルタ */}
       <div>
@@ -2052,10 +2272,10 @@ function MaintenanceTab({
 
       {/* モデル指定（kind 別） */}
       <div className="space-y-3">
-        {/* Concept / Summary */}
+        {/* Concept / Summary（Ingest モデル） */}
         <div>
           <label className="text-xs font-semibold text-foreground mb-2 block">
-            Concept / Summary モデル
+            {t("settings.maintenance.conceptSummaryModel")}
           </label>
           <div className="relative">
             <select
@@ -2080,10 +2300,10 @@ function MaintenanceTab({
           </div>
         </div>
 
-        {/* Synthesis */}
+        {/* Synthesis / Atom（どちらも Chat & Synthesis モデルを使用）*/}
         <div>
           <label className="text-xs font-semibold text-foreground mb-2 block">
-            Synthesis モデル
+            {t("settings.maintenance.synthesisAtomModel")}
           </label>
           <div className="relative">
             <select
@@ -2214,6 +2434,90 @@ function MaintenanceTab({
           </p>
         )}
       </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 共通: Discovery カード（Atom / Synthesis で共有）──
+// auto-loop の進捗表示（イテレーション数 / 累積件数）を担う。
+// 入力アイテム数（Concept 数 or Atom 数）と最低必要数だけ差し替えれば再利用できる。
+type DiscoveryCardProps = {
+  t: (key: string) => string;
+  titleKey: string;
+  helpKey: string;
+  inputCount: number;
+  minInput: number;
+  progress: DiscoveryRunState | null;
+  running: boolean;
+  onRun: () => void;
+  discoveringKey: string;
+  doneKey: string;
+  runKey: string;
+  runningKey: string;
+};
+
+function DiscoveryCard({
+  t,
+  titleKey,
+  helpKey,
+  inputCount,
+  minInput,
+  progress,
+  running,
+  onRun,
+  discoveringKey,
+  doneKey,
+  runKey,
+  runningKey,
+}: DiscoveryCardProps) {
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-3">
+      <div>
+        <div className="text-xs font-semibold text-foreground mb-1">
+          {t(titleKey)}
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          {t(helpKey).replace("{count}", String(inputCount))}
+        </p>
+      </div>
+
+      {progress && (
+        <div className="rounded-md border border-border bg-background px-3 py-2 text-xs space-y-1">
+          {progress.status === "running" && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span>
+                {t(discoveringKey).replace("{count}", String(progress.inputCount))}
+                {progress.iteration !== undefined && (
+                  <span className="ml-2 opacity-70">
+                    (iter {progress.iteration}{progress.created ? ` / created ${progress.created}` : ""})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {progress.status === "done" && (
+            <div className="text-foreground">
+              {t(doneKey).replace("{count}", String(progress.created ?? 0))}
+              {progress.iterations !== undefined && (
+                <span className="ml-2 text-muted-foreground opacity-70">
+                  ({progress.iterations} iter)
+                </span>
+              )}
+            </div>
+          )}
+          {progress.status === "error" && (
+            <div className="text-red-500">
+              {t("settings.maintenance.failed")}: {progress.error ?? "unknown"}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Button size="sm" onClick={onRun} disabled={running || inputCount < minInput}>
+        {running ? t(runningKey) : t(runKey)}
+      </Button>
     </div>
   );
 }

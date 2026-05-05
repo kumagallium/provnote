@@ -76,7 +76,7 @@ import {
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import type { AgentChatMessage } from "./features/ai-assistant";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat, loadSettings, isAtomLayerEnabled, isSynthesisEnabled, type ExperimentalSettings } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -102,6 +102,10 @@ import {
   buildWikiIndex, formatWikiIndexForLLM,
   // Synthesis
   fetchSynthesisCandidates, buildSynthesisDocument, buildConceptSnapshots,
+  // Atom（実験的）
+  atomizeConcepts, buildAtomDocument,
+  // Discovery 共通: embedding ベース重複検出
+  dedupCandidatesByEmbedding,
   // インライン引用リンク
   buildNoteIndex,
   // 操作ログ
@@ -2450,6 +2454,7 @@ export function NoteApp() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [agentConfigured, setAgentConfigured] = useState(() => isAgentConfigured());
+  const [experimentalFlags, setExperimentalFlags] = useState<ExperimentalSettings>(() => loadSettings().experimental);
   // AI バックエンド接続チェック（GitHub Pages 等の静的サイトでは false）
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   useEffect(() => {
@@ -2781,9 +2786,49 @@ export function NoteApp() {
       ingestQueueRef.current.shift();
     }
 
-    // 自動 Synthesis: Concept が 3 つ以上あれば統合ページ生成を試みる
-    try {
-      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc);
+    // 自動 Atomize: experimental.atomLayer 有効時、全 Concept を見渡して
+    // 共通抽象を発見する discovery を 1 回回す（Synthesis と同じ pattern）。
+    // 既存 Atom のタイトルは "重複しないでね" として LLM に渡す。
+    // fire-and-forget — 失敗は ingest 全体には影響させない。
+    if (isAtomLayerEnabled()) try {
+      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc, "concept");
+      if (conceptSnapshots.length >= 2) {
+        const existingAtomTitles = [...fm.wikiMetas.entries()]
+          .filter(([, m]) => m.kind === "atom")
+          .map(([, m]) => m.title);
+        const atomResult = await atomizeConcepts(
+          conceptSnapshots,
+          "ja",
+          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+        );
+        for (const candidate of atomResult.atoms) {
+          const atomDoc = buildAtomDocument(candidate, atomResult.model ?? null, "ja");
+          const newId = await fm.handleCreateWikiFile(atomDoc);
+          embedWikiSections(newId, atomDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          setIngestToast((prev) => ({
+            items: [
+              ...(prev?.items ?? []),
+              { id: `atom:${newId}`, status: "success" as const, noteTitle: `🔬 Atom: ${candidate.title}` },
+            ],
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Atomize failed:", err);
+    }
+
+    // 自動 Synthesis: 実験フラグで Synthesis レイヤが有効なときのみ動作する。
+    // 既定は OFF — 既存ユーザーの Synthesis ファイルは保持されるが新規自動生成は止まる。
+    // Synthesis のソースは Concept ではなく Atom に切り替わる（atomLayer 前提）。
+    if (isSynthesisEnabled()) try {
+      // Atom が 3 つ以上あれば結晶化を試みる。Atom は文脈が削がれているので、
+      // Concept より組み合わせの安定性が高く、誤差伝搬も抑えられる。
+      const conceptSnapshots = buildConceptSnapshots(fm.wikiFiles, fm.wikiMetas, fm.getCachedDoc, "atom");
       if (conceptSnapshots.length >= 3) {
         const existingSynthesisTitles = [...fm.wikiMetas.entries()]
           .filter(([, m]) => m.kind === "synthesis")
@@ -3392,6 +3437,194 @@ export function NoteApp() {
     }
   }, [fm]);
 
+  // 全 Concept を見渡して共通抽象（Atom）を発見する discovery 呼び出し（auto-loop 付き）。
+  // - Maintenance タブの「Atom を発見」ボタンから呼ばれる。
+  // - 1 回の LLM 呼び出しで上限 5 件しか出ないため、収束（0 件返却）まで内部でループする。
+  // - 無限ループ防止に MAX_ITERATIONS の hard cap を置く（必ず終了する保証）。
+  // - 各イテレーション後に既存 Atom タイトルを更新して LLM に渡し、重複提案を抑制する。
+  // - 自動 Atomize（ingest 後）はループせず 1 回だけ走る — 意図的に分離している。
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const runAtomizeDiscovery = useCallback(async (
+    onProgress?: (info: { iteration: number; createdSoFar: number }) => void,
+  ): Promise<{ ok: boolean; created: number; iterations: number; error?: string }> => {
+    if (!isAtomLayerEnabled()) {
+      return { ok: false, created: 0, iterations: 0, error: "Atom layer is disabled" };
+    }
+    const conceptSnapshots = buildConceptSnapshots(
+      fm.wikiFiles,
+      fm.wikiMetas,
+      fm.getCachedDoc,
+      "concept",
+    );
+    if (conceptSnapshots.length < 2) {
+      return { ok: false, created: 0, iterations: 0, error: "Need at least 2 Concepts" };
+    }
+
+    // Atom は Concept→Atom の抽象化なので、共通抽象が有限 → 収束しやすい。
+    // 上限は余裕をもって 10 に設定。実運用では 3〜5 で 0 件返却に到達することが多い。
+    const MAX_ITERATIONS = 10;
+    const existingAtomTitles = [...fm.wikiMetas.entries()]
+      .filter(([, m]) => m.kind === "atom")
+      .map(([, m]) => m.title);
+
+    const toastId = `atomize-discovery:${Date.now()}`;
+    setIngestToast((prev) => ({
+      items: [
+        ...(prev?.items ?? []),
+        { id: toastId, status: "generating" as const, noteTitle: `Discovering Atoms across ${conceptSnapshots.length} Concepts` },
+      ],
+    }));
+
+    let totalCreated = 0;
+    let lastIteration = 0;
+    try {
+      for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+        lastIteration = iter;
+        onProgress?.({ iteration: iter, createdSoFar: totalCreated });
+        const result = await atomizeConcepts(
+          conceptSnapshots,
+          "ja",
+          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+        );
+        if (result.atoms.length === 0) break; // 収束
+        // 既存 Atom との embedding 類似度で post-filter（embedding 未設定なら素通し）
+        const existingAtomDocIds = new Set(
+          [...fm.wikiMetas.entries()].filter(([, m]) => m.kind === "atom").map(([id]) => id),
+        );
+        const filtered = await dedupCandidatesByEmbedding(result.atoms, existingAtomDocIds);
+        if (filtered.length === 0) break; // 全部既存と被っていたら収束扱い
+        for (const candidate of filtered) {
+          const atomDoc = buildAtomDocument(candidate, result.model ?? null, "ja");
+          const newId = await fm.handleCreateWikiFile(atomDoc);
+          embedWikiSections(newId, atomDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Atom: "${candidate.title}" (from ${candidate.derivedFromConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          totalCreated += 1;
+          // 次イテレーションの dedup に渡す
+          existingAtomTitles.push(candidate.title);
+        }
+      }
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId
+            ? { ...i, status: "success" as const, detail: undefined, result: `${totalCreated} atom(s) in ${lastIteration} iter(s)` }
+            : i
+        ),
+      }));
+      return { ok: true, created: totalCreated, iterations: lastIteration };
+    } catch (err) {
+      console.error("Atomize discovery failed:", err);
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+        ),
+      }));
+      return { ok: false, created: totalCreated, iterations: lastIteration, error: err instanceof Error ? err.message : "Failed" };
+    }
+  }, [fm]);
+
+  // 全 Atom を見渡して新しい洞察（Synthesis）を発見する discovery 呼び出し（auto-loop 付き）。
+  // 構造は runAtomizeDiscovery と同じ。Synthesis は Atom 層の上に乗るため、
+  // experimental.synthesis（atomLayer 前提）が ON のときのみ動く。
+  // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
+  const runSynthesisDiscovery = useCallback(async (
+    onProgress?: (info: { iteration: number; createdSoFar: number }) => void,
+  ): Promise<{ ok: boolean; created: number; iterations: number; error?: string }> => {
+    if (!isSynthesisEnabled()) {
+      return { ok: false, created: 0, iterations: 0, error: "Synthesis layer is disabled" };
+    }
+    const atomSnapshots = buildConceptSnapshots(
+      fm.wikiFiles,
+      fm.wikiMetas,
+      fm.getCachedDoc,
+      "atom",
+    );
+    if (atomSnapshots.length < 3) {
+      return { ok: false, created: 0, iterations: 0, error: "Need at least 3 Atoms" };
+    }
+
+    // Synthesis は Atom の組み合わせから立ち上がる洞察。組み合わせ数が C(n,2..4) で
+    // 爆発するため、原理的には収束しない。1 クリックあたりの上限を低く抑え、
+    // ユーザーが必要に応じて再押下する運用にする（UI コピーでも明示）。
+    const MAX_ITERATIONS = 3;
+    const existingSynthesisTitles = [...fm.wikiMetas.entries()]
+      .filter(([, m]) => m.kind === "synthesis")
+      .map(([, m]) => m.title);
+
+    const toastId = `synthesis-discovery:${Date.now()}`;
+    setIngestToast((prev) => ({
+      items: [
+        ...(prev?.items ?? []),
+        { id: toastId, status: "generating" as const, noteTitle: `Discovering Syntheses across ${atomSnapshots.length} Atoms` },
+      ],
+    }));
+
+    let totalCreated = 0;
+    let lastIteration = 0;
+    try {
+      for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+        lastIteration = iter;
+        onProgress?.({ iteration: iter, createdSoFar: totalCreated });
+        const result = await fetchSynthesisCandidates(
+          atomSnapshots,
+          existingSynthesisTitles,
+          "ja",
+          getChatSynthesisLLMModel()?.name,
+        );
+        if (result.candidates.length === 0) break; // 収束
+        // 既存 Synthesis との embedding 類似度で post-filter（embedding 未設定なら素通し）
+        const existingSynthDocIds = new Set(
+          [...fm.wikiMetas.entries()].filter(([, m]) => m.kind === "synthesis").map(([id]) => id),
+        );
+        // dedup ヘルパは { title, body } を期待するので sections を結合した body を作る
+        const candidatesForDedup = result.candidates.map((c) => ({
+          title: c.title,
+          body: c.sections.map((s) => `${s.heading}\n${s.content}`).join("\n\n"),
+          original: c,
+        }));
+        const filtered = await dedupCandidatesByEmbedding(candidatesForDedup, existingSynthDocIds);
+        if (filtered.length === 0) break;
+        for (const f of filtered) {
+          const candidate = f.original;
+          const synthDoc = buildSynthesisDocument(
+            candidate,
+            result.model ?? null,
+            "ja",
+            buildNoteIndex(fm.noteIndex),
+          );
+          const newId = await fm.handleCreateWikiFile(synthDoc);
+          embedWikiSections(newId, synthDoc).catch(() => {});
+          wikiLog.append(
+            "ingest",
+            [newId],
+            `Synthesis: "${candidate.title}" (from ${candidate.sourceConceptTitles.join(" + ")})`,
+          ).catch(() => {});
+          totalCreated += 1;
+          existingSynthesisTitles.push(candidate.title);
+        }
+      }
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId
+            ? { ...i, status: "success" as const, detail: undefined, result: `${totalCreated} synthesis(es) in ${lastIteration} iter(s)` }
+            : i
+        ),
+      }));
+      return { ok: true, created: totalCreated, iterations: lastIteration };
+    } catch (err) {
+      console.error("Synthesis discovery failed:", err);
+      setIngestToast((prev) => ({
+        items: (prev?.items ?? []).map((i) =>
+          i.id === toastId ? { ...i, status: "error" as const, detail: undefined, result: err instanceof Error ? err.message : "Failed" } : i
+        ),
+      }));
+      return { ok: false, created: totalCreated, iterations: lastIteration, error: err instanceof Error ? err.message : "Failed" };
+    }
+  }, [fm]);
+
   // Settings → Maintenance タブから呼ばれる Wiki サマリー
   // ⚠️ 早期 return より前に置くこと（Rules of Hooks）
   const wikiSummariesForSettings = useMemo(() => {
@@ -3449,14 +3682,18 @@ export function NoteApp() {
     wikiCounts: (() => {
       let summary = 0;
       let concept = 0;
+      let atom = 0;
       let synthesis = 0;
       for (const meta of fm.wikiMetas.values()) {
         if (meta.kind === "summary") summary++;
         else if (meta.kind === "concept") concept++;
+        else if (meta.kind === "atom") atom++;
         else if (meta.kind === "synthesis") synthesis++;
       }
-      return { summary, concept, synthesis };
+      return { summary, concept, atom, synthesis };
     })(),
+    showAtomLayer: experimentalFlags.atomLayer,
+    showSynthesisLayer: experimentalFlags.atomLayer && experimentalFlags.synthesis,
     onShowWikiList: (kind: WikiKind) => { fm.setActiveWikiKind(kind); fm.setActiveAssetType(null); fm.setActiveLabel(null); fm.setShowNoteList(false); setShowMemos(false); setActiveWikiView(null); setShowTrash(false); setSidebarOpen(false); router.navigate({ view: "wiki-list", kind }); },
     activeWikiKind: fm.activeWikiKind,
     aiAvailable: aiAvailable ?? false,
@@ -4105,9 +4342,12 @@ export function NoteApp() {
         onClose={() => {
           setShowSettings(false);
           setAgentConfigured(isAgentConfigured());
+          setExperimentalFlags(loadSettings().experimental);
         }}
         wikiSummaries={wikiSummariesForSettings}
         onRegenerateWiki={(wikiId, options) => regenerateWikiById(wikiId, { model: options?.model, openAfter: false })}
+        onRunAtomizeDiscovery={runAtomizeDiscovery}
+        onRunSynthesisDiscovery={runSynthesisDiscovery}
       />
       <Composer
         open={composer.open}

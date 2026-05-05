@@ -1559,6 +1559,209 @@ export function buildSynthesisDocument(
   };
 }
 
+// ── Discovery 共通: embedding ベースの post-filter（重複検出の safety net） ──
+
+/**
+ * Atom / Synthesis の discovery 候補を、既存同 kind ドキュメントとの embedding 類似度で
+ * filter する。LLM プロンプトベースの "Existing titles" 重複防止に対する安全網。
+ *
+ * 設計の意図:
+ *   - embedding モデル必須にはしない。設定が無い / API が失敗したら **そのまま素通し**（fail-open）。
+ *   - 既存が空 / 候補が空のときは即返す（embedding API を叩かない）。
+ *   - 類似度はセクション単位で計算され、同 kind の任意のセクションと閾値超えしたら drop。
+ *
+ * @returns 重複と判定されなかった候補のみ
+ */
+export async function dedupCandidatesByEmbedding<T extends { title: string; body: string }>(
+  candidates: T[],
+  existingSameKindDocIds: Set<string>,
+  threshold = 0.9,
+): Promise<T[]> {
+  if (candidates.length === 0 || existingSameKindDocIds.size === 0) return candidates;
+
+  // embedding モデルが未設定なら fail-open（プロンプトベース dedup に任せる）
+  const embModel = getEmbeddingLLMModel();
+  if (!embModel) return candidates;
+
+  try {
+    // 各候補の title + body を embed
+    const texts = candidates.map((c, i) => ({
+      documentId: `__candidate_${i}__`,
+      sectionId: "main",
+      text: `${c.title}\n\n${c.body}`,
+    }));
+    const res = await fetch(`${API_BASE}/embed`, {
+      method: "POST",
+      headers: wikiHeaders("embedding"),
+      body: JSON.stringify({
+        texts,
+        embedding_model: getEmbeddingModel() || undefined,
+      }),
+    });
+    if (!res.ok) return candidates; // fail-open
+
+    const data = await res.json() as {
+      embeddings: { documentId: string; sectionId: string; vector: number[] }[];
+    };
+
+    // 既存同 kind ドキュメントの中で類似度 > threshold のものがあれば drop
+    const TOP_K = 3;
+    const kept: T[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const emb = data.embeddings.find((e) => e.documentId === `__candidate_${i}__`);
+      if (!emb || emb.vector.length === 0) {
+        kept.push(candidate); // ベクトル取れず → 素通し
+        continue;
+      }
+      const results = await embeddingStore.searchByVector(emb.vector, TOP_K);
+      const dup = results.some(
+        (r) => existingSameKindDocIds.has(r.documentId) && r.score > threshold,
+      );
+      if (!dup) kept.push(candidate);
+    }
+    return kept;
+  } catch (err) {
+    console.warn("dedupCandidatesByEmbedding failed, falling through:", err);
+    return candidates; // fail-open
+  }
+}
+
+// ── Atom（実験的レイヤ）──
+
+export type AtomCandidate = {
+  title: string;
+  body: string;
+  derivedFromConcepts: string[];
+  /** 上流 Concept のタイトル（id と同じ並びで対応）。@リンク描画用。 */
+  derivedFromConceptTitles: string[];
+  confidence: number;
+};
+
+export type AtomizeResult = { atoms: AtomCandidate[]; model?: string };
+
+/**
+ * 複数の Concept を入力し、Concept をまたいで現れる共通抽象（Atom）の候補を 0〜N 件返す。
+ * 既存 Atom のタイトル一覧を渡すと重複提案を抑える。
+ * experimental.atomLayer 有効時にクライアントから呼ぶ。
+ */
+export async function atomizeConcepts(
+  concepts: ConceptSnapshot[],
+  language: string,
+  options?: { existingAtomTitles?: string[]; model?: string },
+): Promise<AtomizeResult> {
+  if (concepts.length < 2) return { atoms: [] };
+  const res = await fetch(`${API_BASE}/atomize`, {
+    method: "POST",
+    headers: wikiHeaders("chatSynthesis"),
+    body: JSON.stringify({
+      concepts,
+      ...(options?.existingAtomTitles ? { existingAtomTitles: options.existingAtomTitles } : {}),
+      language,
+      ...(options?.model ? { model: options.model } : {}),
+    }),
+  });
+  if (!res.ok) {
+    console.error("Atomize API failed:", res.status);
+    return { atoms: [] };
+  }
+  return res.json();
+}
+
+/**
+ * AtomCandidate から GraphiumDocument を構築する。
+ * Atom は Zettel 1 アイデアなので、本文は短い段落のみ。見出しは付けない。
+ */
+export function buildAtomDocument(
+  candidate: AtomCandidate,
+  model: string | null,
+  language?: string,
+): GraphiumDocument {
+  const now = new Date().toISOString();
+  const blocks: any[] = candidate.body
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter((para) => para.length > 0)
+    .map((para) => ({
+      id: crypto.randomUUID(),
+      type: "paragraph",
+      props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+      content: [{ type: "text", text: para, styles: {} }],
+      children: [],
+    }));
+
+  // Source Concepts セクション
+  const knowledgeLinks: any[] = [];
+  if (candidate.derivedFromConcepts.length > 0) {
+    blocks.push({
+      id: crypto.randomUUID(),
+      type: "heading",
+      props: { textColor: "default", backgroundColor: "default", textAlignment: "left", level: 2 },
+      content: [{ type: "text", text: "Source Concepts", styles: {} }],
+      children: [],
+    });
+    for (let i = 0; i < candidate.derivedFromConcepts.length; i++) {
+      const conceptId = candidate.derivedFromConcepts[i];
+      // タイトルが取れない場合は ID にフォールバックするが、これは index 不整合のサインなので
+      // 実運用ではほぼ起きない想定
+      const conceptTitle = candidate.derivedFromConceptTitles?.[i] ?? conceptId;
+      const blockId = crypto.randomUUID();
+      blocks.push({
+        id: blockId,
+        type: "bulletListItem",
+        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+        content: [
+          { type: "text", text: `@🤖 ${conceptTitle}`, styles: { textColor: "blue" } },
+        ],
+        children: [],
+      });
+      knowledgeLinks.push({
+        id: crypto.randomUUID(),
+        sourceBlockId: blockId,
+        targetBlockId: "",
+        targetNoteId: conceptId,
+        type: "reference",
+        layer: "knowledge",
+        createdBy: "ai",
+      });
+    }
+  }
+
+  const wikiMeta: WikiMeta = {
+    kind: "atom",
+    derivedFromNotes: [],
+    derivedFromChats: [],
+    derivedFromConcepts: candidate.derivedFromConcepts,
+    generatedAt: now,
+    generatedBy: { model: model ?? "unknown", version: "1.0.0" },
+    lastIngestedAt: now,
+    language: language ?? undefined,
+    confidence: candidate.confidence,
+  };
+
+  return {
+    version: 2,
+    title: candidate.title,
+    pages: [{
+      id: "main",
+      title: candidate.title,
+      blocks,
+      labels: {},
+      provLinks: [],
+      knowledgeLinks,
+    }],
+    source: "ai",
+    wikiMeta,
+    generatedBy: {
+      agent: "ai",
+      sessionId: `wiki-atomize-${now}`,
+      model: model ?? undefined,
+    },
+    createdAt: now,
+    modifiedAt: now,
+  };
+}
+
 /**
  * 既存の Concept ページからスナップショットを構築する（Synthesis 入力用）
  *
@@ -1570,6 +1773,12 @@ export function buildConceptSnapshots(
   wikiFiles: { id: string; modifiedTime: string }[],
   wikiMetas: Map<string, WikiMetaSummary>,
   getCachedDoc: (id: string) => GraphiumDocument | null | undefined,
+  /**
+   * Synthesizer に渡すソースの kind。
+   * Atom レイヤを有効にした構成では "atom" を渡し、Atom 同士の結晶化として Synthesis を生成する。
+   * 既定の "concept" は legacy 経路（実験フラグ OFF 時には呼ばれない想定）。
+   */
+  sourceKind: "concept" | "atom" = "concept",
 ): ConceptSnapshot[] {
   // Summary 索引: 派生元 noteId → { title, preview }
   const summaryByNote = new Map<string, { title: string; preview: string }>();
@@ -1590,7 +1799,7 @@ export function buildConceptSnapshots(
 
   for (const file of wikiFiles) {
     const meta = wikiMetas.get(file.id);
-    if (!meta || meta.kind !== "concept") continue;
+    if (!meta || meta.kind !== sourceKind) continue;
 
     const doc = getCachedDoc(`wiki:${file.id}`);
 
