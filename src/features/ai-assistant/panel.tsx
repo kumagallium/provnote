@@ -1,11 +1,12 @@
 // AI アシスタント サイドパネル
 // 右パネルの Chat タブに表示される継続対話 UI
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bot, BookPlus, Send, Trash2, FileDown, FilePlus, List, Replace, AlertCircle, X, AtSign } from "lucide-react";
 import { Button } from "@ui/button";
 import { Textarea } from "@ui/form-field";
 import { useAiAssistant } from "./store";
+import { getWikiTitleToIdMap } from "../wiki/retriever";
 import { fetchModels } from "./api";
 import { ensureSidecar } from "../../lib/sidecar";
 import { useT } from "../../i18n";
@@ -32,6 +33,8 @@ type AiAssistantPanelProps = {
   onIngestChat?: (messages: ChatMessage[]) => void;
   /** ノート/Wiki インデックス（@ メンション候補用） */
   noteIndex?: GraphiumIndex | null;
+  /** Wiki ノートを開く（[Source: "title"] 引用クリック時の遷移先） */
+  onOpenWiki?: (wikiId: string) => void;
 };
 
 export function AiAssistantPanel({
@@ -41,6 +44,7 @@ export function AiAssistantPanel({
   onDeriveNote,
   onIngestChat,
   noteIndex,
+  onOpenWiki,
 }: AiAssistantPanelProps) {
   const {
     messages, loading, error, parkChat,
@@ -60,6 +64,21 @@ export function AiAssistantPanel({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // [Source: "title"] 引用クリック用にタイトル→wikiId マップを構築。
+  // Retriever が LLM に渡したのと同じタイトル空間を使う（noteIndex に wiki が無くても動く）。
+  // messages 更新で再計算（最新応答が含む新規 wiki のために）。
+  const wikiTitleToId = useMemo(() => {
+    const map = getWikiTitleToIdMap();
+    // noteIndex に wiki エントリがある場合はそれもマージ（重複時は noteIndex 優先）
+    if (noteIndex) {
+      for (const n of noteIndex.notes) {
+        if (n.wikiKind && n.title) map.set(n.title, n.noteId);
+      }
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteIndex, messages.length]);
 
   // @ メンション機能
   const [attachedNotes, setAttachedNotes] = useState<AttachedNote[]>([]);
@@ -334,6 +353,8 @@ export function AiAssistantPanel({
                       }
                     : undefined
                 }
+                wikiTitleToId={wikiTitleToId}
+                onOpenWiki={onOpenWiki}
               />
             ))}
             {loading && (
@@ -450,7 +471,7 @@ function ChatListView({
         >
           {t("aiChat.newChat")}
         </button>
-        {chats.map((chat) => {
+        {[...chats].sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()).map((chat) => {
           const isPageChat = chat.scopeType === "page";
           const scopeLabel = isPageChat
             ? t("aiChat.pageScope")
@@ -486,11 +507,15 @@ function ChatBubble({
   onInsert,
   onReplace,
   onDerive,
+  wikiTitleToId,
+  onOpenWiki,
 }: {
   message: ChatMessage;
   onInsert?: (markdown: string) => void;
   onReplace?: (markdown: string) => void;
   onDerive?: () => void;
+  wikiTitleToId?: Map<string, string>;
+  onOpenWiki?: (wikiId: string) => void;
 }) {
   const t = useT();
   const isUser = message.role === "user";
@@ -507,7 +532,9 @@ function ChatBubble({
             : "bg-muted text-foreground"
         }`}
       >
-        {displayContent}
+        {isUser
+          ? displayContent
+          : renderWithSourceLinks(displayContent, wikiTitleToId, onOpenWiki)}
       </div>
       {!isUser && (onInsert || onReplace || onDerive) && (
         <div className="flex gap-1 mt-1 flex-wrap">
@@ -545,4 +572,45 @@ function ChatBubble({
       )}
     </div>
   );
+}
+
+/**
+ * チャット応答内の `[Source: "title"]` を Wiki ページへのクリック可能リンクに変換する。
+ * - wikiTitleToId にタイトルが見つかればクリック可能な span を描画
+ * - 見つからなければ装飾なしのプレーンテキスト（`[Source: "title"]`）を残す
+ */
+function renderWithSourceLinks(
+  content: string,
+  wikiTitleToId: Map<string, string> | undefined,
+  onOpenWiki: ((wikiId: string) => void) | undefined,
+): ReactNode {
+  if (!content.includes("[Source:")) return content;
+  if (!wikiTitleToId || !onOpenWiki || wikiTitleToId.size === 0) return content;
+  const pattern = /\[Source:\s*"([^"]+)"\]/g;
+  const parts: ReactNode[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    if (match.index > lastIdx) parts.push(content.slice(lastIdx, match.index));
+    const title = match[1];
+    const wikiId = wikiTitleToId.get(title);
+    if (wikiId) {
+      parts.push(
+        <button
+          key={`src-${match.index}`}
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenWiki(wikiId); }}
+          title={`Open Wiki: ${title}`}
+          className="inline-flex items-center gap-0.5 px-1 mx-0.5 text-xs text-violet-700 hover:text-violet-900 underline decoration-dotted underline-offset-2 hover:bg-violet-50 rounded transition-colors align-baseline"
+        >
+          📎{title}
+        </button>,
+      );
+    } else {
+      parts.push(match[0]);
+    }
+    lastIdx = pattern.lastIndex;
+  }
+  if (lastIdx < content.length) parts.push(content.slice(lastIdx));
+  return <>{parts}</>;
 }

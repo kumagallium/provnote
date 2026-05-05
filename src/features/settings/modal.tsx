@@ -148,9 +148,11 @@ type SettingsModalProps = {
   /** Maintenance タブの「Synthesis を発見」ハンドラ（synthesis 有効時のみ表示）。
    *  全 Atom を見渡し、Atom 同士の結合から立ち上がる新しい洞察を auto-loop で発見する。 */
   onRunSynthesisDiscovery?: DiscoveryHandler;
+  /** 全 Wiki の embedding を再生成する。AI チャットでの引用検索（Retriever）の精度を回復させたい時に使う。 */
+  onReembedAllWikis?: (onProgress: (done: number, total: number) => void) => Promise<void>;
 };
 
-export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery, onRunSynthesisDiscovery }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki, onRunAtomizeDiscovery, onRunSynthesisDiscovery, onReembedAllWikis }: SettingsModalProps) {
   const { locale, setLocale, t } = useLocale();
   const [tab, setTab] = useState<Tab>("display");
 
@@ -1989,6 +1991,7 @@ export function SettingsModal({ isOpen, onClose, wikiSummaries, onRegenerateWiki
               setSynthesisRunning={setSynthesisRunning}
               synthesisProgress={synthesisProgress}
               setSynthesisProgress={setSynthesisProgress}
+              onReembedAllWikis={onReembedAllWikis}
             />
           </div>
         )}
@@ -2048,6 +2051,7 @@ type MaintenanceTabProps = {
   setSynthesisRunning: (b: boolean) => void;
   synthesisProgress: DiscoveryRunState | null;
   setSynthesisProgress: (p: DiscoveryRunState | null) => void;
+  onReembedAllWikis?: (onProgress: (done: number, total: number) => void) => Promise<void>;
 };
 
 function MaintenanceTab({
@@ -2080,9 +2084,13 @@ function MaintenanceTab({
   setSynthesisRunning,
   synthesisProgress,
   setSynthesisProgress,
+  onReembedAllWikis,
 }: MaintenanceTabProps) {
   const KINDS: WikiKind[] = ["concept", "summary", "atom", "synthesis"];
   const [cancelling, setCancelling] = useState(false);
+  const [reembedRunning, setReembedRunning] = useState(false);
+  const [reembedProgress, setReembedProgress] = useState<{ done: number; total: number } | null>(null);
+  const [reembedError, setReembedError] = useState<string | null>(null);
 
   // 表示値: 明示的に指定されていなければ設定の現在値をライブで反映する
   const effectiveDefaultModel = bulkModelOverride || defaultModel;
@@ -2229,6 +2237,64 @@ function MaintenanceTab({
           runKey="settings.maintenance.synthesize.run"
           runningKey="settings.maintenance.synthesize.running"
         />
+      )}
+
+      {/* 全 Wiki の embedding を再生成。
+          AI チャットの Retriever が引用元を検索するための embedding を IndexedDB に作り直す。
+          既存ユーザーの wiki が embedding 機能導入前に作られていた場合や、Embedding model を切り替えた直後に使う。 */}
+      {onReembedAllWikis && wikiSummaries.length > 0 && (
+        <div className="rounded-lg border border-border p-3 space-y-3">
+          <div>
+            <div className="text-xs font-semibold text-foreground mb-1">
+              Re-embed all Wikis
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              AI チャットの引用検索（Retriever）が動かないときに使う。全 Wiki の埋め込みを作り直して IndexedDB に保存する。
+            </p>
+          </div>
+          {reembedProgress && reembedRunning && (
+            <div className="text-[11px] text-muted-foreground">
+              Embedding... {reembedProgress.done} / {reembedProgress.total}
+            </div>
+          )}
+          {reembedProgress && !reembedRunning && !reembedError && (
+            <div className="text-[11px] text-emerald-600 dark:text-emerald-400">
+              Done. {reembedProgress.done} / {reembedProgress.total} wikis embedded.
+            </div>
+          )}
+          {reembedError && (
+            <div className="text-[11px] text-red-600 dark:text-red-400">
+              {reembedError}
+            </div>
+          )}
+          <Button
+            size="sm"
+            disabled={reembedRunning}
+            onClick={async () => {
+              const total = wikiSummaries.length;
+              const confirmed = window.confirm(
+                `Re-embed all ${total} wikis? This may take a while and consumes embedding API tokens.`,
+              );
+              if (!confirmed) return;
+              setReembedRunning(true);
+              setReembedError(null);
+              setReembedProgress({ done: 0, total });
+              try {
+                await onReembedAllWikis((done, t) => setReembedProgress({ done, total: t }));
+              } catch (e) {
+                setReembedError(e instanceof Error ? e.message : String(e));
+              } finally {
+                setReembedRunning(false);
+              }
+            }}
+          >
+            {reembedRunning ? (
+              <><Loader2 size={12} className="animate-spin mr-1.5" />Re-embedding...</>
+            ) : (
+              `Re-embed ${wikiSummaries.length} wiki${wikiSummaries.length === 1 ? "" : "s"}`
+            )}
+          </Button>
+        </div>
       )}
 
       {/* Wiki 一括 Regenerate（Atomize と視覚的に揃えるためカード化） */}
