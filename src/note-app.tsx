@@ -76,7 +76,7 @@ import {
 import type { AttachedNote } from "./features/ai-assistant/panel";
 import type { AgentChatMessage } from "./features/ai-assistant";
 import { extractLabelMarkersFromBlocks } from "./features/ai-assistant/label-markers";
-import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getDefaultLLMModel, getChatSynthesisLLMModel, getAutoIngestChat, loadSettings, isAtomLayerEnabled, isSynthesisEnabled, type ExperimentalSettings } from "./features/settings";
+import { SettingsModal, isAgentConfigured, getSelectedModel, getDisabledTools, getChatSynthesisLLMModel, getChatSynthesisModelName, getAutoIngestChat, loadSettings, isAtomLayerEnabled, isSynthesisEnabled, type ExperimentalSettings } from "./features/settings";
 import { useStorage } from "./lib/storage/use-storage";
 import { getActiveProvider } from "./lib/storage/registry";
 import type { GraphiumDocument, NoteLink } from "./lib/document-types";
@@ -2852,7 +2852,7 @@ export function NoteApp() {
         const atomResult = await atomizeConcepts(
           conceptSnapshots,
           "ja",
-          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+          { existingAtomTitles, model: getChatSynthesisModelName() || undefined },
         );
         for (const candidate of atomResult.atoms) {
           const atomDoc = buildAtomDocument(candidate, atomResult.model ?? null, "ja");
@@ -2893,7 +2893,7 @@ export function NoteApp() {
           conceptSnapshots,
           existingSynthesisTitles,
           "ja",
-          getChatSynthesisLLMModel()?.name,
+          getChatSynthesisModelName() || undefined,
         );
         for (const candidate of synthResult.candidates) {
           const synthDoc = buildSynthesisDocument(candidate, synthResult.model ?? null, "ja", buildNoteIndex(fm.noteIndex));
@@ -3537,7 +3537,7 @@ export function NoteApp() {
         const result = await atomizeConcepts(
           conceptSnapshots,
           "ja",
-          { existingAtomTitles, model: getChatSynthesisLLMModel()?.name },
+          { existingAtomTitles, model: getChatSynthesisModelName() || undefined },
         );
         if (result.atoms.length === 0) break; // 収束
         // 既存 Atom との embedding 類似度で post-filter（embedding 未設定なら素通し）
@@ -3625,7 +3625,7 @@ export function NoteApp() {
           atomSnapshots,
           existingSynthesisTitles,
           "ja",
-          getChatSynthesisLLMModel()?.name,
+          getChatSynthesisModelName() || undefined,
         );
         if (result.candidates.length === 0) break; // 収束
         // 既存 Synthesis との embedding 類似度で post-filter（embedding 未設定なら素通し）

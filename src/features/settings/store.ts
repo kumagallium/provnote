@@ -205,6 +205,16 @@ export function getChatSynthesisLLMModel(): LLMModelConfig | undefined {
   return found ?? getDefaultLLMModel();
 }
 
+/**
+ * Chat & Synthesis モデル名（string）を取得する。Tauri モードでは getLLMModels()
+ * (localStorage) が空で getChatSynthesisLLMModel() が undefined を返すため、
+ * body.model に名前を載せたい用途（Atomize / Synthesize）はこちらを使う。
+ * Chat & Synthesis 未設定なら Default モデル名にフォールバックする。
+ */
+export function getChatSynthesisModelName(): string {
+  return getChatSynthesisModel() || getSelectedModel() || "";
+}
+
 /** Embedding 用の LLMModelConfig を取得する。
  *  embeddingModel 設定が空の場合は default にフォールバック（embeddings が動かない場合あり）。
  *  Web モードでは `wikiHeaders("embedding")` でこの認証情報をヘッダーに入れる必要がある —
