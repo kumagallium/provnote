@@ -9,6 +9,7 @@ import type { GraphiumFile } from "../../lib/document-types";
 import type { GraphiumIndex } from "../navigation/index-file";
 import { Breadcrumb } from "../../components/Breadcrumb";
 import { useT } from "../../i18n";
+import { useRangeSelect } from "../../hooks/use-range-select";
 
 // 日付を YYYY-MM-DD 形式で表示
 function formatDate(iso: string): string {
@@ -260,14 +261,9 @@ export function WikiListView({
     return sorted;
   }, [wikiEntries, searchQuery, sortKey, sortDir]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  // ドラッグ範囲選択（チェックボックス列）
+  const orderedIds = useMemo(() => filtered.map((e) => e.id), [filtered]);
+  const range = useRangeSelect(orderedIds, selectedIds, setSelectedIds);
 
   const toggleSelectAll = useCallback(() => {
     const ids = filtered.map((e) => e.id);
@@ -410,21 +406,32 @@ export function WikiListView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((entry) => (
+              {filtered.map((entry, index) => (
                 <tr
                   key={entry.id}
                   className={`border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer group ${
                     selectedIds.has(entry.id) ? "bg-primary/5" : ""
                   }`}
-                  onClick={() => onOpenWiki(entry.id)}
+                  onMouseDown={(e) => range.onRowMouseDown(e, index)}
+                  onMouseEnter={() => range.onRowMouseEnter(index)}
+                  onClick={() => {
+                    if (range.shouldSuppressClick()) return;
+                    onOpenWiki(entry.id);
+                  }}
                   onDoubleClick={() => onOpenWikiFull?.(entry.id)}
                 >
-                  <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="py-2 px-2 cursor-pointer"
+                    title={t("wikiList.dragToRangeSelect")}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => range.onCheckboxMouseDown(e, index)}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedIds.has(entry.id)}
-                      onChange={() => toggleSelect(entry.id)}
-                      className="w-3.5 h-3.5 rounded border-border accent-primary cursor-pointer"
+                      readOnly
+                      tabIndex={-1}
+                      className="w-3.5 h-3.5 rounded border-border accent-primary pointer-events-none"
                     />
                   </td>
                   <td className="py-2 px-3">
