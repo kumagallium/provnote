@@ -2,7 +2,7 @@
 // サーバー /api/prov/ingest-url を叩き、構造化済みブロック列を受け取る
 
 import { apiBase, isTauri } from "../../lib/platform";
-import { getDefaultLLMModel } from "../settings/store";
+import { getDefaultLLMModel, getSelectedModel } from "../settings/store";
 import type { ProvIngesterBlock } from "./prov-note-builder";
 
 export type IngestUrlResult = {
@@ -42,7 +42,7 @@ export async function ingestUrlToProv(
   const res = await fetch(`${apiBase()}/prov/ingest-url`, {
     method: "POST",
     headers: provHeaders(),
-    body: JSON.stringify({ url, language }),
+    body: JSON.stringify({ url, language, ...(getSelectedModel() ? { model: getSelectedModel() } : {}) }),
   });
 
   if (!res.ok) {

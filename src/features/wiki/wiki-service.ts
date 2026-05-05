@@ -4,7 +4,7 @@
 import type { GraphiumDocument, WikiKind, WikiMeta, WikiMetaSummary } from "../../lib/document-types";
 import { embeddingStore } from "../../lib/embedding-store";
 import type { IngesterOutput } from "../../server/services/wiki-ingester";
-import { getEmbeddingModel, getDefaultLLMModel, getChatSynthesisLLMModel, getEmbeddingLLMModel } from "../settings/store";
+import { getEmbeddingModel, getDefaultLLMModel, getChatSynthesisLLMModel, getEmbeddingLLMModel, getSelectedModel, getChatSynthesisModelName } from "../settings/store";
 import { apiBase, isTauri } from "../../lib/platform";
 
 import type { GraphiumIndex } from "../navigation";
@@ -33,6 +33,21 @@ export function buildNoteIndex(index: GraphiumIndex | null | undefined): NoteInd
  * - "chatSynthesis": Chat & Synthesis 用モデル（未設定なら default）
  * - "embedding":     Embedding 用モデル（未設定なら default）
  */
+/**
+ * body.model を解決する。Tauri モードではヘッダー経由のモデル指定が無いため、
+ * これを送らないとサーバー側 resolveModelConfig が `models[0]` にフォールバックする
+ * （Web モードはヘッダー優先のため body.model は無視されるが、付けても害は無い）。
+ *
+ * - "default":       Default モデル（ingest / lint / rewrite / cross-update / URL→PROV）
+ * - "chatSynthesis": Chat & Synthesis モデル（未設定時は Default）
+ * - "embedding":     Embedding 用途は body.embedding_model を別途使うので空
+ */
+function wikiBodyModel(mode: "default" | "chatSynthesis" | "embedding" = "default"): { model?: string } {
+  if (mode === "embedding") return {};
+  const name = mode === "chatSynthesis" ? getChatSynthesisModelName() : getSelectedModel();
+  return name ? { model: name } : {};
+}
+
 function wikiHeaders(mode: "default" | "chatSynthesis" | "embedding" = "default"): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   if (!isTauri()) {
@@ -261,6 +276,7 @@ export async function rewriteAndMerge(
         newSections,
         editedSectionHeadings,
         language: existingDoc.wikiMeta?.language ?? language ?? "en",
+        ...(model ? { model } : wikiBodyModel()),
         ...(skills && skills.length > 0 ? { skills } : {}),
       }),
     });
@@ -901,6 +917,7 @@ export async function ingestFromUrl(
       noteTitle: urlData.title || url,
       existingWikiTitles: existingWikis,
       language,
+      ...wikiBodyModel(),
     }),
   });
 
@@ -960,6 +977,7 @@ export async function ingestFromPdf(
       noteTitle,
       existingWikiTitles: existingWikis,
       language,
+      ...wikiBodyModel(),
     }),
   });
 
@@ -995,6 +1013,7 @@ export async function ingestFromChat(
       noteTitle: `Chat: ${chatTitle}`,
       existingWikiTitles: existingWikis,
       language,
+      ...wikiBodyModel(),
     }),
   });
 
@@ -1032,7 +1051,7 @@ export async function fetchCrossUpdateProposals(
   const res = await fetch(`${API_BASE}/cross-update`, {
     method: "POST",
     headers: wikiHeaders(),
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, ...wikiBodyModel() }),
   });
 
   if (!res.ok) {
@@ -1106,6 +1125,7 @@ export async function applyCrossUpdate(
             newSections: [{ heading: proposal.section.heading, content: proposal.section.content }],
             editedSectionHeadings: existingDoc.wikiMeta?.editedSections ?? [],
             language: existingDoc.wikiMeta?.language ?? "ja",
+            ...(model ? { model } : wikiBodyModel()),
             ...(skills && skills.length > 0 ? { skills } : {}),
           }),
         });
@@ -1283,7 +1303,7 @@ export async function lintWikis(
   const res = await fetch(`${API_BASE}/lint`, {
     method: "POST",
     headers: wikiHeaders(),
-    body: JSON.stringify({ wikis, language, localOnly }),
+    body: JSON.stringify({ wikis, language, localOnly, ...wikiBodyModel() }),
   });
 
   if (!res.ok) {
