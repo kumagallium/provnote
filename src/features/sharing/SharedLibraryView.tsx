@@ -42,13 +42,13 @@ type Props = {
   onBack: () => void;
 };
 
+// 共有導線（Share ボタン）が実装されている type のみ tab に出す。
+// concept / atom / template / report は SharedEntryType としては予約されており
+// データ層は読み書きできるが、UI に「Share」エントリポイントが整うまで非表示。
 const TYPE_TABS: { type: SharedEntryType; label: string }[] = [
   { type: "note", label: "Notes" },
   { type: "reference", label: "References" },
   { type: "data-manifest", label: "Data" },
-  { type: "template", label: "Templates" },
-  { type: "concept", label: "Concepts" },
-  { type: "report", label: "Reports" },
 ];
 
 function formatDate(iso?: string): string {
@@ -86,6 +86,7 @@ export function SharedLibraryView({
     "data-manifest": [],
     template: [],
     concept: [],
+    atom: [],
     report: [],
   });
   const [loadErrors, setLoadErrors] = useState<
@@ -117,6 +118,7 @@ export function SharedLibraryView({
       "data-manifest": 0,
       template: 0,
       concept: 0,
+      atom: 0,
       report: 0,
     };
     for (const t of TYPE_TABS) {

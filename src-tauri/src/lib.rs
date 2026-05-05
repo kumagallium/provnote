@@ -679,6 +679,7 @@ const SHARED_ENTRY_TYPES: &[&str] = &[
     "data-manifests",
     "templates",
     "concepts",
+    "atoms",
     "reports",
 ];
 

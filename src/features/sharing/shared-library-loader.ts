@@ -18,6 +18,7 @@ const ALL_TYPES: SharedEntryType[] = [
   "data-manifest",
   "template",
   "concept",
+  "atom",
   "report",
 ];
 
@@ -38,6 +39,7 @@ export async function loadAllSharedEntries(
     "data-manifest": [],
     template: [],
     concept: [],
+    atom: [],
     report: [],
   };
   const errors: Partial<Record<SharedEntryType, string>> = {};
