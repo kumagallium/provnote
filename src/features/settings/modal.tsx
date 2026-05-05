@@ -1963,14 +1963,16 @@ function MaintenanceTab({
         </div>
       )}
 
-      <div>
-        <div className="text-xs font-semibold text-foreground mb-1">
-          {t("settings.maintenance.regenAll.title")}
+      {/* Wiki 一括 Regenerate（Atomize と視覚的に揃えるためカード化） */}
+      <div className="rounded-lg border border-border p-3 space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-foreground mb-1">
+            {t("settings.maintenance.regenAll.title")}
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            {t("settings.maintenance.regenAll.help")}
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.maintenance.regenAll.help")}
-        </p>
-      </div>
 
       {/* kind フィルタ */}
       <div>
@@ -2002,10 +2004,10 @@ function MaintenanceTab({
 
       {/* モデル指定（kind 別） */}
       <div className="space-y-3">
-        {/* Concept / Summary */}
+        {/* Concept / Summary（Ingest モデル） */}
         <div>
           <label className="text-xs font-semibold text-foreground mb-2 block">
-            Concept / Summary モデル
+            {t("settings.maintenance.conceptSummaryModel")}
           </label>
           <div className="relative">
             <select
@@ -2030,10 +2032,10 @@ function MaintenanceTab({
           </div>
         </div>
 
-        {/* Synthesis */}
+        {/* Synthesis / Atom（どちらも Chat & Synthesis モデルを使用）*/}
         <div>
           <label className="text-xs font-semibold text-foreground mb-2 block">
-            Synthesis モデル
+            {t("settings.maintenance.synthesisAtomModel")}
           </label>
           <div className="relative">
             <select
@@ -2163,6 +2165,7 @@ function MaintenanceTab({
             {t("settings.maintenance.unavailable")}
           </p>
         )}
+      </div>
       </div>
     </div>
   );

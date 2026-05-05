@@ -375,6 +375,8 @@ export const ja: Record<string, string> = {
   "settings.maintenance.atomize.running": "Atom 生成中…",
   "settings.maintenance.atomize.created": "作成",
   "settings.maintenance.atomize.skipped": "スキップ",
+  "settings.maintenance.conceptSummaryModel": "Concept / Summary モデル",
+  "settings.maintenance.synthesisAtomModel": "Synthesis / Atom モデル（Concept → Atom 生成にも使われます）",
   "settings.maintenance.modelOverride": "モデル指定（任意）",
   "settings.maintenance.modelOverrideDefault": "設定中のモデルを使用",
   "settings.maintenance.modelOverrideHelp": "現行設定と異なるモデルで再生成したいときに選択してください。",

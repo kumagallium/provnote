@@ -375,6 +375,8 @@ export const en: Record<string, string> = {
   "settings.maintenance.atomize.running": "Generating Atoms…",
   "settings.maintenance.atomize.created": "created",
   "settings.maintenance.atomize.skipped": "skipped",
+  "settings.maintenance.conceptSummaryModel": "Concept / Summary model",
+  "settings.maintenance.synthesisAtomModel": "Synthesis / Atom model (also used when generating Atoms from Concepts)",
   "settings.maintenance.modelOverride": "Model override (optional)",
   "settings.maintenance.modelOverrideDefault": "Use configured model",
   "settings.maintenance.modelOverrideHelp": "Pick a different model only if you want to regenerate with one that differs from your current setting.",
